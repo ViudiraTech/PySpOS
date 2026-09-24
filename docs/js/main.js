@@ -1,53 +1,82 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // 主题切换功能
     const themeToggle = document.getElementById('theme-toggle');
-    const themeIcon = themeToggle?.querySelector('i');
     const body = document.body;
-    
-    // 从 localStorage 读取主题偏好
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') {
-        body.classList.add('light-theme');
-        if (themeIcon) {
-            themeIcon.classList.remove('fa-moon');
-            themeIcon.classList.add('fa-sun');
+    const storageKey = 'theme';
+
+    const readTheme = () => {
+        try {
+            return localStorage.getItem(storageKey);
+        } catch (error) {
+            return null;
         }
-    }
-    
-    // 主题切换按钮点击事件
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function() {
+    };
+
+    const saveTheme = (theme) => {
+        try {
+            localStorage.setItem(storageKey, theme);
+        } catch (error) {
+            return;
+        }
+    };
+
+    const preferredTheme = () => {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            return 'light';
+        }
+        return 'dark';
+    };
+
+    const applyTheme = (theme, persist = false) => {
+        const normalized = theme === 'light' ? 'light' : 'dark';
+        const isLight = normalized === 'light';
+        body.classList.toggle('light-theme', isLight);
+        document.documentElement.dataset.theme = normalized;
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', String(isLight));
+            themeToggle.setAttribute('aria-label', isLight ? '切换到暗色主题' : '切换到亮色主题');
             const icon = themeToggle.querySelector('i');
-            
-            // 添加过渡效果
             if (icon) {
-                // 先缩小消失
+                icon.className = isLight ? 'far fa-sun' : 'far fa-moon';
+            }
+        }
+        if (persist) {
+            saveTheme(normalized);
+        }
+    };
+
+    const savedTheme = readTheme();
+    applyTheme(savedTheme || preferredTheme(), !savedTheme);
+
+    if (themeToggle) {
+        themeToggle.setAttribute('role', 'button');
+        themeToggle.setAttribute('tabindex', '0');
+        const toggleTheme = () => {
+            const icon = themeToggle.querySelector('i');
+            const nextTheme = body.classList.contains('light-theme') ? 'dark' : 'light';
+            if (icon) {
                 icon.classList.add('icon-transition');
-                
-                // 等图标消失后切换，然后再淡入
-                setTimeout(() => {
-                    body.classList.toggle('light-theme');
-                    
-                    // 更新图标
-                    const isLight = body.classList.contains('light-theme');
-                    if (icon) {
-                        icon.className = isLight ? 'far fa-sun' : 'far fa-moon';
-                    }
-                    
-                    // 保存到 localStorage
-                    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-                    
-                    // 移除过渡类，让图标重新显示
+                window.setTimeout(() => {
+                    applyTheme(nextTheme, true);
                     icon.classList.remove('icon-transition');
                 }, 150);
             } else {
-                // 如果没有图标，直接切换
-                body.classList.toggle('light-theme');
-                const isLight = body.classList.contains('light-theme');
-                localStorage.setItem('theme', isLight ? 'light' : 'dark');
+                applyTheme(nextTheme, true);
+            }
+        };
+        themeToggle.addEventListener('click', toggleTheme);
+        themeToggle.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleTheme();
             }
         });
     }
+
+    window.addEventListener('storage', (event) => {
+        if (event.key === storageKey || event.key === null) {
+            applyTheme(event.newValue || preferredTheme());
+        }
+    });
     
     // Mobile Navigation Toggle
     const navToggle = document.getElementById('nav-toggle');
