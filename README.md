@@ -5,10 +5,10 @@
 **用 Python 写的模拟操作系统** — 真子进程、EEVDF 调度器、Unicorn ELF 引擎、curses 首次开机向导。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg)](requirements.txt)
-[![Version](https://img.shields.io/badge/Release-3.2.0--RC1-orange.svg)](src/version.txt)
-[![Tests](https://img.shields.io/badge/Tests-112%20passed-brightgreen.svg)](tests/)
-[![Stars](https://img.shields.io/github/stars/GoutouStdio-cn/PySpOS?style=social)](https://github.com/GoutouStdio-cn/PySpOS)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](requirements.txt)
+[![Release](https://img.shields.io/github/v/release/ViudiraTech/PySpOS?include_prereleases)](https://github.com/ViudiraTech/PySpOS/releases)
+[![CI](https://github.com/ViudiraTech/PySpOS/actions/workflows/ci.yml/badge.svg)](https://github.com/ViudiraTech/PySpOS/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/ViudiraTech/PySpOS?style=social)](https://github.com/ViudiraTech/PySpOS)
 
 [快速开始](#quickstart) · [命令速查](#commands) · [架构](#architecture) · [路线图](#roadmap) · [FAQ](#faq) · [许可](#license)
 
@@ -40,10 +40,10 @@ ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Win
 
 ## 🚀 快速开始
 
-前置：Python 3.8+，推荐 3.12+。
+前置：Python 3.10+，已在 3.10 / 3.12 / 3.14 与 Linux、macOS、Windows 上验证。
 
 ```bash
-git clone https://github.com/GoutouStdio-cn/PySpOS.git
+git clone https://github.com/ViudiraTech/PySpOS.git
 cd PySpOS
 pip install -r requirements.txt
 
@@ -225,9 +225,11 @@ Out-Of-Box Experience。检测不到 `etc/.oobe_done` 时在 `kernel.loop()` 里
 
 **代码开源吗？**
 
-是。3.2.0 及之后的活跃分支就是本仓库
-[GoutouStdio-cn/PySpOS](https://github.com/GoutouStdio-cn/PySpOS)；
-`beta_version` / `pre_version` 两个 tag 保留了早期版本。
+是。3.2.0 起的活跃版本就是本仓库
+[ViudiraTech/PySpOS](https://github.com/ViudiraTech/PySpOS)。
+3.1.0 及之前的原始版本保留在
+[GoutouStdio-cn/PySpOS](https://github.com/GoutouStdio-cn/PySpOS)
+（含 `beta_version` / `pre_version` 两个历史 tag）。
 
 **代码怎么写的？**
 

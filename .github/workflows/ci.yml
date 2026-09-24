@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+
+      # 只启用抓「真 bug」的关键规则（语法错误、未定义名、遮蔽、比较陷阱）。
+      # 故意不启用 F401 未用导入：main.py 是兼容 facade，重导出是有意为之，
+      # 全开会产生大量误报。风格类规则留给本地按需开启。
+      - name: Ruff
+        run: python -m ruff check --no-cache --select E9,F63,F7,F82,F811,F821 src/ tests/ launcher.py build_update.py
+
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows 覆盖 README 声明的跨平台支持；macOS 默认走 multiprocessing
+        # 的 spawn 启动方式，正好压到 forkexec 里的 spawn 分支。
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.14"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Show environment
+        run: |
+          python -VV
+          python -c "import unicorn; print('unicorn', unicorn.__version__)"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q -p no:warnings
+
+      # 测试会写 etc/ 与题库 history，仓库里是干净副本，这里确认没被改脏
+      - name: Check working tree stays clean
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain -- src/apps/question_bank.json)" ]; then
+            echo "::error::测试污染了 question_bank.json"
+            exit 1
+          fi

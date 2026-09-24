@@ -2,6 +2,9 @@
 requests>=2.28
 # ELF 执行默认引擎（缺失时自动降级到自研 CPU 模拟器兜底）
 unicorn>=2.0
+# zoneinfo 的时区数据库。Linux 通常由系统提供，但 Windows 与精简容器镜像没有，
+# 缺了它 OOBE 的真实时区功能会静默退化。
+tzdata>=2023.3
 # 开发/测试
 pytest>=7.0
 ruff>=0.1
