@@ -345,6 +345,7 @@ def main(argv=None):
         zip_path, zip_filename = create_zip_file(build_version)
         signed_manifest = None
         if args.private_key:
+            secure_boot.configure_runtime_keys(os.getcwd(), locked=False)
             signed_manifest = secure_boot.sign_package(
                 zip_path, build_version, args.security_version, args.private_key)
             say(f"✓ 已生成 Ed25519 签名 manifest，security_version={args.security_version}")

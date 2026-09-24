@@ -1,4 +1,5 @@
 import hashlib
+import os
 import zipfile
 
 import pytest
@@ -145,6 +146,24 @@ def test_policy_signature_controls_lock_state(tmp_path):
 
 def test_missing_policy_fails_closed(tmp_path):
     assert secure_boot.read_locked(str(tmp_path)) is True
+
+
+def test_oobe_developer_key_only_trusts_unlocked_images(tmp_path, monkeypatch):
+    monkeypatch.setattr(secure_boot, "_RUNTIME_TRUSTED_KEYS", {})
+    info = secure_boot.ensure_developer_key(str(tmp_path), locked=False)
+    assert os.path.isfile(info["private_key"])
+    assert secure_boot.configure_runtime_keys(str(tmp_path), False)
+    package = tmp_path / "dev.zip"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("src/main.py", "print('dev')\n")
+        archive.writestr("src/kernel.py", "LOOP = True\n")
+    secure_boot.sign_package(str(package), "1.0.0", 1, info["private_key"])
+    assert secure_boot.verify_package(str(package), locked=False)["key_id"] == info["key_id"]
+    secure_boot.configure_runtime_keys(str(tmp_path), True)
+    with pytest.raises(secure_boot.BootVerificationError):
+        secure_boot.verify_package(str(package), locked=True)
+    with pytest.raises(secure_boot.BootVerificationError):
+        secure_boot.write_policy(str(tmp_path), True, 1, info["private_key"])
 
 
 def test_legacy_token_cannot_change_policy():

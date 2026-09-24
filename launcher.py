@@ -55,6 +55,7 @@ def main():
 
     try:
         locked = secure_boot.read_locked(root_dir)
+        secure_boot.configure_runtime_keys(root_dir, locked)
         selection = secure_boot.prepare_boot(
             root_dir, locked, legacy_slot=_read_legacy_slot(root_dir))
     except secure_boot.BootVerificationError as exc:

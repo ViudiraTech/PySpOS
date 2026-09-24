@@ -93,7 +93,7 @@ CATALOGS = {
         "oobe.ota_stable": "stable（仅正式版）",
         "oobe.ota_beta": "beta（抢先体验）",
          "oobe.token_t": "安全策略",
-         "oobe.token_b": "Bootloader 信任由固定公钥和外部签名 policy 决定。\nROOT 不会改变 OEM 签名，旧 Token 也不具备授权能力。",
+         "oobe.token_b": "Bootloader 信任由固定公钥和外部签名 policy 决定。\nUNLOCKED 首次设置会生成开发签名密钥；ROOT 不会改变 OEM 签名，旧 Token 也不具备授权能力。",
 
         "oobe.summary_t": "确认配置",
         "oobe.summary_b": "语言：{lang}\n时区：{tz}\n显示名：{user}\nROOT：{root}\n更新通道：{channel}\n\n确认写入并完成向导？",
@@ -155,7 +155,7 @@ CATALOGS = {
         "oobe.ota_stable": "stable (releases only)",
         "oobe.ota_beta": "beta (early access)",
          "oobe.token_t": "Security policy",
-         "oobe.token_b": "Bootloader trust is fixed by a public key and an externally signed policy.\nROOT cannot change the OEM signature; legacy tokens are not authorization.",
+         "oobe.token_b": "Bootloader trust is fixed by a public key and an externally signed policy.\nUNLOCKED first setup creates a developer signing key; ROOT cannot change the OEM signature.",
 
         "oobe.summary_t": "Confirm",
         "oobe.summary_b": "Language: {lang}\nTimezone: {tz}\nDisplay name: {user}\nROOT: {root}\nChannel: {channel}\n\nWrite config and finish?",

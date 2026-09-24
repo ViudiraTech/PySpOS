@@ -79,7 +79,7 @@ python3 boot_policy.py --lock --rollback-index 1 --private-key boot_signing_key.
 python3 build_update.py --private-key boot_signing_key.pem --security-version 1
 ```
 
-设备内的 ROOT、应用和旧 Token 都不能修改该信任域。
+设备内的 ROOT、应用和旧 Token 都不能修改该信任域。UNLOCKED 模式的 OOBE 会自动生成 `.pyspos_boot/device_signing_key.pem` 供本地开发镜像签名；它不是 OEM 私钥，LOCKED 模式不会信任它。
 
 UNLOCKED 开发槽位需要同步源码时，直接运行 `python3 force_sync.py`；它会拒绝 LOCKED 模式，不会绕过验签。若要清空旧槽位并让下次启动从 `src` 重建，运行 `python3 reset_slot.py --slot slot_a`。
 

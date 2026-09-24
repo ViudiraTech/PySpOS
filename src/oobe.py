@@ -226,6 +226,12 @@ def _live_ctx(root_dir):
         main.rootstate = effective_root
         syslocale.init_from_bootcfg({"lang": values["lang"],
                                      "timezone": values["timezone"]})
+        if not locked:
+            try:
+                secure_boot.ensure_developer_key(root_dir, locked=False)
+                secure_boot.configure_runtime_keys(root_dir, False)
+            except Exception as exc:
+                print(f"开发签名密钥生成失败: {exc}")
         etc = os.path.join(root_dir, "etc")
         os.makedirs(etc, exist_ok=True)
         with open(marker_path(root_dir), "w", encoding="utf-8") as f:
@@ -240,9 +246,18 @@ def maybe_run_oobe(root_dir):
 
     无论成功/取消/异常，都必须把终端恢复到可正常 input() 的状态——
     向导中途 Ctrl-C（TUIAbort）会跳过 curses 的正常收尾，不恢复的话
-    后续 shell 的回车会全部变成 ^M。
+    后续 shell 的 readline 会一直卡在异常终端状态。
     """
+    try:
+        import secure_boot
+        locked = secure_boot.read_locked(root_dir)
+        if not locked:
+            secure_boot.ensure_developer_key(root_dir, locked=False)
+            secure_boot.configure_runtime_keys(root_dir, False)
+    except Exception:
+        pass
     if not should_run(root_dir):
+
         return True
     try:
         return run_wizard(_live_ctx(root_dir))

@@ -18,7 +18,10 @@ PROTECTED_DIR = ".pyspos_boot"
 STATE_RELATIVE_PATH = os.path.join(PROTECTED_DIR, "boot_state.json")
 POLICY_RELATIVE_PATH = os.path.join(PROTECTED_DIR, POLICY_NAME)
 POLICY_SIGNATURE_RELATIVE_PATH = os.path.join(PROTECTED_DIR, POLICY_SIGNATURE_NAME)
+DEVICE_PRIVATE_KEY_NAME = "device_signing_key.pem"
+DEVICE_PUBLIC_KEY_NAME = "device_signing_key.pub"
 SLOTS = ("slot_a", "slot_b")
+_RUNTIME_TRUSTED_KEYS = {}
 TRUSTED_PUBLIC_KEYS = {
     "6ebb03d113dcce85213d81c44d81bcaf": "E14Rw1ot7/pBbVWgVQlNTx+3yLpQtEaQ3TEYQ8MM8Ek=",
 }
@@ -104,20 +107,93 @@ def sign_bytes(private_key, payload):
     return private_key.sign(payload)
 
 
-def _load_trusted_keys(keys=None):
+def _load_trusted_keys(keys=None, include_runtime=True):
     source = TRUSTED_PUBLIC_KEYS if keys is None else keys
-    if not source:
+    if not source and not (include_runtime and _RUNTIME_TRUSTED_KEYS):
         raise BootVerificationError("Bootloader 没有配置可信公钥")
     if isinstance(source, dict):
         result = {}
         for key_id, value in source.items():
             result[str(key_id).lower()] = decode_public_key(value)
-        return result
-    result = {}
-    for value in source:
-        raw = decode_public_key(value)
-        result[public_key_id(raw)] = raw
+    else:
+        result = {}
+        for value in source:
+            raw = decode_public_key(value)
+            result[public_key_id(raw)] = raw
+    if keys is None and include_runtime:
+        result.update(_RUNTIME_TRUSTED_KEYS)
     return result
+
+
+def _device_private_path(root_dir):
+    return os.path.join(root_dir, PROTECTED_DIR, DEVICE_PRIVATE_KEY_NAME)
+
+
+def _device_public_path(root_dir):
+    return os.path.join(root_dir, PROTECTED_DIR, DEVICE_PUBLIC_KEY_NAME)
+
+
+def configure_runtime_keys(root_dir, locked):
+    _RUNTIME_TRUSTED_KEYS.clear()
+    if locked:
+        return {}
+    path = _device_public_path(root_dir)
+    if os.path.islink(path) or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="ascii") as stream:
+            raw = decode_public_key(stream.read().strip())
+        key_id = public_key_id(raw)
+    except (OSError, BootVerificationError):
+        return {}
+    _RUNTIME_TRUSTED_KEYS[key_id] = raw
+    return dict(_RUNTIME_TRUSTED_KEYS)
+
+
+def ensure_developer_key(root_dir, locked=False):
+    if locked:
+        raise BootVerificationError("LOCKED 模式不能生成设备开发密钥")
+    private_path = _device_private_path(root_dir)
+    public_path = _device_public_path(root_dir)
+    if os.path.islink(private_path) or os.path.islink(public_path):
+        raise BootVerificationError("开发密钥路径不能是符号链接")
+    try:
+        private_key = load_private_key(private_path)
+    except BootVerificationError:
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives import serialization
+        except ImportError as exc:
+            raise BootVerificationError("缺少 cryptography，无法生成开发密钥") from exc
+        private_key = Ed25519PrivateKey.generate()
+        pem = private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        _atomic_bytes(private_path, pem, ".device-key-")
+    raw_public = public_key_bytes(private_key)
+    public_value = base64.b64encode(raw_public) + b"\n"
+    _atomic_bytes(public_path, public_value, ".device-key-")
+    key_id = public_key_id(raw_public)
+    _RUNTIME_TRUSTED_KEYS.clear()
+    _RUNTIME_TRUSTED_KEYS[key_id] = raw_public
+    return {
+        "key_id": key_id,
+        "private_key": private_path,
+        "public_key": public_path,
+    }
+
+
+def developer_key_id(root_dir):
+    path = _device_public_path(root_dir)
+    if os.path.islink(path) or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="ascii") as stream:
+            return public_key_id(decode_public_key(stream.read().strip()))
+    except (OSError, BootVerificationError):
+        return None
 
 
 def _validate_path(path):
@@ -208,7 +284,7 @@ def verify_policy_bytes(raw, signature, keys=None):
         policy = validate_policy(json.loads(raw.decode("utf-8")))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BootVerificationError("Bootloader policy 不是有效 JSON") from exc
-    trusted = _load_trusted_keys(keys)
+    trusted = _load_trusted_keys(keys, include_runtime=False)
     key_id = policy["key_id"].lower()
     if key_id not in trusted:
         raise BootVerificationError("Bootloader policy 使用了不受信任的密钥")
@@ -341,6 +417,8 @@ def _package_signature_path(manifest_path):
 
 
 def verify_package(package_path, keys=None, floor=0, locked=True):
+    if locked and keys is None:
+        _RUNTIME_TRUSTED_KEYS.clear()
     try:
         archive = zipfile.ZipFile(package_path, "r")
     except (OSError, zipfile.BadZipFile) as exc:
@@ -584,7 +662,7 @@ def write_policy(root_dir, locked, rollback_index, private_key_path, trusted_key
     private_key = load_private_key(private_key_path)
     raw_public = public_key_bytes(private_key)
     key_id = public_key_id(raw_public)
-    if key_id not in _load_trusted_keys(trusted_keys):
+    if key_id not in _load_trusted_keys(trusted_keys, include_runtime=False):
         raise BootVerificationError("签名私钥对应的公钥不在 Bootloader 信任库中")
     policy = {
         "format": 1,
@@ -643,6 +721,8 @@ def _legacy_slot(root_dir):
 
 
 def verify_slot(root_dir, slot, locked=True, keys=None, floor=0):
+    if locked and keys is None:
+        _RUNTIME_TRUSTED_KEYS.clear()
     manifest = _manifest_from_slot(root_dir, slot, keys, floor)
     if locked and manifest is None:
         raise BootVerificationError("锁定槽位缺少签名 manifest")
@@ -674,6 +754,8 @@ def _choose_candidates(root_dir, state, legacy_slot):
 
 
 def prepare_boot(root_dir, locked, keys=None, legacy_slot=None):
+    if locked and keys is None:
+        _RUNTIME_TRUSTED_KEYS.clear()
     state = load_state(root_dir)
     floor = max(state["rollback_index"], policy_rollback_index(root_dir, keys))
     candidates = _choose_candidates(root_dir, state, legacy_slot)
