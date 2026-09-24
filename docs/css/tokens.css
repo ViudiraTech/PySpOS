@@ -208,12 +208,15 @@ body:not(.light-theme) {
 body.light-theme {
     color-scheme: light;
 
-    /* 蒙版比暗色主题浅：亮色文字本身够强，只需压住背景的亮部 */
+    /* 亮色主题的蒙版必须**偏亮**，不能沿用暗色那套深色蒙版。
+       2026-09-24 踩过：亮色主题前景是深色（#0f172a），若蒙版仍是深蓝黑，
+       深色文字就压在深色照片上，整段标题几乎读不出来。
+       蒙版方向要跟着主题反转：暗色主题压暗、亮色主题提亮。 */
     --ps-bg-scrim:
         linear-gradient(180deg,
-            rgb(15 23 42 / 0.72) 0%,
-            rgb(15 23 42 / 0.58) 45%,
-            rgb(15 23 42 / 0.78) 100%);
+            rgb(248 250 252 / 0.88) 0%,
+            rgb(248 250 252 / 0.78) 45%,
+            rgb(241 245 249 / 0.9) 100%);
 
     --ps-bg-page: var(--ps-ref-slate-50);
     --ps-bg-surface: var(--ps-ref-white);
@@ -269,10 +272,24 @@ body.light-theme {
 
 /* =============================================================================
    第 3 层：组件 Token —— 卡片
-   组件只认这一层，不直接引用原始层。
+   -----------------------------------------------------------------------------
+   ⚠ 必须声明在 **body** 上，不能放 :root。
+
+   原因是一个很容易踩、且症状极难定位的 CSS 陷阱：
+   自定义属性里的 var() 是在**声明它所在的那个元素**上完成替换的，
+   替换后继承下去的是**算好的字面值**，不是那串 var()。
+
+   所以若写成：
+       :root { --ps-card-title-color: var(--ps-fg-strong); }
+   那么在 :root 上 --ps-fg-strong 解析成暗色值 #ffffff，
+   --ps-card-title-color 就永久等于 #ffffff；之后 body.light-theme
+   再怎么改 --ps-fg-strong 都影响不到它——卡片会永远用暗色文字。
+
+   声明到 body 上则没问题：body 的 --ps-fg-strong 先由级联定出亮色值，
+   同一元素上的 --ps-card-title-color 再据此替换，顺序正确。
    ========================================================================== */
 
-:root {
+body {
     --ps-card-bg: color-mix(in srgb, var(--ps-bg-surface) 88%, transparent);
     --ps-card-bg-elevated: color-mix(in srgb, var(--ps-bg-surface) 96%, transparent);
     --ps-card-border: var(--ps-border-subtle);
@@ -290,7 +307,7 @@ body.light-theme {
     --ps-card-accent-bar-height: 3px;
     --ps-card-transition: var(--ps-ref-duration-base) var(--ps-ref-ease-standard);
 
-    /* 停用态：只弱化非文字元素（强调条/图标/底色）。
+    /* 停更态：只弱化非文字元素（强调条/图标/底色）。
        刻意不给「整卡 opacity」——那会把正文一起冲淡，对比度跌破 WCAG AA。
        停用状态由中性强调色 + .ps-badge 文字承载，不依赖透明度。 */
     --ps-card-disabled-accent: var(--ps-status-neutral-fg);
@@ -306,7 +323,6 @@ body.light-theme {
    以后把 style.css 逐步迁到新名，这层桥接就可以删掉。
    ========================================================================== */
 
-:root,
 body:not(.light-theme) {
     --primary-color: var(--ps-brand);
     --primary-dark: var(--ps-brand-active);

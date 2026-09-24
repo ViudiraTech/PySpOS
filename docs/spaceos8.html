@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpaceOS 8 - 下一代内核 | GoutouStdio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- 设计 token 必须在 style.css 之前：它把旧变量桥接到语义 token，
+         存量样式因此自动吃到统一值 -->
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233776ab' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
+</head>
+<body class="spaceos8-page">
+    <header>
+        <div class="container">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div>
+                    <h1>GoutouStdio</h1>
+                    <span class="subtitle">科技创新工作室</span>
+                </div>
+            </div>
+            <div class="nav-toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+                <i class="fas fa-times"></i>
+            </div>
+            <div class="theme-toggle" id="theme-toggle" title="切换主题">
+                <i class="far fa-moon"></i>
+            </div>
+                    <nav class="nav-menu" id="nav-menu">
+                <ul>
+                    <li><a href="index.html" class="nav-link active">首页</a></li>
+                    <li><a href="pyspos.html" class="nav-link">PySpOS</a></li>
+                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
+                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
+                    <li><a href="spaceos8.html" class="nav-link">SpaceOS 8</a></li>
+                    <li><a href="requirements.html" class="nav-link">配置要求</a></li>
+                    <li><a href="index.html#history" class="nav-link">发展历程</a></li>
+                    <li><a href="index.html#about" class="nav-link">关于我们</a></li>
+                    <li><a href="index.html#contact" class="nav-link">联系我们</a></li>
+                    <li class="github-link-desktop"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
+                    <li class="github-link-mobile" style="display: none;"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
+                </ul>
+                <div class="nav-indicator" id="nav-indicator"></div>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <!-- 发布状态横幅：状态靠文字承载 -->
+        <div class="container">
+            <div class="ps-banner ps-banner--info ps-banner--page-top" role="status">
+                <i class="fas fa-circle-info ps-banner__icon" aria-hidden="true"></i>
+                <div class="ps-banner__content">
+                    <p class="ps-banner__title">SpaceOS 8 正式发布</p>
+                    <p>
+                        构建在自研内核 <a href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">Uinxed-Kernel</a>
+                        之上，配一套自研用户态。内核部分已在实体服务器上跑通，
+                        桌面能启动、能跑 Linux 软件、能跑 DOOM。
+                        当前仍是实验性系统，图形与部分 ABI 尚未补齐。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <section class="ps-section" id="overview">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">SpaceOS 8</span>
+                    <h1 class="ps-section__title">从内核到能用的桌面</h1>
+                    <p class="ps-section__lead">
+                        SpaceOS 6 与 7 停更之后，我们把方向收回到一件事上：
+                        把一个能启动的内核，做成一台真正能用的机器。
+                    </p>
+                </div>
+
+                <div class="ps-grid ps-grid--narrow">
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">架构</h3>
+                            <div class="ps-card__body">x86_64 单体内核</div>
+                        </div>
+                    </article>
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-hashtag"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">内核规模</h3>
+                            <div class="ps-card__body">449 个 C/H 文件 · 约 18.1 万行</div>
+                        </div>
+                    </article>
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">用户态</h3>
+                            <div class="ps-card__body">约 29.2 万行 C / C++</div>
+                        </div>
+                    </article>
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-scroll"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">协议兼容</h3>
+                            <div class="ps-card__body">Linux 6.12 系统调用 ABI</div>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="highlights">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">这次的重点</span>
+                    <h2 class="ps-section__title">四件我们自己想做的事</h2>
+                    <p class="ps-section__lead">
+                        相比 SpaceOS 6 / 7，SpaceOS 8 的提升集中在下面四处。
+                        它们都不是「加了个功能」，而是把原来做不到的事变成了能做到。
+                    </p>
+                </div>
+
+                <div class="ps-grid ps-grid--wide">
+                    <article class="ps-card ps-card--accent-success">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-gamepad"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">能跑 DOOM 了</h3>
+                                <span class="ps-card__subtitle">X11 兼容层落地</span>
+                            </div>
+                            <span class="ps-badge ps-badge--success">已实现</span>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>
+                                这是这一版最实在的进展。我们从零写了一个 X11 服务器，
+                                目的不是造一个玩具 X，而是让<strong>原生 SPUI 桌面</strong>
+                                能直接跑 Linux 上的图形软件。
+                            </p>
+                            <p>
+                                DOOM 跑起来了——它要键盘输入、鼠标、连续动画帧、
+                                音频与稳定的显示通路，任何一环不行都跑不动。
+                                能跑起来，说明这套兼容层不是摆设。
+                            </p>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-code"></i> 120 个 X11 核心协议请求</span>
+                            <span class="ps-card__meta-item"><i class="fas fa-file-code"></i> 约 4,500 行</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--accent-info">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">VortexGlass</h3>
+                                <span class="ps-card__subtitle">自研毛玻璃主题</span>
+                            </div>
+                            <span class="ps-badge ps-badge--info">已实现</span>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>
+                                Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素画出来：
+                                34 个素材覆盖四边边框、标题栏按钮的四种状态，
+                                以及标志性的 <b>Aero orb</b>。
+                            </p>
+                            <p>
+                                主题可切换 <code>tech</code> / <code>win98</code> /
+                                <code>vortexglass</code> 三种，由配置服务统一管理，
+                                所有应用共享同一套外观。
+                            </p>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-images"></i> 34 个 PNG 素材</span>
+                            <span class="ps-card__meta-item"><i class="fas fa-palette"></i> 3 种主题风格</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--accent-info">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-globe"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">自研浏览器</h3>
+                                <span class="ps-card__subtitle">纯 C 的 UxHtml 引擎</span>
+                            </div>
+                            <span class="ps-badge ps-badge--info">已实现</span>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>
+                                没再用第三方渲染库（原先的 litehtml 已移除），
+                                换成自己写的 UxHtml：HTML 解析器、CSS、DOM、
+                                布局与渲染各成一层，另带一个完整的 JavaScript 引擎
+                                与原生绑定。
+                            </p>
+                            <p>
+                                网络层是自己写的 HTTP 客户端，TLS 走 OpenSSL。
+                                目标是「浏览器也是自研栈的一部分」，而不是套壳。
+                            </p>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-file-code"></i> 约 2.4 万行</span>
+                            <span class="ps-card__meta-item"><i class="fab fa-js"></i> 含 JS 引擎与 GC</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--accent-neutral">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-cubes"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">图形栈</h3>
+                                <span class="ps-card__subtitle">合成器 + 图形库</span>
+                            </div>
+                            <span class="ps-badge ps-badge--neutral">进行中</span>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>
+                                上面三件事都站在同一个底子上：约 1.2 万行的窗口合成器
+                                （DRM/KMS、损伤跟踪、Xcursor 解析、窗口装饰），
+                                加上约 2.2 万行的自研图形库 <code>libgfx</code>。
+                            </p>
+                            <p>
+                                桌面上还跑着终端、文件管理器、计算器、编辑器、
+                                设置、浏览器、系统监视器等一整套自研程序。
+                            </p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="kernel">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">底座</span>
+                    <h2 class="ps-section__title">Uinxed-Kernel</h2>
+                    <p class="ps-section__lead">
+                        SpaceOS 8 的内核是一个用 C 从零写的 UNIX-like x86_64 单体内核，
+                        通过 Limine 引导（UEFI 与 Legacy 双模），实现 Linux 6.12 的系统调用 ABI。
+                    </p>
+                </div>
+
+                <div class="ps-grid">
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-sliders-h"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">调度与进程</h3>
+                            <div class="ps-card__body">
+                                EEVDF 调度器，每 CPU 运行队列配红黑树时间线
+                                （vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、
+                                IPI 抢占；两阶段等待队列避免丢失唤醒；互斥量与 futex 支持优先级继承；
+                                cgroups、ptrace、可加载内核模块。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-memory"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">内存管理</h3>
+                            <div class="ps-card__body">
+                                二元 buddy 物理页分配器，四级页表支持 4 KiB / 2 MiB / 1 GiB 页；
+                                高半区直接映射（HHDM）与 slab 分配器；
+                                统一页缓存带 LRU 回收、脏页回写与预读；完整的 swap 子系统。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-folder-open"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">文件系统</h3>
+                            <div class="ps-card__body">
+                                UNIX 风格 VFS，支持挂载点与 inode 式节点；
+                                tmpfs 作为默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；
+                                实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、
+                                NTFS（可写）与 ISO 9660。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-network-wired"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">网络</h3>
+                            <div class="ps-card__body">
+                                自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；
+                                Intel e1000/e1000e 与 Realtek RTL8139/8169 网卡驱动；
+                                Linux 套接字 ABI、DHCP 客户端，以及 /proc/net 与 /sys/class/net 视图。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-plug"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">驱动</h3>
+                            <div class="ps-card__body">
+                                输入：PS/2 键鼠、evdev、USB HID；
+                                存储：IDE/ATA、AHCI、NVMe、USB Mass Storage；
+                                显示：DRM/KMS 与 VirtIO-GPU、GOP 帧缓冲；
+                                音频：Sound Blaster 16、Intel HD Audio；
+                                总线与平台：PCI/PCIe、USB 控制器、I2C、ACPI、HPET、TPM 1.2/2.0。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-shield-halved"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">安全与 IPC</h3>
+                            <div class="ps-card__body">
+                                seccomp 过滤与 no_new_privs、用户通知；
+                                AF_UNIX / AF_NETLINK / AF_INET / AF_INET6 套接字；
+                                pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、
+                                POSIX 消息队列与 System V IPC；futex2；inotify；Unix98 PTY 与多虚拟终端。
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="status">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">诚实说明</span>
+                    <h2 class="ps-section__title">现在到哪一步了</h2>
+                </div>
+
+                <div class="ps-banner ps-banner--warning" role="note">
+                    <i class="fas fa-triangle-exclamation ps-banner__icon" aria-hidden="true"></i>
+                    <div class="ps-banner__content">
+                        <p class="ps-banner__title">这是实验性系统，请不要拿重要数据冒险</p>
+                        <p>
+                            已经跑通的部分：内核能在实体服务器上启动，
+                            能引导 Alpine Linux 3.23 并拉起 Xfce 桌面，终端可用；
+                            我们的 SPUI 桌面与自研用户态在同一套内核上运行；
+                            X11 兼容层已能运行 DOOM 这类真实图形程序。
+                        </p>
+                        <p>
+                            仍在补的部分：GPU 驱动、虚拟化设备、音频，
+                            以及 Linux ABI 的相当一部分。
+                            PS/2 输入路径、evdev 消费者、poll/epoll 唤醒与 EEVDF
+                            调度器都在验证阶段。NTFS 写入驱动尚未被认为可以信任，
+                            请使用可抛弃的机器与测试盘。
+                        </p>
+                        <p>
+                            已在 <strong>Dell PowerEdge R410</strong> 等实体服务器上验证。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="get-started">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">上手</span>
+                    <h2 class="ps-section__title">构建与运行</h2>
+                    <p class="ps-section__lead">
+                        需要 make、gcc（建议 13.3+）、qemu、xorriso；
+                        menuconfig 另需 kconfig-frontends 与 libncurses-dev。
+                    </p>
+                </div>
+
+                <div class="ps-grid">
+                    <article class="ps-card">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-terminal"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">在 QEMU 里跑</h3>
+                            </div>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>最快看到桌面的方式，无需额外硬件：</p>
+                            <p><code>make run</code> —— 已自动把串口输出接到终端。</p>
+                            <p>想抓内核日志，把 <code>limine.conf</code> 里的
+                                <code>console=tty0</code> 改成 <code>console=ttyS0</code>。
+                                屏幕控制台在启动挂死时可能丢日志，串口更可靠。</p>
+                        </div>
+                        <div class="ps-card__actions">
+                            <a class="ps-btn ps-btn--primary"
+                               href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">
+                                <i class="fab fa-github"></i> 源码
+                            </a>
+                            <a class="ps-btn ps-btn--secondary" href="requirements.html">
+                                <i class="fas fa-microchip"></i> 配置要求
+                            </a>
+                        </div>
+                    </article>
+
+                    <article class="ps-card">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-server"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">在实体机上跑</h3>
+                            </div>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>先看仓库 README 的
+                                <code>Run on physical hardware</code> 一节，按步骤准备引导介质。</p>
+                            <p>再次提醒：请用可抛弃的机器与测试盘。
+                                文件系统驱动（尤其 NTFS 写入）目前不适合承载重要数据。</p>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> 已验证：Dell PowerEdge R410</span>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-cube"></i>
+                    </div>
+                    <div>
+                        <h3>GoutouStdio</h3>
+                        <p>科技创新工作室</p>
+                    </div>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>产品</h4>
+                        <ul>
+                            <li><a href="pyspos.html">PySpOS</a></li>
+                            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+                            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
+                            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>资源</h4>
+                        <ul>
+                            <li><a href="requirements.html">配置要求</a></li>
+                            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">Uinxed-Kernel</a></li>
+                            <li><a href="https://github.com/ViudiraTech" target="_blank">GitHub</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2022~2026 GoutouStdio. Open all rights.</p>
+                <p>GoutouStdio 不是真实的公司。这是由学生自发组织的项目，不涉及任何商业活动。</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>系统配置要求 - SpaceOS | GoutouStdio</title>
+    <title>配置要求 - SpaceOS 系列 | GoutouStdio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
     <link rel="stylesheet" href="css/cards.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%234f46e5' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233776ab' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
 </head>
-<body class="product-page">
+<body class="requirements-page">
     <header>
         <div class="container">
             <div class="logo">
@@ -40,8 +40,9 @@
                 <ul>
                     <li><a href="index.html" class="nav-link">首页</a></li>
                     <li><a href="pyspos.html" class="nav-link">PySpOS</a></li>
-                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6</a></li>
-                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7</a></li>
+                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
+                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
+                    <li><a href="spaceos8.html" class="nav-link">SpaceOS 8</a></li>
                     <li><a href="requirements.html" class="nav-link active">配置要求</a></li>
                     <li><a href="index.html#history" class="nav-link">发展历程</a></li>
                     <li><a href="index.html#about" class="nav-link">关于我们</a></li>
@@ -52,121 +53,329 @@
                 <div class="nav-indicator" id="nav-indicator"></div>
             </nav>
         </div>
-    </header>
-
-    <main>
-        <section class="product-hero" id="requirements-hero">
+    </header>    <main>
+        <section class="ps-section" id="requirements-hero" style="padding-top: 7rem;">
             <div class="container">
-                <div class="product-hero-content">
-                    <div class="hero-badge">
-                        <i class="fas fa-microchip"></i>
-                        <span>系统配置要求</span>
-                    </div>
-                    <h1 class="product-hero-title">配置要求</h1>
-                    <p class="product-hero-subtitle">运行 SpaceOS 系列操作系统所需的硬件和软件要求。</p>
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">配置要求</span>
+                    <h1 class="ps-section__title">跑起来需要什么</h1>
+                    <p class="ps-section__lead">
+                        SpaceOS 系列三个产品的运行条件差别很大——
+                        PySpOS 是跑在宿主系统上的 Python 程序，SpaceOS 8 是要独占机器的真内核。
+                        所以这里按产品分开列，不做一张通用表。
+                    </p>
                 </div>
             </div>
         </section>
 
-        <section class="requirements-section">
+        <section class="ps-section" id="pyspos-req" style="padding-top: 0;">
             <div class="container">
-                <div class="requirements-table-wrapper">
-                    <table class="requirements-table">
-                        <thead>
-                            <tr>
-                                <th class="req-col-component">组件</th>
-                                <th class="req-col-minimum">
-                                    <span class="req-header-badge minimum">
-                                        <i class="fas fa-minus-circle"></i>
-                                        最低配置
-                                    </span>
-                                </th>
-                                <th class="req-col-recommended">
-                                    <span class="req-header-badge recommended">
-                                        <i class="fas fa-plus-circle"></i>
-                                        推荐配置
-                                    </span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="req-row">
-                                <td class="req-component">
-                                    <span class="req-component-icon"><i class="fas fa-microchip"></i></span>
-                                    <span class="req-component-name">处理器 (CPU)</span>
-                                </td>
-                                <td class="req-value minimum">
-                                    <span class="req-value-text">x86_64 架构处理器</span>
-                                    <span class="req-value-sub">1.0 GHz 或更高</span>
-                                </td>
-                                <td class="req-value recommended">
-                                    <span class="req-value-text">x86_64 多核处理器</span>
-                                    <span class="req-value-sub">2.0 GHz+</span>
-                                </td>
-                            </tr>
-                            <tr class="req-row">
-                                <td class="req-component">
-                                    <span class="req-component-icon"><i class="fas fa-memory"></i></span>
-                                    <span class="req-component-name">内存 (RAM)</span>
-                                </td>
-                                <td class="req-value minimum">
-                                    <span class="req-value-text">128 MB</span>
-                                    <span class="req-value-sub">或更高</span>
-                                </td>
-                                <td class="req-value recommended">
-                                    <span class="req-value-text">512 MB</span>
-                                    <span class="req-value-sub">或更高</span>
-                                </td>
-                            </tr>
-                            <tr class="req-row">
-                                <td class="req-component">
-                                    <span class="req-component-icon"><i class="fas fa-hdd"></i></span>
-                                    <span class="req-component-name">存储空间</span>
-                                </td>
-                                <td class="req-value minimum">
-                                    <span class="req-value-text">512 MB</span>
-                                    <span class="req-value-sub">可用空间</span>
-                                </td>
-                                <td class="req-value recommended">
-                                    <span class="req-value-text">2 GB</span>
-                                    <span class="req-value-sub">可用空间</span>
-                                </td>
-                            </tr>
-                            <tr class="req-row">
-                                <td class="req-component">
-                                    <span class="req-component-icon"><i class="fas fa-desktop"></i></span>
-                                    <span class="req-component-name">显卡 (GPU)</span>
-                                </td>
-                                <td class="req-value minimum">
-                                    <span class="req-value-text">基础显示适配器</span>
-                                    <span class="req-value-sub">支持基本图形输出</span>
-                                </td>
-                                <td class="req-value recommended">
-                                    <span class="req-value-text">支持高分辨率</span>
-                                    <span class="req-value-sub">更好的显示效果</span>
-                                </td>
-                            </tr>
-                            <tr class="req-row">
-                                <td class="req-component">
-                                    <span class="req-component-icon"><i class="fas fa-power-off"></i></span>
-                                    <span class="req-component-name">启动固件</span>
-                                </td>
-                                <td class="req-value minimum">
-                                    <span class="req-value-text">UEFI</span>
-                                    <span class="req-value-sub">基础版本</span>
-                                </td>
-                                <td class="req-value recommended">
-                                    <span class="req-value-text">UEFI 2.0+</span>
-                                    <span class="req-value-sub">支持更多特性</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">PySpOS 3.2.0</span>
+                    <h2 class="ps-section__title">模拟操作系统</h2>
                 </div>
 
-                <div class="requirements-note">
-                    <i class="fas fa-info-circle"></i>
-                    <p>以上配置要求适用于 SpaceOS 6 及以上系列操作系统。实际使用体验可能因具体应用场景而异，建议使用更高配置以获得更好的性能表现。</p>
+                <div class="ps-grid">
+                    <article class="ps-card ps-card--accent-success">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fab fa-python"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">软件要求</h3>
+                            </div>
+                            <span class="ps-badge ps-badge--success">持续维护</span>
+                        </div>
+                        <div class="ps-card__body">
+                            <ul class="ps-feature-list">
+                                <li><b>Python 3.10 或更高</b>（CI 覆盖 3.10 / 3.12 / 3.14）</li>
+                                <li>操作系统：Windows 7+、Linux 各发行版、macOS</li>
+                                <li>磁盘约 120 MB</li>
+                                <li>无需管理员权限，除部分终端功能外均可普通用户运行</li>
+                            </ul>
+                            <p><b>可选依赖：</b><code>unicorn</code>（ELF 引擎，缺失自动降级到自研模拟器）、
+                                <code>tzdata</code>（真实时区，Windows 与精简容器镜像需要）。
+                                两者都不是硬性要求。</p>
+                        </div>
+                        <div class="ps-card__actions">
+                            <a class="ps-btn ps-btn--primary" href="pyspos.html">
+                                <i class="fas fa-arrow-right"></i> PySpOS 详情
+                            </a>
+                            <a class="ps-btn ps-btn--secondary" href="ota/index.html">
+                                <i class="fas fa-download"></i> 下载
+                            </a>
+                        </div>
+                    </article>
+
+                    <article class="ps-card">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">硬件要求</h3>
+                            </div>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>PySpOS 是纯用户态程序，不直接操作硬件，
+                                因此基本没有硬性门槛——能跑 Python 的机器就能跑。</p>
+                            <div class="ps-card__meta">
+                                <span class="ps-card__meta-item"><i class="fas fa-check"></i> 双核 CPU 足够</span>
+                                <span class="ps-card__meta-item"><i class="fas fa-check"></i> 512 MB 内存足够</span>
+                                <span class="ps-card__meta-item"><i class="fas fa-check"></i> 无需独立显卡</span>
+                            </div>
+                            <p style="margin-top: 1rem;">
+                                唯一与显示相关的是终端：使用 curses 的 OOBE 向导需要
+                                一个能承载 80×24 字符的终端。SSH、tmux、ConEmy、
+                                Windows Terminal 都可以。
+                            </p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="spaceos8-req">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">SpaceOS 8</span>
+                    <h2 class="ps-section__title">真实内核</h2>
+                    <p class="ps-section__lead">
+                        这一部分是硬要求。下面标注「已验证」的是我们实际跑过的组合，
+                        标注「默认关闭」的需要自己在 <code>make menuconfig</code> 里打开。
+                    </p>
+                </div>
+
+                <div class="ps-banner ps-banner--warning" role="note">
+                    <i class="fas fa-triangle-exclamation ps-banner__icon" aria-hidden="true"></i>
+                    <div class="ps-banner__content">
+                        <p class="ps-banner__title">请用可抛弃的机器与测试盘</p>
+                        <p>
+                            NTFS 写入驱动目前尚未被认为可以信任。在确认它稳定之前，
+                            不要让它碰到重要数据。已在
+                            <strong>Dell PowerEdge R410</strong> 等实体服务器上验证。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="ps-grid ps-grid--wide" style="margin-top: 1.5rem;">
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">处理器</h3>
+                            <div class="ps-card__body">
+                                x86_64 必需。多核可用，SMP 启动会拉起全部核心
+                                并在核间做任务迁移与负载均衡。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> 已验证</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-memory"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">内存</h3>
+                            <div class="ps-card__body">
+                                最低 128 MB。要跑图形桌面并使用 swap，
+                                建议 1 GB 以上。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> 512 MB 可启动</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-power-off"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">固件</h3>
+                            <div class="ps-card__body">
+                                通过 <b>Limine</b> 引导，<b>UEFI 与 Legacy 两种模式都支持</b>，
+                                不挑固件实现。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> UEFI 已验证</span>
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> Legacy 支持</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-keyboard"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">输入设备</h3>
+                            <div class="ps-card__body">
+                                PS/2 键盘与鼠标为主路径，提供 Linux 兼容的
+                                <code>evdev</code>；另支持 USB HID
+                                （键盘、鼠标、消费类控制器）。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-spinner"></i> PS/2 路径验证中</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-desktop"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">显示</h3>
+                            <div class="ps-card__body">
+                                DRM/KMS 内核核心，带通用 GPU 驱动注册表，
+                                内置 <b>VirtIO-GPU</b> 驱动；另提供
+                                GOP 帧缓冲控制台（带点阵字体）与软件帧缓冲兜底。
+                                未接显卡时可用 GOP 文本控制台。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-times"></i> 真实 GPU 驱动未完成</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-hdd"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">存储</h3>
+                            <div class="ps-card__body">
+                                IDE/ATA、AHCI（SATA）、NVMe、USB Mass Storage
+                                均有驱动。默认根文件系统是 tmpfs。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-check"></i> NVMe 已启用</span>
+                            <span class="ps-card__meta-item"><i class="fas fa-triangle-exclamation"></i> NTFS 写入不建议用</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-network-wired"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">网络</h3>
+                            <div class="ps-card__body">
+                                需要 Intel e1000 / e1000e 或 Realtek RTL8139 / RTL8169 网卡。
+                                协议栈自研，客户端带 DHCP。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-times"></i> 非该网卡可能无法联网</span>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-volume-high"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">音频（可选）</h3>
+                            <div class="ps-card__body">
+                                Sound Blaster 16 与 Intel HD Audio，
+                                带 ALSA 兼容的 PCM / control ABI。
+                            </div>
+                        </div>
+                        <div class="ps-card__meta">
+                            <span class="ps-card__meta-item"><i class="fas fa-times"></i> SB16 默认关闭，需 menuconfig 打开</span>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="ps-grid" style="margin-top: 1.5rem;">
+                    <article class="ps-card">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-toolbox"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">构建工具链</h3>
+                            </div>
+                        </div>
+                        <div class="ps-card__body">
+                            <p><b>必需：</b><code>make</code>、<code>gcc</code>（建议 13.3+）、
+                                <code>qemu</code>、<code>xorriso</code></p>
+                            <p><b>建议：</b><code>clang-format</code>、<code>clang-tidy</code>
+                                （格式化与静态分析）</p>
+                            <p><b>仅 menuconfig 需要：</b>
+                                <code>kconfig-frontends</code> 与 <code>libncurses-dev</code></p>
+                            <p>Debian / Ubuntu：<br>
+                                <code>sudo apt install build-essential qemu-system-x86 xorriso \
+                                libncurses-dev</code></p>
+                        </div>
+                    </article>
+
+                    <article class="ps-card">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-sliders-h"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">默认关闭的功能</h3>
+                            </div>
+                        </div>
+                        <div class="ps-card__body">
+                            <p>有些子系统在 Kconfig 里默认是 <code>n</code>，
+                                想用得自己打开：</p>
+                            <ul class="ps-feature-list">
+                                <li><code>VIRTIO</code> / <code>VIRTIO_GPU</code> —— 虚拟化设备</li>
+                                <li><code>SOUND_SB16</code> —— Sound Blaster 16 声卡</li>
+                            </ul>
+                            <p>用 <code>make menuconfig</code> 打开，然后确认你的虚拟机或实体机
+                                上确实有对应设备。新增 GPU 驱动的方式是在
+                                <code>drivers/gpu/gpu_drivers.c</code> 的注册表里加一条记录。</p>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="ps-card__actions" style="margin-top: 2rem;">
+                    <a class="ps-btn ps-btn--primary" href="spaceos8.html">
+                        <i class="fas fa-arrow-right"></i> SpaceOS 8 详情
+                    </a>
+                    <a class="ps-btn ps-btn--secondary"
+                       href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">
+                        <i class="fab fa-github"></i> 内核源码与构建说明
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="retired-req">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">已停更</span>
+                    <h2 class="ps-section__title">SpaceOS 6 / 7</h2>
+                </div>
+
+                <div class="ps-banner ps-banner--warning" role="note">
+                    <i class="fas fa-circle-exclamation ps-banner__icon" aria-hidden="true"></i>
+                    <div class="ps-banner__content">
+                        <p class="ps-banner__title">这两条路线已停止开发</p>
+                        <p>
+                            原先那张「SpaceOS 系列通用配置表」对它们其实已经不适用，
+                            因此本页不再列出硬件要求。
+                            两个页面仅作历史存档，配置与构建说明请以当时的仓库记录为准。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="ps-grid" style="margin-top: 1.5rem;">
+                    <article class="ps-card ps-card--accent-neutral ps-card--retired">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-shuttle-van"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">SpaceOS 6</h3>
+                            </div>
+                            <span class="ps-badge ps-badge--neutral">已停止开发</span>
+                        </div>
+                        <div class="ps-card__actions">
+                            <a class="ps-btn ps-btn--secondary" href="spaceos6.html">
+                                <i class="fas fa-book-open"></i> 查看存档
+                            </a>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--accent-neutral ps-card--retired">
+                        <div class="ps-card__head">
+                            <div class="ps-card__icon"><i class="fas fa-rocket"></i></div>
+                            <div class="ps-card__heading">
+                                <h3 class="ps-card__title">SpaceOS 7</h3>
+                            </div>
+                            <span class="ps-badge ps-badge--neutral">已停止开发</span>
+                        </div>
+                        <div class="ps-card__actions">
+                            <a class="ps-btn ps-btn--secondary" href="spaceos7.html">
+                                <i class="fas fa-book-open"></i> 查看存档
+                            </a>
+                        </div>
+                    </article>
                 </div>
             </div>
         </section>
@@ -189,22 +398,24 @@
                         <h4>产品</h4>
                         <ul>
                             <li><a href="pyspos.html">PySpOS</a></li>
-                            <li><a href="spaceos6.html">SpaceOS 6</a></li>
-                            <li><a href="spaceos7.html">SpaceOS 7</a></li>
+                            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+                            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
+                            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
-                        <h4>关于</h4>
+                        <h4>资源</h4>
                         <ul>
-                            <li><a href="index.html#history">发展历程</a></li>
-                            <li><a href="index.html#about">关于我们</a></li>
-                            <li><a href="index.html#contact">联系我们</a></li>
+                            <li><a href="requirements.html">配置要求</a></li>
+                            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">Uinxed-Kernel</a></li>
+                            <li><a href="https://github.com/ViudiraTech" target="_blank">GitHub</a></li>
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2022~2026 GoutouStdio. All rights reserved.</p>
+                <p>&copy; 2022~2026 GoutouStdio. Open all rights.</p>
+                <p>GoutouStdio 不是真实的公司。这是由学生自发组织的项目，不涉及任何商业活动。</p>
             </div>
         </div>
     </footer>

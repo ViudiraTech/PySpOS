@@ -119,6 +119,69 @@ def check_no_opacity_on_content(css, name):
     return uniq
 
 
+def check_root_tokens_frozen(css, name):
+    """`:root` 上不许声明「值里含 var()」的 token。
+
+    这是个症状极难定位的 CSS 陷阱：自定义属性里的 var() 是在**声明它的
+    那个元素**上完成替换的，替换后继承下去的是算好的字面值。
+
+        :root { --ps-card-title-color: var(--ps-fg-strong); }
+
+    在 :root 上 --ps-fg-strong 解析成暗色值 #ffffff，于是
+    --ps-card-title-color 永久等于 #ffffff；body.light-theme 之后
+    再怎么改 --ps-fg-strong 都影响不到——卡片永远用暗色文字。
+
+    2026-09-24 真踩过：整套卡片在亮色主题下完全失效，肉眼看着是
+    「停更卡的字颜色不对」，根因却是 token 冻结在 :root。
+
+    规则：原始层（--ps-ref-*，纯字面值）可以放 :root；
+    凡是引用了别的 token 的（组件层、桥接层），必须与被引用的语义 token
+    落在同一个元素上（body）。
+    """
+    bad = []
+    body = strip_comments(css)
+    for m in re.finditer(r':root\s*\{(.*?)\n\}', body, re.S):
+        block = m.group(1)
+        for name_, val in re.findall(r'(--ps-[a-z0-9-]+)\s*:\s*([^;]+);', block):
+            if 'var(' in val:
+                bad.append((name_, ' '.join(val.split())[:56]))
+    return bad
+
+
+def check_scrim_direction(css, name):
+    """亮色主题的蒙版必须比暗色主题**亮**。
+
+    2026-09-24 踩过：亮色主题前景是深色，蒙版却沿用暗色那套深蓝黑，
+    于是深色文字压在深色照片上，整段标题读不出来。蒙版方向要跟主题反转。
+    这里只比较两套蒙版的整体亮度，抓「方向搞反了」这一类错误。
+    """
+    def avg_lum(grad):
+        alphas = [float(a) / 100 for a in re.findall(r'/([\d.]+)%\)', grad)]
+        cols = re.findall(r'rgb\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*/', grad)
+        if not alphas or not cols:
+            return None
+        a = sum(alphas) / len(alphas)
+        rgb = [sum(c[i] for c in cols) / len(cols) for i in range(3)]
+        # 假设底图是中灰 #808080，合成后的亮度
+        base = [128.0, 128.0, 128.0]
+        comp = [rgb[i] * a + base[i] * (1 - a) for i in range(3)]
+        return (0.2126 * comp[0] + 0.7152 * comp[1] + 0.0722 * comp[2])
+
+    dark = re.search(r'--ps-bg-scrim\s*:\s*linear-gradient\((.*?)\);',
+                     css, re.S)
+    light = re.findall(r'--ps-bg-scrim\s*:\s*linear-gradient\((.*?)\);',
+                       css, re.S)
+    if not dark or len(light) < 2:
+        return []          # 只有一套蒙版，无从比较
+    ld, ll = avg_lum(dark.group(1)), avg_lum(light[-1])
+    if ld is None or ll is None:
+        return []
+    if ll <= ld:
+        return [(f"--ps-bg-scrim(亮色) 亮度 {ll:.0f} <= 暗色 {ld:.0f}",
+                 "亮色主题用了不比暗色亮的蒙版，深色文字会压在深色照片上")]
+    return []
+
+
 def main():
     errors = []
 
@@ -150,12 +213,34 @@ def main():
     css_files = sorted((DOCS / "css").glob("*.css"))
     missing = check_token_refs(css_files, defined, "css")
     if missing:
-        print(f"[FAIL] 引用了未定义的 token：")
+        print("[FAIL] 引用了未定义的 token：")
         for tok, files in missing.items():
             print(f"       {tok:34} <- {', '.join(files)}")
         errors.append(f"{len(missing)} 个 token 引用未定义")
     else:
         print(f"[ OK ] 所有 var(--ps-*) 引用都有定义（共 {len(defined)} 个 token）")
+
+    # ---- 2b. :root 上的 token 不得含 var()（会被冻结在暗色值）----
+    frozen = check_root_tokens_frozen(tokens, TOKENS.name)
+    if frozen:
+        print(f"[FAIL] {TOKENS.name} 有 {len(frozen)} 个 token 声明在 :root 上"
+              f"且值里含 var()，会被冻结成暗色值、亮色主题失效：")
+        for tok, val in frozen[:10]:
+            print(f"       {tok:34} = {val}")
+        print("       引用了别的 token 的定义必须与被引用方落在同一元素（body）。")
+        errors.append(f"{len(frozen)} 个 token 在 :root 上被冻结")
+    else:
+        print("[ OK ] :root 上没有会被 var() 冻结的 token")
+
+    # ---- 2c. 亮色蒙版必须比暗色亮 ----
+    scrim = check_scrim_direction(tokens, TOKENS.name)
+    if scrim:
+        print(f"[FAIL] 蒙版方向错误：")
+        for msg, _ in scrim:
+            print(f"       {msg}")
+        errors.append("亮色主题蒙版不比暗色亮")
+    else:
+        print("[ OK ] 亮色主题蒙版方向正确（比暗色亮）")
 
     # ---- 3. token 是否定义了却没人用（提示，非错误）----
     all_refs = set()
