@@ -28,10 +28,15 @@ def confirm(prompt: str, default: bool = False, max_retries: int = 5) -> bool:
     默认 default=False（保守语义：拿不准就当拒绝），max_retries=5。
     历史调用 confirm(prompt) 行为不变，只是多了防呆上限。
     """
-    import ttyutil
+    try:
+        import ttyutil
+    except ImportError:
+        ttyutil = None
     for _ in range(max_retries + 1):
         try:
-            user_input = ttyutil.read_line(f"{prompt}(y/n): ").lower()
+            question = f"{prompt}(y/n): "
+            user_input = (ttyutil.read_line(question) if ttyutil is not None
+                          else input(question)).lower()
         except (EOFError, KeyboardInterrupt):
             raise
         if not user_input:

@@ -61,3 +61,18 @@ def test_spc_and_sysmon(tmp_path, monkeypatch):
     run("spc_export boot.spc")
     assert (tmp_path / "boot.spc").exists()
     assert "PySpOS" in run("sysmon")
+
+
+def test_bootloader_status_requires_root(monkeypatch, capsys):
+    import main
+    old_root = main.rootstate
+    old_persisted = main.bootcfg.get("rootstate")
+    main.rootstate = False
+    main.bootcfg["rootstate"] = False
+    try:
+        main.handle_command("bootloader_status")
+        output = capsys.readouterr().out
+    finally:
+        main.rootstate = old_root
+        main.bootcfg["rootstate"] = old_persisted
+    assert "需要 ROOT" in output

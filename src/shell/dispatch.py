@@ -161,6 +161,7 @@ _REG = [
     # setup
     ("oobe", sys_cmds.cmd_oobe, "重跑首次开机向导", "oobe", "setup", [], False),
     ("testroot", sys_cmds.cmd_testroot, "查看 ROOT 状态", "testroot", "setup", [], False),
+    ("bootloader_status", sys_cmds.cmd_bootloader_status, "查看 Bootloader 验签/信任状态（需 ROOT）", "bootloader_status", "setup", ["bl_status"], False),
 ]
 
 for _name, _fn, _summary, _usage, _group, _aliases, _arg in _REG:

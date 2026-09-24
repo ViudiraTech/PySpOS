@@ -37,7 +37,9 @@ sys.path.append(apps_dir)
 
 # 全局变量定义处
 bootcfg = btcfg.load_bootcfg()
-rootstate = bool(btcfg.get_bootcfg('rootstate'))
+boot_locked = os.environ.get("PYSPOS_BOOT_LOCKED") == "1"
+bootcfg["locked"] = boot_locked
+rootstate = bool(btcfg.get_bootcfg('rootstate')) and not boot_locked
 boot_time = logk.get_boot_time()
 
 # 进程树顶层（Linux 语义）：0=idle(swapper) / 1=init / 2=shell
@@ -45,51 +47,38 @@ boot_time = logk.get_boot_time()
 import process as _process
 _process.boot_system()
 
-# 获取根目录（main.py所在目录的父目录）
-# 统一走 common.paths，失败时回退到历史逻辑（兼容旧槽位布局）。
+# 获取根目录和已验证的启动上下文
 script_dir = os.path.dirname(os.path.abspath(__file__))
-try:
-    from common.paths import get_root_dir as _get_root_dir
-    root_dir = _get_root_dir(script_dir)
-    in_slot = os.path.basename(script_dir) in ['slot_a', 'slot_b']
-except Exception:
-    if os.path.basename(script_dir) == 'src':
-        # 在src目录中，根目录是src的父目录
-        root_dir = os.path.dirname(script_dir)
-        in_slot = False
-    elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-        # 在槽位目录中，根目录是槽位的父目录
-        root_dir = os.path.dirname(script_dir)
-        in_slot = True
-    else:
-        # 其他情况，使用当前目录作为根目录
-        root_dir = script_dir
-        in_slot = False
-
-# 切换到当前槽位目录
-current_slot_file = os.path.join(root_dir, "current_slot")
-if os.path.exists(current_slot_file):
-    try:
-        with open(current_slot_file, 'r') as f:
-            current_slot = f.read().strip()
-            slot_path = os.path.join(root_dir, current_slot)
-            if os.path.exists(slot_path):
-                # 如果当前不在槽位目录中，切换到槽位目录
-                if not in_slot:
-                    os.chdir(slot_path)
-                    current_dir = os.getcwd()
-                    apps_dir = os.path.join(current_dir, 'apps')
-                    sys.path.append(apps_dir)
-                    logk.printl("main", f"已切换到槽位: {current_slot}", boot_time)
-                else:
-                    # 已经在槽位目录中，保持当前目录
-                    logk.printl("main", f"当前已在槽位: {current_slot}", boot_time)
-            else:
-                logk.printl("main", f"槽位 {current_slot} 不存在，使用src目录", boot_time)
-    except Exception as e:
-        logk.printl("main", f"读取槽位文件失败: {e}，使用src目录", boot_time)
+boot_root = os.environ.get("PYSPOS_BOOT_ROOT")
+boot_system = os.environ.get("PYSPOS_BOOT_SYSTEM")
+if boot_root:
+    root_dir = os.path.abspath(boot_root)
 else:
-    logk.printl("main", "未找到槽位文件，使用src目录", boot_time)
+    try:
+        from common.paths import get_root_dir as _get_root_dir
+        root_dir = _get_root_dir(script_dir)
+    except Exception:
+        root_dir = script_dir
+in_slot = os.path.basename(script_dir) in ['slot_a', 'slot_b']
+if boot_system and os.path.isdir(boot_system):
+    current_dir = os.path.abspath(boot_system)
+    apps_dir = os.path.join(current_dir, 'apps')
+    if apps_dir not in sys.path:
+        sys.path.append(apps_dir)
+    if os.getcwd() != current_dir:
+        os.chdir(current_dir)
+
+
+def is_root():
+    return bool(rootstate or (not boot_locked and bootcfg.get('rootstate', False)))
+
+
+def require_root(operation):
+    if not is_root():
+        raise PermissionError(f"{operation} 需要 ROOT 权限")
+
+
+# 主函数
 
 # 主函数
 def main():
@@ -97,7 +86,7 @@ def main():
     from syslocale import _
     syslocale.init_from_bootcfg(bootcfg)
     logk.printl("main", _("boot.loading"), boot_time)
-    logk.printl("main", f"Bootloader：{ _('boot.locked') if bootcfg['locked'] else _('boot.unlocked')}，ROOT 权限：{ _('boot.root_off') if not bootcfg['rootstate'] else _('boot.root_on')}", boot_time)
+    logk.printl("main", f"Bootloader：{ _('boot.locked') if boot_locked else _('boot.unlocked')}，ROOT 权限：{ _('boot.root_off') if not rootstate else _('boot.root_on')}", boot_time)
     logk.printl("main", f"{_('boot.loaded')}{sys.platform}", boot_time)
     logk.printl("main", _("boot.root_enabled") if rootstate else _("boot.root_disabled"), boot_time)
 
@@ -121,7 +110,7 @@ from shell.sys_cmds import (
     cmd_pwd, cmd_whoami, cmd_cat, cmd_grep, cmd_mkdir, cmd_touch,
     cmd_cp, cmd_mv, cmd_history, cmd_spc_show, cmd_spc_export,
     cmd_spc_validate, cmd_spc_get, cmd_spc_set, cmd_spc_migrate,
-    cmd_oobe, cmd_locale,
+    cmd_oobe, cmd_locale, cmd_bootloader_status,
 )
 from shell.elf_cmd import cmd_run
 from shell.ota_cmds import (
@@ -131,8 +120,8 @@ from shell.ota_cmds import (
 from shell.proc_cmds import cmd_ps, cmd_jobs, cmd_kill, cmd_signal, cmd_sysmon
 
 __all__ = [
-    "bootcfg", "rootstate", "boot_time", "root_dir",
-    "current_dir", "apps_dir",
+    "bootcfg", "rootstate", "boot_locked", "boot_time", "root_dir",
+    "current_dir", "apps_dir", "is_root", "require_root",
     "get_app_path", "get_spf_path", "is_safe_filename",
     "handle_command", "COMMANDS", "_cmd_history",
     "main",
@@ -144,7 +133,7 @@ __all__ = [
     "cmd_mkdir", "cmd_touch",     "cmd_cp", "cmd_mv", "cmd_history",
     "cmd_spc_show", "cmd_spc_export",
     "cmd_spc_validate", "cmd_spc_get", "cmd_spc_set", "cmd_spc_migrate",
-    "cmd_oobe", "cmd_locale",
+    "cmd_oobe", "cmd_locale", "cmd_bootloader_status",
     "cmd_run",
     "cmd_ota_check", "cmd_ota_update", "cmd_ota_status", "cmd_ota_rollback",
     "cmd_ota_clean",

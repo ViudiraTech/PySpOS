@@ -30,6 +30,11 @@ src/.hotreset
 etc/
 *.log
 
+keys/
+*.pem
+*.sig
+/.pyspos_boot/
+
 # 构建/测试
 .pytest_cache/
 .coverage

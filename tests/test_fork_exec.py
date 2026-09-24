@@ -62,18 +62,22 @@ def test_concurrent_background_children():
     assert all(proc.get(p) is None for p in pids)
 
 
-def test_syscall_rpc_mutates_parent_state(tmp_path):
-    """子进程不能直接改父进程内存，只能经 syscall；改完父进程状态应变化。"""
+def test_syscall_rpc_rejects_unauthorized_root(tmp_path):
+    """普通子进程不能直接改父进程 ROOT 状态。"""
     import main
     app = tmp_path / "rpcprobe.py"
     app.write_text(RPC_APP, encoding="utf-8")
     was_root = main.rootstate
+    was_authorized = getattr(main, "_root_authorized", False)
+    main.rootstate = False
+    main._root_authorized = False
     try:
         pcb = _spawn(f"app:{app}")
         _drain(pcb)
-        assert main.rootstate is True
+        assert main.rootstate is False
     finally:
         main.rootstate = was_root
+        main._root_authorized = was_authorized
 
 
 def test_child_reads_parent_authoritative_state(tmp_path):

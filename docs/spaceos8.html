@@ -83,8 +83,8 @@
                 </div>
 
                 <table class="ps-metrics">
-                    <caption>一句话概括底座规模——这里用表格而非卡片：这是结构化数据，
-                        表格比四个方块读得快，也不占用版面层级。</caption>
+                    <caption>先说用户态——它比内核更大，也更少见。
+                        这里用表格而非卡片：结构化数据用表格读得快，也不占用版面层级。</caption>
                     <thead>
                         <tr>
                             <th scope="col">项目</th>
@@ -94,19 +94,24 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <th scope="row">架构</th>
-                            <td>C 从零写的 UNIX-like 单体内核</td>
-                            <td>x86_64</td>
+                            <th scope="row">用户态</th>
+                            <td>SPUI 桌面、合成器、浏览器、系统程序，全部自研</td>
+                            <td>约 29.2 万行</td>
                         </tr>
                         <tr>
-                            <th scope="row">内核规模</th>
-                            <td>449 个 C/H 文件</td>
+                            <th scope="row">内核</th>
+                            <td>C 从零写的 UNIX-like 单体内核，449 个 C/H 文件</td>
                             <td>约 18.1 万行</td>
                         </tr>
                         <tr>
-                            <th scope="row">用户态规模</th>
-                            <td>自研桌面、合成器、浏览器与系统程序</td>
-                            <td>约 29.2 万行</td>
+                            <th scope="row">图形界面</th>
+                            <td>合成器 + 自研图形库 libgfx</td>
+                            <td>约 3.4 万行</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">浏览器</th>
+                            <td>纯 C 的 UxHtml 引擎，含完整 JavaScript 引擎</td>
+                            <td>约 2.4 万行</td>
                         </tr>
                         <tr>
                             <th scope="row">协议兼容</th>
@@ -114,14 +119,9 @@
                             <td>0-462</td>
                         </tr>
                         <tr>
-                            <th scope="row">版本串</th>
-                            <td>当前发布标识</td>
+                            <th scope="row">版本 / 许可</th>
+                            <td>内核仓库许可 Apache-2.0</td>
                             <td>1.0.0-alpha.1</td>
-                        </tr>
-                        <tr>
-                            <th scope="row">许可</th>
-                            <td>内核仓库许可</td>
-                            <td>Apache-2.0</td>
                         </tr>
                     </tbody>
                 </table>
@@ -134,8 +134,9 @@
                     <span class="ps-section__eyebrow">这次的重点</span>
                     <h2 class="ps-section__title">能扛住外面现成的软件</h2>
                     <p class="ps-section__lead">
-                        一个内核是否「真的能用」，不看它有多少功能，
-                        看它能不能扛住别人写好的软件。这是这一版最实在的进展。
+                        一个系统是否「真的能用」，不看它自己有多少功能，
+                        看它能不能扛住别人写好的软件。这是这一版最实在的进展，
+                        也是内核与用户态一起扛下来的结果。
                     </p>
                 </div>
 
@@ -210,15 +211,18 @@
             </div>
         </section>
 
-        <section class="ps-section" id="stack">
+        <section class="ps-section" id="compat">
             <div class="container">
                 <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">自研部分</span>
-                    <h2 class="ps-section__title">上面那些事站在哪个底子上</h2>
+                    <span class="ps-section__eyebrow">兼容与外观</span>
+                    <h2 class="ps-section__title">DOOM 是怎么跑起来的</h2>
+                    <p class="ps-section__lead">
+                        上面那四样试金石里，DOOM 靠的是这两件东西。
+                    </p>
                 </div>
 
                 <div class="ps-rows">
-                    <div class="ps-row">
+                    <div class="ps-row ps-row--success">
                         <div class="ps-row__head">
                             <h4 class="ps-row__title">X11 兼容层</h4>
                             <span class="ps-row__note">120 个核心协议请求 · 约 4,500 行</span>
@@ -226,10 +230,12 @@
                         <div class="ps-row__body">
                             从零写的 X11 服务器。目的不是造一个玩具 X，
                             而是让<strong>原生 SPUI 桌面</strong>能直接跑 Linux 上的图形软件。
+                            窗口映射、绘制、输入与事件、字体、光标、属性与选区
+                            这些日常用得到的请求都要实现，缺一个就有程序起不来。
                         </div>
                     </div>
 
-                    <div class="ps-row">
+                    <div class="ps-row ps-row--info">
                         <div class="ps-row__head">
                             <h4 class="ps-row__title">VortexGlass</h4>
                             <span class="ps-row__note">34 个素材 · 3 种主题风格</span>
@@ -243,33 +249,169 @@
                             所有应用共享同一套外观。
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
 
-                    <div class="ps-row">
+        <section class="ps-section" id="desktop">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">用户态</span>
+                    <h2 class="ps-section__title">一整套自研桌面</h2>
+                    <p class="ps-section__lead">
+                        内核是每个 OS 都得有的东西，用户态不是。
+                        从窗口合成器到浏览器，中间没有一层是套现成的。
+                    </p>
+                </div>
+
+                <div class="ps-rows">
+                    <div class="ps-row ps-row--info">
                         <div class="ps-row__head">
-                            <h4 class="ps-row__title">自研浏览器</h4>
-                            <span class="ps-row__note">纯 C 的 UxHtml 引擎 · 约 2.4 万行</span>
+                            <h4 class="ps-row__title">SPUI 桌面</h4>
+                            <span class="ps-row__note">约 4,500 行 · 14 个文件</span>
                         </div>
                         <div class="ps-row__body">
-                            没再用第三方渲染库（原先的 litehtml 已移除），换成自己写的 UxHtml：
-                            HTML 解析器、CSS、DOM、布局与渲染各成一层，
-                            另带一个完整的 JavaScript 引擎与原生绑定。
-                            网络层是自己写的 HTTP 客户端，TLS 走 OpenSSL。
+                            我们的原生桌面环境。带 dock、壁纸与窗口管理，
+                            dock 上直接启动终端、开始屏幕、文件管理器、
+                            活动监视器与文本编辑器。图标缺失时有降级配色兜底，
+                            不至于开天窗。
+                        </div>
+                    </div>
+
+                    <div class="ps-row ps-row--info">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">服务与配置系统</h4>
+                            <span class="ps-row__note">init / service / uxconfd</span>
+                        </div>
+                        <div class="ps-row__body">
+                            自研的 PID 1 服务管理器，支持目标里程碑、进程监管与自动重启、
+                            僵尸回收；状态输出对齐 systemd 的
+                            <code>[ OK ] Started …</code> 格式，并提供
+                            <code>systemctl</code> 风格的命令行，通过
+                            <code>/tmp/initctl</code> 与 PID 1 通信。
+                            配置由 <code>uxconfd</code> 统一管理，
+                            <code>uxconf-query</code> 负责读写，
+                            所有应用共享同一套外观与设置。
                         </div>
                     </div>
 
                     <div class="ps-row">
                         <div class="ps-row__head">
-                            <h4 class="ps-row__title">图形栈</h4>
-                            <span class="ps-row__note">合成器约 1.2 万行 · libgfx 约 2.2 万行</span>
+                            <h4 class="ps-row__title">OOBE 首次开机向导</h4>
+                            <span class="ps-row__note">约 2,100 行</span>
                         </div>
                         <div class="ps-row__body">
-                            窗口合成器含 DRM/KMS、损伤跟踪、Xcursor 解析与窗口装饰；
-                            另有自研图形库 <code>libgfx</code>。
-                            桌面上跑着终端、文件管理器、计算器、编辑器、设置、
-                            浏览器、系统监视器等一整套自研程序。
+                            首次开机的设置流程，与 PySpOS 里的向导是同一套思路——
+                            语言、时区等设置真实生效，而不是走个过场。
+                        </div>
+                    </div>
+
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">自研 libc 与工具链</h4>
+                            <span class="ps-row__note">libc / libgfx / imgui</span>
+                        </div>
+                        <div class="ps-row__body">
+                            自己的 C 库、图形库与 GUI 工具包，
+                            加上自研的 <code>sh</code>。系统不依赖现成的用户态发行版。
                         </div>
                     </div>
                 </div>
+
+                <div class="ps-section__head" style="margin-block-start: 3rem;">
+                    <span class="ps-section__eyebrow">应用套件</span>
+                    <h3 class="ps-section__title">桌面上跑的程序</h3>
+                    <p class="ps-section__lead">
+                        下面每一个都是自研的，不是移植来的。行数是源码规模。
+                    </p>
+                </div>
+
+                <table class="ps-metrics">
+                    <thead>
+                        <tr>
+                            <th scope="col">程序</th>
+                            <th scope="col">做什么</th>
+                            <th scope="col">行数</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">compositor</th>
+                            <td>窗口合成器：DRM/KMS、损伤跟踪、Xcursor、窗口装饰</td>
+                            <td>12,320</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">browser</th>
+                            <td>浏览器，含 UxHtml 渲染引擎与 JS 引擎</td>
+                            <td>25,713</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">libgfx</th>
+                            <td>自研图形库与控件库</td>
+                            <td>21,785</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">settings</th>
+                            <td>系统设置</td>
+                            <td>3,064</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">terminal</th>
+                            <td>终端仿真器</td>
+                            <td>2,869</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">oobe</th>
+                            <td>首次开机向导</td>
+                            <td>2,137</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">editor</th>
+                            <td>文本编辑器</td>
+                            <td>1,637</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">displaymgr</th>
+                            <td>显示管理器</td>
+                            <td>1,489</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">filemgr</th>
+                            <td>文件管理器</td>
+                            <td>1,347</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">sysmon</th>
+                            <td>活动监视器</td>
+                            <td>1,267</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">init</th>
+                            <td>PID 1 服务管理器</td>
+                            <td>1,262</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">uxconfd</th>
+                            <td>配置守护进程</td>
+                            <td>873</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">netmgrd</th>
+                            <td>网络管理器</td>
+                            <td>761</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">escalate</th>
+                            <td>提权通道</td>
+                            <td>685</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">calc</th>
+                            <td>计算器</td>
+                            <td>388</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -277,9 +419,10 @@
             <div class="container">
                 <div class="ps-section__head">
                     <span class="ps-section__eyebrow">底座</span>
-                    <h2 class="ps-section__title">Uinxed-Kernel</h2>
+                    <h2 class="ps-section__title">底座：Uinxed-Kernel</h2>
                     <p class="ps-section__lead">
-                        SpaceOS 8 的内核是一个用 C 从零写的 UNIX-like x86_64 单体内核，
+                        上面那些桌面、应用与浏览器最终都跑在这个内核上。
+                        它是一个用 C 从零写的 UNIX-like x86_64 单体内核，
                         通过 Limine 引导（UEFI 与 Legacy 双模），实现 Linux 6.12 的系统调用 ABI。
                     </p>
                 </div>

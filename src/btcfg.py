@@ -9,6 +9,7 @@ import json
 import sys
 import os
 import shutil
+import tempfile
 import printk
 import hashlib
 
@@ -44,6 +45,8 @@ def calculate_checksum(cfg):
 # 公共异常处理函数
 def _handle_bootcfg_error(error_msg: str, allow_repair: bool = True) -> None:
     print(f"\033[31m{error_msg}\033[0m")
+    if os.environ.get("PYSPOS_BOOT_LOCKED") == "1":
+        raise RuntimeError(error_msg)
     if allow_repair and printk.confirm(f"系统启动失败（原因：{error_msg}），是否尝试自动修复？"):
         create_bootcfg()
         print("操作成功完成\n")
@@ -77,7 +80,7 @@ def create_bootcfg():
         printk.info("create_bootcfg: 尝试创建新的引导文件夹")
         os.makedirs(etc_dir, exist_ok=True)
         printk.ok("create_bootcfg: 引导文件夹创建成功！")
-        bootcfg['locked'] = True
+        bootcfg['locked'] = False
         bootcfg['rootstate'] = False
         # 计算并添加校验和
         bootcfg['checksum'] = calculate_checksum(bootcfg)
@@ -85,16 +88,43 @@ def create_bootcfg():
         save_bootcfg_data(bootcfg)
         printk.ok("create_bootcfg: 所有步骤全部完成！")
 
+def _validate_bootcfg(value):
+    if not isinstance(value, dict):
+        raise ValueError("配置文件必须是 JSON 对象")
+    for key in ("locked", "rootstate"):
+        if not isinstance(value.get(key), bool):
+            raise ValueError(f"配置项 {key} 必须是布尔值")
+    return value
+
+
+def _write_json_atomic(path, value):
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".bootcfg-", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 # 存储引导配置
 def save_bootcfg_data(bootcfg_data):
     try:
-        # 保存前更新校验和
+        _validate_bootcfg(bootcfg_data)
         bootcfg_data['checksum'] = calculate_checksum(bootcfg_data)
-        os.makedirs(os.path.dirname(boot_config), exist_ok=True)
-        with open(boot_config, 'w') as f:
-            json.dump(bootcfg_data, f)
+        _write_json_atomic(boot_config, bootcfg_data)
     except Exception as e:
         printk.error(f"保存引导配置时出错: {e}")
+        raise
 
 # 读取引导配置
 def get_bootcfg(cfg):
@@ -126,7 +156,7 @@ def load_bootcfg():
         with open(boot_config, 'r') as f:
             bootcfg = json.load(f)
         
-        # 校验和验证
+        _validate_bootcfg(bootcfg)
         current_checksum = bootcfg.get('checksum')
         if not current_checksum:
             _handle_bootcfg_error("配置文件缺少校验和，可能被篡改！")
@@ -140,7 +170,7 @@ def load_bootcfg():
         # 文件不存在时自动创建默认配置
         print(f"bootcfg.json 不存在，正在创建默认配置...")
         bootcfg = {
-            'locked': True,
+            'locked': False,
             'rootstate': False,
             'checksum': ''
         }

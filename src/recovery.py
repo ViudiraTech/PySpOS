@@ -35,11 +35,25 @@ except Exception:
 
 # 确保在根目录下运行
 def ensure_root_directory():
+    for path in (os.path.join(root_dir, "src"),
+                 os.path.join(root_dir, "slot_a"),
+                 os.path.join(root_dir, "slot_b")):
+        if os.path.isdir(path) and path not in sys.path:
+            sys.path.insert(0, path)
     current_dir = os.getcwd()
     if current_dir != root_dir:
         logk.printl("recovery", f"切换到根目录: {root_dir}", main.boot_time)
         os.chdir(root_dir)
         logk.printl("recovery", f"当前目录已切换到: {os.getcwd()}", main.boot_time)
+
+
+def _require_root(operation):
+    try:
+        main.require_root(operation)
+        return True
+    except PermissionError as exc:
+        printk.error(str(exc))
+        return False
 
 # 查找并终止 main 进程
 def check_and_terminate_main_process():
@@ -109,6 +123,8 @@ def recovery_main(jumpinfo) -> str:
             print("ota_clean  清理更新包文件")
             print("exit     退出Recovery\n")
         elif prompt == "erase":
+            if not _require_root("recovery erase"):
+                continue
             # 出厂重置：与测试共用 common.reset 工厂实现，保证无残留、
             # 且下次启动必进 OOBE（etc/.oobe_done 随 etc/ 一起被删）。
             from common.reset import factory_reset
@@ -147,6 +163,8 @@ def recovery_main(jumpinfo) -> str:
                 print("无法获取云端版本信息（网络失败或 OTA 被禁用）。")
             print()
         elif prompt == "ota_update":
+            if not _require_root("recovery OTA 更新"):
+                continue
             logk.printl("recovery", "下载并安装更新...", main.boot_time)
             result = ota.download_and_install_update()
             if result:
@@ -167,6 +185,8 @@ def recovery_main(jumpinfo) -> str:
                 print(f"更新版本: {status['update_version']}")
             print()
         elif prompt == "ota_rollback":
+            if not _require_root("recovery OTA 回滚"):
+                continue
             logk.printl("recovery", "回滚到上一个版本...", main.boot_time)
             result = ota.rollback_update()
             if result:
@@ -174,6 +194,8 @@ def recovery_main(jumpinfo) -> str:
             else:
                 print("回滚失败\n")
         elif prompt == "ota_clean":
+            if not _require_root("recovery OTA 清理"):
+                continue
             logk.printl("recovery", "清理更新包文件...", main.boot_time)
             ota.clean_update_package()
             print()

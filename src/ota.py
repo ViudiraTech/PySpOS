@@ -18,6 +18,10 @@ import urllib.error
 import hashlib
 import platform
 import re
+import stat
+import tempfile
+import uuid
+import secure_boot
 
 # 获取启动时间
 boot_time = logk.get_boot_time()
@@ -79,7 +83,7 @@ def is_ota_enabled() -> bool:
 REQUIRED_CORE_FILES = [
     "kernel.py", "main.py", "fs.py", "printk.py", "logk.py", 
     "recovery.py", "ota.py", "btcfg.py", "pyspos.py", "parse_spf.py",
-    "version.txt", "current_slot", "launcher.py"
+    "version.txt", "launcher.py"
 ]
 
 # 必要的文件夹
@@ -329,61 +333,93 @@ def download_update_package(remote_url: str, local_path: str, expected_size: int
         logk.printl("ota", f"下载错误: {e}", boot_time)
         return False
 
+def _boot_is_locked():
+    try:
+        return secure_boot.read_locked(root_dir)
+    except secure_boot.BootVerificationError:
+        return True
+
+
+def _rollback_floor():
+    try:
+        state_floor = secure_boot.load_state(root_dir)["rollback_index"]
+    except secure_boot.BootVerificationError:
+        state_floor = 0
+    try:
+        policy_floor = secure_boot.policy_rollback_index(root_dir)
+    except secure_boot.BootVerificationError:
+        policy_floor = 0
+    return max(state_floor, policy_floor)
+
+
 # 验证更新包完整性
 def verify_update_package(package_path: str, expected_hash: str = None) -> bool:
+    locked = _boot_is_locked()
     try:
         if expected_hash:
-            logk.printl("ota", "验证更新包", boot_time)
+            logk.printl("ota", "验证更新包 SHA-256", boot_time)
             sha256_hash = hashlib.sha256()
-            
-            start_time = time.time()
             with open(package_path, 'rb') as f:
                 for chunk in iter(lambda: f.read(8192), b''):
                     sha256_hash.update(chunk)
             calculated_hash = sha256_hash.hexdigest()
-            end_time = time.time()
-            
-            logk.printl("ota", f"验证耗时: {end_time - start_time:.2f}秒", boot_time)
-            
-            if calculated_hash == expected_hash:
-                logk.printl("ota", "验证通过", boot_time)
-                return True
-            else:
+            if calculated_hash.lower() != str(expected_hash).lower():
                 logk.printl("ota", "校验和不匹配", boot_time)
                 return False
+        manifest = secure_boot.verify_package(
+            package_path, floor=_rollback_floor(), locked=locked)
+        if locked and manifest is None:
+            return False
+        if manifest is not None:
+            logk.printl("ota", f"签名验证通过，security_version={manifest['security_version']}", boot_time)
         else:
-            logk.printl("ota", "跳过验证", boot_time)
-            return True
+            logk.printl("ota", "未签名开发包，仅允许未锁定模式安装", boot_time)
+        return True
     except Exception as e:
         logk.printl("ota", f"验证失败: {e}", boot_time)
         return False
 
-# 获取当前的槽位
 def get_current_slot() -> str:
+    try:
+        state = secure_boot.load_state(root_dir)
+        if state.get("active_slot") in (SLOT_A, SLOT_B):
+            return state["active_slot"]
+    except secure_boot.BootVerificationError:
+        pass
     if os.path.exists(CURRENT_SLOT_FILE):
-        with open(CURRENT_SLOT_FILE, 'r') as f:
+        with open(CURRENT_SLOT_FILE, 'r', encoding='utf-8') as f:
             slot = f.read().strip()
             if slot in [SLOT_A, SLOT_B]:
                 return slot
-    # 如果没有，默认使用槽位_A
     set_current_slot(SLOT_A)
     return SLOT_A
 
-# 设置激活的槽位
+
 def set_current_slot(slot: str) -> None:
-    if slot in [SLOT_A, SLOT_B]:
-        with open(CURRENT_SLOT_FILE, 'w') as f:
-            f.write(slot)
-        logk.printl("ota", f"已设置当前槽位为: {slot}", boot_time)
+    if slot not in [SLOT_A, SLOT_B]:
+        raise ValueError("无效槽位")
+    parent = os.path.dirname(CURRENT_SLOT_FILE)
+    os.makedirs(parent, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".current-slot-", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(slot)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, CURRENT_SLOT_FILE)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    logk.printl("ota", f"已设置当前槽位为: {slot}", boot_time)
 
 # 获取其他槽位
 def get_other_slot() -> str:
     return SLOT_B if get_current_slot() == SLOT_A else SLOT_A
 
 # 验证更新包
-def verify_update_compatibility() -> bool:
+def verify_update_compatibility(package_path=None) -> bool:
     current_ver = get_current_version()
-    update_ver = get_update_version()
+    update_ver = get_update_version(package_path)
     
     comparison = compare_versions(update_ver, current_ver)
     if comparison > 0:
@@ -589,63 +625,44 @@ def _slot_is_ready(slot_path: str) -> bool:
 def rollback_update() -> bool:
     current = get_current_slot()
     other = get_other_slot()
-    
     logk.printl("ota", f"当前槽位: {current} ({get_version(current)})", boot_time)
     logk.printl("ota", f"目标槽位: {other} ({get_version(other)})", boot_time)
-    
     if not printk.confirm("是否回滚到上一个版本？"):
         return False
-    
-    # 获取旧版本信息
-    old_version = get_version(other)
-    
-    # 舍弃新版本的槽位：删除当前槽位的内容
-    current_slot_path = os.path.join(root_dir, current)
-    if os.path.exists(current_slot_path):
-        if not _reset_slot_dir(current_slot_path, "rollback"):
-            logk.printl("ota", "删除新版本槽位失败", boot_time)
+
+    other_path = os.path.join(root_dir, other)
+    manifest = None
+    if _boot_is_locked():
+        try:
+            manifest = secure_boot.verify_slot(
+                root_dir, other, locked=True, floor=_rollback_floor())
+        except secure_boot.BootVerificationError as exc:
+            logk.printl("ota", f"回滚目标验签或防回滚检查失败: {exc}", boot_time)
             return False
-    
-    # 从旧版本槽位复制核心文件到新创建的空槽位
-    other_slot_path = os.path.join(root_dir, other)
-    
-    try:
-        # 复制核心文件
-        for file in REQUIRED_CORE_FILES:
-            source_file = os.path.join(other_slot_path, file)
-            if os.path.exists(source_file):
-                dest_file = os.path.join(current_slot_path, file)
-                shutil.copy2(source_file, dest_file)
-        
-        # 复制必要的文件夹
-        for directory in REQUIRED_DIRS:
-            source_dir = os.path.join(other_slot_path, directory)
-            dest_dir = os.path.join(current_slot_path, directory)
-            if os.path.exists(source_dir):
-                if os.path.exists(dest_dir):
-                    shutil.rmtree(dest_dir)
-                shutil.copytree(source_dir, dest_dir)
-        
-        logk.printl("ota", f"已从旧版本槽位复制文件到: {current}", boot_time)
-    except Exception as e:
-        logk.printl("ota", f"复制旧版本文件失败: {str(e)}", boot_time)
+    if not _slot_is_ready(other_path):
+        logk.printl("ota", "回滚目标不是完整系统镜像", boot_time)
         return False
-    
-    # 更新更新日志
+
+    staging = os.path.join(root_dir, f".rollback-{uuid.uuid4().hex[:12]}")
     try:
-        log_path = os.path.join(current_slot_path, UPDATE_LOG)
+        shutil.copytree(other_path, staging, symlinks=False)
+        if manifest is not None:
+            secure_boot.verify_tree(staging, manifest, floor=_rollback_floor())
         log_data = {
-            "from_version": get_version(other),
-            "to_version": old_version,
+            "from_version": get_version(current),
+            "to_version": get_version(other),
             "install_time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "action": "rollback"
         }
-        with open(log_path, 'w') as f:
-            json.dump(log_data, f, indent=2)
-        logk.printl("ota", "回滚日志已记录", boot_time)
-    except Exception as e:
-        logk.printl("ota", f"记录回滚日志失败: {str(e)}", boot_time)
-    
+        with open(os.path.join(staging, UPDATE_LOG), "w", encoding="utf-8") as stream:
+            json.dump(log_data, stream, indent=2)
+        secure_boot.stage_directory_replace(root_dir, current, staging)
+        staging = None
+    except Exception as exc:
+        logk.printl("ota", f"回滚失败: {exc}", boot_time)
+        if staging and os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
+        return False
     logk.printl("ota", "回滚成功，重启后生效", boot_time)
     return True
 
@@ -757,182 +774,198 @@ def get_current_version() -> str:
     return "3.0.0"
 
 # 获取更新包版本
-def get_update_version() -> str:
-    package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
-    
-    if not os.path.exists(package_path):
-        try:
-            for filename in os.listdir(OTA_PACKAGE_DIR):
-                if filename.endswith('.zip'):
-                    package_path = os.path.join(OTA_PACKAGE_DIR, filename)
-                    break
-        except Exception as e:
-            logk.printl("ota", f"查找更新包失败: {str(e)}", boot_time)
-    
+def get_update_version(package_path=None) -> str:
+    package_path = package_path or _find_update_package()
+    if not package_path:
+        return "未知版本"
     try:
         with zipfile.ZipFile(package_path, 'r') as zip_ref:
-            possible_paths = [VERSION_FILE, f'src/{VERSION_FILE}']
-            for path in possible_paths:
-                if path in zip_ref.namelist():
-                    with zip_ref.open(path) as f:
-                        return f.read().decode().strip()
-            logk.printl("ota", f"更新包中未找到版本文件", boot_time)
+            names = set(zip_ref.namelist())
+            for path in (VERSION_FILE, f'src/{VERSION_FILE}'):
+                if path in names:
+                    with zip_ref.open(path) as stream:
+                        return stream.read().decode().strip()
+        logk.printl("ota", "更新包中未找到版本文件", boot_time)
     except Exception as e:
         logk.printl("ota", f"读取更新包版本失败: {str(e)}", boot_time)
     return "未知版本"
 
+def _safe_extract_package(package_path, target_path):
+    target_real = os.path.realpath(target_path)
+    if not os.path.isdir(target_real) or os.path.islink(target_path):
+        raise ValueError("更新暂存目录无效")
+    seen = set()
+    total_size = 0
+    with zipfile.ZipFile(package_path, "r") as archive:
+        infos = archive.infolist()
+        if len(infos) > 20000:
+            raise ValueError("更新包成员过多")
+        for info in infos:
+            if info.is_dir():
+                continue
+            if info.filename in (secure_boot.MANIFEST_NAME, secure_boot.SIGNATURE_NAME,
+                                 "src/" + secure_boot.MANIFEST_NAME,
+                                 "src/" + secure_boot.SIGNATURE_NAME):
+                rel = (secure_boot.MANIFEST_NAME
+                       if info.filename.endswith(secure_boot.MANIFEST_NAME)
+                       else secure_boot.SIGNATURE_NAME)
+            else:
+                rel = secure_boot._normalized_member(info.filename)
+                if rel is None:
+                    continue
+            if rel == "etc" or rel.startswith("etc/"):
+                raise ValueError("更新包不能携带 etc 数据")
+            if rel in seen:
+                raise ValueError(f"更新包成员重复: {rel}")
+            seen.add(rel)
+            if info.file_size < 0 or info.file_size > 128 * 1024 * 1024:
+                raise ValueError("更新包单文件过大")
+            total_size += info.file_size
+            if total_size > 512 * 1024 * 1024:
+                raise ValueError("更新包解压体积过大")
+            mode = (info.external_attr >> 16) & 0xffff
+            if stat.S_ISLNK(mode):
+                raise ValueError("更新包不能包含符号链接")
+            destination = os.path.realpath(os.path.join(target_real, rel))
+            if os.path.commonpath((target_real, destination)) != target_real:
+                raise ValueError("更新包路径越界")
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            with archive.open(info, "r") as source, open(destination, "wb") as target:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    target.write(chunk)
+    return True
+
+
+def _find_update_package():
+    package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
+    if os.path.isfile(package_path):
+        return package_path
+    if not os.path.isdir(OTA_PACKAGE_DIR):
+        return None
+    for filename in sorted(os.listdir(OTA_PACKAGE_DIR)):
+        if filename.endswith(".zip"):
+            return os.path.join(OTA_PACKAGE_DIR, filename)
+    return None
+
+
 # 将更新包安装到另一槽位
 def install_update() -> bool:
-    if not check_for_update():
+    package_path = _find_update_package()
+    if package_path is None:
         logk.printl("ota", "未找到更新包", boot_time)
         return False
-    
-    if not verify_update_compatibility():
+    if not verify_update_package(package_path):
+        return False
+
+    locked = _boot_is_locked()
+    try:
+        manifest = secure_boot.verify_package(
+            package_path, floor=_rollback_floor(), locked=locked)
+    except secure_boot.BootVerificationError as exc:
+        logk.printl("ota", f"更新包验证失败: {exc}", boot_time)
+        return False
+    if not verify_update_compatibility(package_path):
         logk.printl("ota", "版本不兼容", boot_time)
         return False
-    
-    # 查找更新包（support do重构版）
-    package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
-    if not os.path.exists(package_path):
-        # 查找OTA_PACKAGE_DIR中的所有zip文件
-        try:
-            for filename in os.listdir(OTA_PACKAGE_DIR):
-                if filename.endswith('.zip'):
-                    package_path = os.path.join(OTA_PACKAGE_DIR, filename)
-                    logk.printl("ota", f"找到更新包: {filename}", boot_time)
-                    break
-        except Exception as e:
-            logk.printl("ota", f"查找更新包失败: {str(e)}", boot_time)
-    
-    target_slot = os.path.join(root_dir, get_other_slot())
+
+    target_name = get_other_slot()
+    target_slot = os.path.join(root_dir, target_name)
+    staging = os.path.join(root_dir, f".{target_name}.staging-{uuid.uuid4().hex[:12]}")
     current_ver = get_current_version()
-    update_ver = get_update_version()
-    
+    update_ver = get_update_version(package_path)
     logk.printl("ota", f"安装更新: {current_ver} -> {update_ver}", boot_time)
     logk.printl("ota", f"目标槽位: {target_slot}", boot_time)
-    
     start_time = time.time()
-    
-    # 清空目标槽位（Windows 先 move 再后台删除，见 _reset_slot_dir）
-    if os.path.exists(target_slot):
-        if not _reset_slot_dir(target_slot, "install"):
-            return False
-    
-    os.makedirs(target_slot, exist_ok=True)
-    
+
     try:
-        with zipfile.ZipFile(package_path, 'r') as zip_ref:
-            namelist = zip_ref.namelist()
-            has_src_prefix = any(n.startswith('src/') for n in namelist)
-            
-            for member in namelist:
-                if member.endswith('/'):
-                    continue
-                
-                if has_src_prefix and member.startswith('src/'):
-                    target_path = os.path.join(target_slot, member[4:])
-                else:
-                    target_path = os.path.join(target_slot, member)
-                
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                with zip_ref.open(member) as src, open(target_path, 'wb') as dst:
-                    dst.write(src.read())
-        
-        logk.printl("ota", "解压完成", boot_time)
-    except Exception as e:
-        logk.printl("ota", f"解压失败: {str(e)}", boot_time)
-        return False
-    
-    # 从根目录复制etc到目标槽位（这个用于保留数据）
-    etc_source = os.path.join(root_dir, "etc")
-    etc_target = os.path.join(target_slot, "etc")
-    if os.path.exists(etc_source):
-        try:
-            if os.path.exists(etc_target):
-                shutil.rmtree(etc_target)
-            shutil.copytree(etc_source, etc_target)
-            logk.printl("ota", "已复制 etc 目录", boot_time)
-        except Exception as e:
-            logk.printl("ota", f"复制 etc 目录失败: {str(e)}", boot_time)
-            return False
-    
-    try:
-        log_path = os.path.join(target_slot, UPDATE_LOG)
+        os.makedirs(staging, exist_ok=False)
+        _safe_extract_package(package_path, staging)
+        etc_source = os.path.join(root_dir, "etc")
+        etc_target = os.path.join(staging, "etc")
+        if os.path.isdir(etc_source):
+            shutil.copytree(etc_source, etc_target, symlinks=True)
         log_data = {
             "from_version": current_ver,
             "to_version": update_ver,
             "install_time": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        with open(log_path, 'w') as f:
-            json.dump(log_data, f, indent=2)
-        logk.printl("ota", "日志已记录", boot_time)
-    except Exception as e:
-        logk.printl("ota", f"记录日志失败: {str(e)}", boot_time)
-    
-    # 确保version.txt文件存在
-    version_path = os.path.join(target_slot, VERSION_FILE)
-    if not os.path.exists(version_path):
-        try:
-            with open(version_path, 'w') as f:
-                f.write(update_ver)
-            logk.printl("ota", f"已创建版本文件: {version_path}", boot_time)
-        except Exception as e:
-            logk.printl("ota", f"创建版本文件失败: {str(e)}", boot_time)
-    
+        with open(os.path.join(staging, UPDATE_LOG), "w", encoding="utf-8") as stream:
+            json.dump(log_data, stream, indent=2)
+        if not _slot_is_ready(staging):
+            raise ValueError("更新包核心文件不完整")
+        if manifest is not None:
+            secure_boot.verify_tree(staging, manifest, floor=_rollback_floor())
+        secure_boot.stage_directory_replace(root_dir, target_name, staging)
+        staging = None
+        secure_boot.stage_slot(root_dir, target_name, manifest)
+        set_current_slot(target_name)
+    except Exception as exc:
+        logk.printl("ota", f"安装失败: {exc}", boot_time)
+        if staging and os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
+        return False
+
     end_time = time.time()
     logk.printl("ota", f"安装完成: {end_time - start_time:.2f}秒", boot_time)
-    
-    # 清除更新包
     try:
         if os.path.exists(package_path):
             os.remove(package_path)
             logk.printl("ota", "已删除更新包文件", boot_time)
     except Exception as e:
         logk.printl("ota", f"删除更新包失败: {str(e)}", boot_time)
-    
     return True
 
 # 切换槽位
 def switch_slot() -> bool:
-    current = get_current_slot()
     target = get_other_slot()
     target_path = os.path.join(root_dir, target)
-    
-    # 检查目标槽位是否有效
-    valid = True
+
     missing_items = []
-    
-    # 检查核心文件
     for file in REQUIRED_CORE_FILES:
         if not os.path.exists(os.path.join(target_path, file)):
             missing_items.append(file)
-            valid = False
-    
-    # 检查必要的文件夹
     for directory in REQUIRED_DIRS:
-        if not os.path.exists(os.path.join(target_path, directory)):
+        if not os.path.isdir(os.path.join(target_path, directory)):
             missing_items.append(directory)
-            valid = False
-    
-    if not valid:
+    if missing_items:
         logk.printl("ota", f"槽位切换失败：目标槽位 {target} 缺少: {', '.join(missing_items)}", boot_time)
         return False
-    
+
+    manifest = None
+    if _boot_is_locked():
+        try:
+            manifest = secure_boot.verify_slot(
+                root_dir, target, locked=True, floor=_rollback_floor())
+        except secure_boot.BootVerificationError as exc:
+            logk.printl("ota", f"目标槽位验签失败: {exc}", boot_time)
+            return False
+    try:
+        secure_boot.stage_slot(root_dir, target, manifest)
+    except secure_boot.BootVerificationError as exc:
+        logk.printl("ota", f"无法设置待启动槽位: {exc}", boot_time)
+        return False
     set_current_slot(target)
-    logk.printl("ota", f"槽位已切换至 {target}", boot_time)
+    logk.printl("ota", f"槽位已标记为待启动: {target}", boot_time)
     logk.printl("ota", "请重启系统以加载新槽位的系统文件", boot_time)
-    logk.printl("ota", "使用 start.bat (Windows) 或 start.sh (Linux/Mac) 启动系统", boot_time)
     return True
 
 # 获取OTA更新状态
 def get_ota_status() -> dict:
+    current = get_current_slot()
+    other = get_other_slot()
     return {
         "ota_enabled": _ota_enabled(),
         "ota_disable_reason": (None if _ota_enabled() else _ota_disable_reason()),
-        "current_slot": get_current_slot(),
+        "boot_locked": _boot_is_locked(),
+        "rollback_index": _rollback_floor(),
+        "current_slot": current,
         "current_version": get_current_version(),
-        "other_slot": get_other_slot(),
-        "other_version": get_version(get_other_slot()),
+        "current_slot_verified": secure_boot.secure_slot_present(
+            root_dir, current, floor=_rollback_floor()),
+        "other_slot": other,
+        "other_version": get_version(other),
+        "other_slot_verified": secure_boot.secure_slot_present(
+            root_dir, other, floor=_rollback_floor()),
         "has_update": check_for_update(),
         "update_version": get_update_version() if check_for_update() else None
     }
@@ -952,6 +985,9 @@ def clean_update_package() -> None:
 # 初始化OTA
 def ota_init() -> bool:
     logk.printl("ota", "正在初始化OTA槽位结构...", boot_time)
+    if _boot_is_locked():
+        logk.printl("ota", "锁定模式禁止从 src 自动修复或复制系统文件", boot_time)
+        return True
     
     # 创建槽位文件夹（在根目录）
     slots = [SLOT_A, SLOT_B]

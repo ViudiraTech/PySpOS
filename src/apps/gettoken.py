@@ -1,4 +1,4 @@
-# gettoken.py - 获取解锁密钥实用程序
+# gettoken.py - 旧版答题入口（不授予 Bootloader 权限）
 #
 # 审核算法（2026-09-24 重构，A+B 组合）：
 #   A. 规则重构 —— 分数为主，速度不再定罪：
@@ -128,10 +128,10 @@ def _show_history(history):
 
 
 def main():
-    print("获取解锁密钥实用程序")
-    print("注意：此密钥包含一些设备的敏感数据，请勿泄露！")
-    print(f"解锁需要您判断一些选项（共{TOTAL_QUESTIONS}道题，一道题{SCORE_PER_QUESTION}分，"
-          f"大于等于{PASS_SCORE}分可获取密钥；限时{TOTAL_TIME_LIMIT}秒）。\n")
+    print("旧版答题入口")
+    print("答题结果不会授予 ROOT 或改变 Bootloader 信任域。")
+    print(f"本流程仅保留兼容性（共{TOTAL_QUESTIONS}道题，一道题{SCORE_PER_QUESTION}分，"
+          f"仅记录结果；限时{TOTAL_TIME_LIMIT}秒）。\n")
 
     bank = _load_bank()
     if bank is None:
@@ -149,8 +149,7 @@ def main():
                 return
         if not api.api_confirm("是否重新答题？（y/n）"):
             if latest.get("pass") and latest.get("score", 0) >= PASS_SCORE:
-                print(f"{printk.GREEN_COLOR}您已通过测试，以下是你的解锁密钥{printk.RESET_COLOR}")
-                print(f"解锁密钥（请妥善保管）: {api.return_token()}")
+                print(f"{printk.GREEN_COLOR}审核通过，但 Token 不再是 Bootloader 授权凭据{printk.RESET_COLOR}")
                 return
             print(f"{printk.YELLOW_COLOR}您上次未通过测试，无法获取密钥，请重新答题。{printk.RESET_COLOR}")
             return
@@ -214,8 +213,7 @@ def main():
         return
     if is_pass:
         print(f"{printk.GREEN_COLOR}恭喜！得分：{score}分（及格线{PASS_SCORE}分）{printk.RESET_COLOR}")
-        print("审核通过，以下是你的解锁密钥")
-        print(f"解锁密钥（请妥善保管）: {api.return_token()}")
+        print("审核通过，但 Token 不再是 Bootloader 授权凭据。")
         return
     print(f"{printk.YELLOW_COLOR}未通过测试：得分{score}分（及格线{PASS_SCORE}分）{printk.RESET_COLOR}")
     print(f"请 {COOLDOWN_SECONDS} 秒后重试。")

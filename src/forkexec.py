@@ -17,7 +17,9 @@
 #
 
 import multiprocessing as mp
+import base64
 import os
+import secrets
 import sys
 import threading
 import time
@@ -26,7 +28,8 @@ import traceback
 import process as proc
 
 SYSCTL_ENV = "PYSPOS_SYSCTL_ADDR"
-AUTHKEY = b"pyspos-sysctl-v1"
+AUTHKEY_ENV = "PYSPOS_SYSCTL_AUTHKEY"
+AUTHKEY = secrets.token_bytes(32)
 
 # POSIX 用 fork（真 fork 语义 + 免 pickle 传参）；Windows 用 spawn
 try:
@@ -85,6 +88,7 @@ def _run_app_module(target):
     # 因此按源码判断，避免重复执行。
     with open(mod_path, "r", encoding="utf-8") as f:
         source = f.read()
+    os.environ["PYSPOS_APP_NAME"] = os.path.basename(mod_path)
     runs_on_import = '__name__ == "__exec__"' in source
 
     spec = importlib.util.spec_from_file_location("__exec__", mod_path)
@@ -227,10 +231,19 @@ def _sysctl_handler(op, args, kwargs):
     import printk
 
     op = str(op)
+    if op == "authorize_root":
+        app_id = str(kwargs.get("app_id", ""))
+        if app_id not in {"getroot.py", "bm.py"}:
+            raise PermissionError("只有官方 ROOT 管理应用可以请求授权")
+        main._root_authorized = True
+        return True
     if op == "set_rootstate":
         state = bool(args[0])
-        if main.bootcfg.get("locked"):
-            printk.warn("系统已锁定，使用临时 ROOT 方法...（重启后失效）")
+        if state and not getattr(main, "_root_authorized", False):
+            raise PermissionError("ROOT 需要用户在父进程确认")
+        main._root_authorized = False
+        if main.boot_locked:
+            printk.warn("系统处于 OEM 锁定信任域，ROOT 仅为临时运行权限")
             main.rootstate = state
         else:
             main.rootstate = state
@@ -240,20 +253,14 @@ def _sysctl_handler(op, args, kwargs):
         _audit("set_rootstate", f"state={state}")
         return True
     if op == "set_lockstate":
-        state = bool(args[0])
-        cfg = main.bootcfg
-        cfg["locked"] = state
-        btcfg.save_bootcfg_data(cfg)
-        _audit("set_lockstate", f"state={state}")
-        return True
+        raise PermissionError("Bootloader 信任域只能由外部签名 policy 改变")
     if op == "get_bootcfg":
         return dict(main.bootcfg)
     if op == "get_rootstate":
-        return bool(main.rootstate or main.bootcfg.get("rootstate", False))
+        return bool(main.is_root())
     if op == "get_lockstate":
-        return bool(main.bootcfg.get("locked"))
-    if op == "return_token":
-        return kernel.token
+        import secure_boot
+        return secure_boot.read_locked(main.root_dir)
     if op == "get_system_username":
         return kernel.get_system_username()
     if op == "exit_system":
@@ -400,9 +407,11 @@ def _relay_parent_side(out_r, in_w, background):
             except (OSError, TypeError):
                 pass
 
-    threading.Thread(target=_pump_out, daemon=True).start()
+    output_thread = threading.Thread(target=_pump_out, daemon=True)
+    output_thread.start()
     threading.Thread(target=_pump_in_relay, args=(in_w, background),
                      daemon=True).start()
+    return output_thread
 
 
 def fork_exec(payload, *, kind="app", background=False, nice=0,
@@ -454,9 +463,11 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
     # （前台交互式 app 挂在 input() 上退不掉的根因）。
     parent_fds = tuple(fd for fd in (out_r, in_w) if fd is not None)
 
+    child_env = dict(env or {})
+    child_env[AUTHKEY_ENV] = base64.b64encode(AUTHKEY).decode("ascii")
     handle = _CTX.Process(
         target=_child_main,
-        args=(payload, addr, src_dir, apps_dir, env or {},
+        args=(payload, addr, src_dir, apps_dir, child_env,
               out_fd, in_fd, parent_fds),
         daemon=False,
     )
@@ -486,7 +497,7 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
                 threading.Thread(target=_pump_in_relay, args=(in_w, False),
                                  daemon=True).start()
         else:
-            _relay_parent_side(out_r, in_w, background)
+            _relay_threads[pcb.pid] = _relay_parent_side(out_r, in_w, background)
     proc._table().set_remote_signal_backend(_signal_backend)
     return pcb
 
@@ -518,6 +529,9 @@ def _log_relay(out_r, log_path, echo=False):
 def wait(pid, timeout=30.0):
     """等待子进程结束并回收（wait 语义：结束后从表中移除）。"""
     pcb = proc.wait_for(pid, timeout=timeout)
+    output_thread = _relay_threads.pop(pid, None)
+    if output_thread is not None:
+        output_thread.join(timeout=1)
     if pcb is not None:
         proc.reap_children(pcb.ppid)
     return pcb

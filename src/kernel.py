@@ -13,9 +13,6 @@ import main
 import time
 import shutil
 from fs import current_dir
-import uuid
-import hashlib
-import random
 import logk
 import ota
 
@@ -91,15 +88,6 @@ def get_system_username() -> str:
 
     raise RuntimeError("无法获取用户名")
 
-# 生成Unlock Token
-def generate_token():
-    base_info = f"{uuid.getnode()}-{random.randint(1000,9999)}-unlock_token-{get_system_username()}"
-    token = hashlib.sha256(base_info.encode('utf-8')).hexdigest()
-    return token
-
-# unlock token
-token = generate_token()
-
 # 打印提示符
 def print_prompt():
     import syslocale
@@ -109,7 +97,7 @@ def print_prompt():
     username = main.bootcfg.get('display_name') or get_system_username()
     current_time = syslocale.now_str("%H:%M:%S")
 
-    if main.rootstate or main.bootcfg.get('rootstate', False):
+    if main.is_root():
         prompt_header = (
             f"┌──\033[91m({username}@PySPOS)─[ROOT]─[\033[93m{current_time}\033[91m]─(\033[94m/%s\033[91m)\033[0m"
             % current_dir_name
@@ -141,7 +129,16 @@ def loop():
     # 首次开机向导：etc/.oobe_done 缺失即进入（出厂重置会删掉它）。
     # 放在 kernel.loop 而不是 main.main()：hotreset_env 启动路径直接进
     # kernel.loop()，放错位置会导致真实开机跳过 OOBE。
-    oobe.maybe_run_oobe(_main_mod.root_dir)
+    oobe_ok = oobe.maybe_run_oobe(_main_mod.root_dir)
+    if oobe_ok and os.environ.get("PYSPOS_BOOT_VERIFIED") == "1":
+        try:
+            import secure_boot
+            slot = os.environ.get("PYSPOS_BOOT_SLOT")
+            manifest = secure_boot.verify_slot(_main_mod.root_dir, slot, locked=True)
+            secure_boot.mark_boot_success(_main_mod.root_dir, slot, manifest)
+        except Exception as exc:
+            logk.printl("kernel", f"无法提交启动状态: {exc}", main.boot_time)
+            raise
 
     screen_clear()
     username = main.bootcfg.get('display_name') or get_system_username()
@@ -149,15 +146,17 @@ def loop():
 
     ota.ota_init()
 
-    # 2026-09-24 安全加固：启动日志不再明文打印完整 Token（历史行为直接泄露），
-    # 仅显示前 6 位 + 获取方式；完整 Token 仍可通过官方 gettoken 答题流程获取。
-    logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心，Token = {token[:6]}****（完整 Token 请用 open gettoken 获取）", main.boot_time)
+    logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心", main.boot_time)
     print(_("boot.welcome", user=username))
     print()
     while 1:
         try:
             prompt = input(print_prompt())
             main.handle_command(prompt)
+        except EOFError:
+            return
+        except KeyboardInterrupt:
+            return
         except Exception as e:
             print(f"error: {e}")
 

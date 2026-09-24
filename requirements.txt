@@ -1,5 +1,6 @@
 # PySpOS 运行依赖（标准库为主，requests 仅用于 OTA，缺失时自动降级 urllib/curl）
 requests>=2.28
+cryptography>=42.0
 # ELF 执行默认引擎（缺失时自动降级到自研 CPU 模拟器兜底）
 unicorn>=2.0
 # zoneinfo 的时区数据库。Linux 通常由系统提供，但 Windows 与精简容器镜像没有，

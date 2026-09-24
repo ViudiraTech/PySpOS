@@ -84,6 +84,14 @@ def test_ensure_sane_tty_never_raises():
     assert ttyutil.ensure_sane_tty() in (True, False)
 
 
+def test_confirm_falls_back_when_ttyutil_is_missing(monkeypatch):
+    import builtins
+    import printk
+    monkeypatch.setitem(sys.modules, "ttyutil", None)
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "y")
+    assert printk.confirm("继续") is True
+
+
 # ---- 集成层：源码级锁，防止有人删掉兜底 ----
 
 def test_launcher_uses_hardened_choice():

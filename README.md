@@ -32,7 +32,7 @@ PySpOS 是一个教学向的**模拟操作系统**：在用户态把进程调度
 | ELF | 默认 Unicorn 执行真 x86 指令，syscall 转发到模拟层 | `src/elf_loader/unicorn_runner.py` |
 | 配置 | SpaceConfig v2：转义、行尾注释、null、列表、Schema 校验 | `src/spc.py` |
 | Shell | 元数据驱动的命令注册表、分组 help、Tab 补全、管道与重定向 | `src/commands.py` |
-| OTA | A/B 槽位与本地回滚（云端维护中，默认关闭） | `src/ota.py` |
+| OTA | A/B 槽位、Ed25519 镜像验签与本地回滚（云端维护中，默认关闭） | `src/ota.py` `secure_boot.py` |
 
 ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Windows 也能跑。
 
@@ -64,6 +64,25 @@ start.bat           # Windows
 python3 -m pytest tests/ -q
 ```
 
+签名信任链按 Android Verified Boot 的边界实现：启动器固定公钥，先验签 manifest，再校验槽位文件和 `security_version`；LOCKED 状态拒绝未签名镜像，UNLOCKED 状态允许开发镜像但必须显示警告。ROOT 只影响运行时权限，不能改 OEM 公钥或签名。Token 不再是授权凭据。
+
+生产/锁定模式需要在系统外部签发 policy；私钥不得放入系统镜像或设备目录：
+
+```bash
+python3 boot_keygen.py --private-key boot_signing_key.pem
+```
+
+把命令输出的公钥加入 `secure_boot.py` 的 `TRUSTED_PUBLIC_KEYS` 后，再执行：
+
+```bash
+python3 boot_policy.py --lock --rollback-index 1 --private-key boot_signing_key.pem
+python3 build_update.py --private-key boot_signing_key.pem --security-version 1
+```
+
+设备内的 ROOT、应用和旧 Token 都不能修改该信任域。
+
+UNLOCKED 开发槽位需要同步源码时，直接运行 `python3 force_sync.py`；它会拒绝 LOCKED 模式，不会绕过验签。若要清空旧槽位并让下次启动从 `src` 重建，运行 `python3 reset_slot.py --slot slot_a`。
+
 > [!NOTE]
 > 开机若出现「按 Enter 疯狂刷 `^M`」，是上一次会话异常退出把终端留在了
 > `icrnl` 关闭状态。手动跑 `stty sane` 即可；3.2.0 起程序已内置该自愈
@@ -78,8 +97,9 @@ python3 -m pytest tests/ -q
 | `help` / `help <cmd>` | 分组命令表 / 单命令详情 |
 | `ls` `cd` `cat` `grep` | 文件操作，支持 `cat x.txt \| grep foo` |
 | `echo hi > a.txt` | 输出重定向，`>>` 追加 |
-| `open gettoken` | 答题获取 bootloader 解锁 Token |
-| `open getroot` | 获取 ROOT 权限，需二次确认并写审计日志 |
+| `open gettoken` | 旧版答题入口，仅保留兼容性；Token 不再改变 Bootloader 信任 |
+| `open getroot` | 获取 ROOT 权限，需父进程确认并写审计日志 |
+| `bootloader_status` / `bl_status` | ROOT 查看 Bootloader 信任域、验签和防回滚状态 |
 | `oobe` | 手动重跑首次开机向导 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |
@@ -114,6 +134,11 @@ python3 -m pytest tests/ -q
 ```text
 PySpOS/
 ├── launcher.py           # 槽位选择 + 终端状态恢复
+├── secure_boot.py        # AVB 风格签名、信任域与防回滚验证
+├── boot_policy.py        # 外部签发 LOCKED/UNLOCKED policy
+├── boot_keygen.py        # 生成离线 Ed25519 密钥
+├── force_sync.py         # UNLOCKED 开发槽位强制同步
+├── reset_slot.py         # UNLOCKED 开发槽位安全清空
 ├── src/
 │   ├── main.py           # 入口 facade（启动状态 + 兼容重导出）
 │   ├── kernel.py         # 主循环与提示符

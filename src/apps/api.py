@@ -9,10 +9,11 @@
 #   两种运行模式自动识别：
 #     子进程模式：检测到 PYSPOS_SYSCTL_ADDR，连父进程 Listener 发请求；
 #     同进程模式（测试/历史 open 兼容路径）：直接调用本地实现。
-#   读类操作（用户名/root 状态/token）在子进程里也走 RPC，保证读到的是
+#   读类操作（用户名/root/信任域状态）在子进程里也走 RPC，保证读到的是
 #   父进程权威状态，避免子进程持有一份过期副本。
 #
 
+import base64
 import os
 import sys
 from pathlib import Path
@@ -27,7 +28,7 @@ sys.path.append(syscall)
 import printk
 
 SYSCTL_ENV = "PYSPOS_SYSCTL_ADDR"
-AUTHKEY = b"pyspos-sysctl-v1"
+AUTHKEY_ENV = "PYSPOS_SYSCTL_AUTHKEY"
 _conn = None
 _req_id = 0
 _REQ_LOCK = None
@@ -46,8 +47,12 @@ def _get_conn():
         return None
     try:
         from multiprocessing.connection import Client
+        encoded = os.environ.get(AUTHKEY_ENV)
+        if not encoded:
+            return None
+        authkey = base64.b64decode(encoded, validate=True)
         host, port = addr.rsplit(":", 1)
-        _conn = Client((host, int(port)), authkey=AUTHKEY)
+        _conn = Client((host, int(port)), authkey=authkey)
     except Exception:
         _conn = None
     return _conn
@@ -75,14 +80,14 @@ def _call(op, *args, **kwargs):
     return (True, payload.get("ret"))
 
 
-def _local_set_rootstate(state: bool) -> bool:
+def _local_set_rootstate_impl(state: bool) -> bool:
     import main
     import btcfg
     import kernel
     from common.audit import audit
     try:
-        if main.bootcfg.get("locked"):
-            printk.warn("系统已锁定，使用临时 ROOT 方法...（重启后失效）")
+        if main.boot_locked:
+            printk.warn("系统处于 OEM 锁定信任域，ROOT 仅为临时运行权限")
             main.rootstate = state
         else:
             main.rootstate = state
@@ -100,30 +105,35 @@ def _local_set_rootstate(state: bool) -> bool:
         return False
 
 
-def _local_set_lockstate(state: bool) -> bool:
+def _local_authorize_root() -> bool:
     import main
-    import btcfg
-    import kernel
-    from common.audit import audit
-    try:
-        cfg = main.bootcfg
-        cfg["locked"] = state
-        btcfg.save_bootcfg_data(cfg)
-        try:
-            audit(main.root_dir, kernel.get_system_username(),
-                  "set_lockstate", f"state={state}")
-        except Exception:
-            pass
-        return True
-    except Exception as e:
-        printk.error(f"设置 locked 状态时出错: {e}")
+    import printk
+    if not printk.confirm("允许当前应用获取 ROOT 权限？"):
         return False
+    main._root_authorized = True
+    return True
 
 
-def _remote_or_local(op, local_impl, *args):
-    res = _call(op, *args)
+def _local_set_rootstate(state: bool) -> bool:
+    import main
+    if state and not getattr(main, "_root_authorized", False):
+        raise PermissionError("ROOT 需要用户在父进程确认")
+    main._root_authorized = False
+    return _local_set_rootstate_impl(state)
+
+
+def _local_set_lockstate(state: bool) -> bool:
+    printk.error("Bootloader 状态只能由离线签发的 policy 改变，ROOT/应用无权修改")
+    return False
+
+
+def _remote_or_local(op, local_impl, *args, **kwargs):
+    res = _call(op, *args, **kwargs)
     if res is None:
-        return local_impl(*args)
+        if os.environ.get(SYSCTL_ENV):
+            printk.error("系统调用连接不可用，操作拒绝")
+            return False
+        return local_impl(*args, **kwargs)
     ok, val = res
     if not ok:
         printk.error(str(val))
@@ -151,6 +161,12 @@ def set_rootstate(state: bool) -> bool:
     return _remote_or_local("set_rootstate", _local_set_rootstate, bool(state))
 
 
+def authorize_root() -> bool:
+    return _remote_or_local(
+        "authorize_root", _local_authorize_root,
+        app_id=os.environ.get("PYSPOS_APP_NAME", ""))
+
+
 # API: 设置 locked 状态
 def set_lockstate(state: bool) -> bool:
     return _remote_or_local("set_lockstate", _local_set_lockstate, bool(state))
@@ -172,6 +188,12 @@ def _get_cfg(key, default=None):
 
 # API：返回 ROOT 状态（bcfg中）
 def get_rootstate_bcfg() -> bool:
+    try:
+        import main
+        if main.boot_locked:
+            return False
+    except Exception:
+        pass
     return bool(_get_cfg("rootstate", False))
 
 
@@ -184,24 +206,18 @@ def get_rootstate() -> bool:
             return bool(val)
     try:
         import main
-        return bool(main.rootstate)
+        return bool(main.is_root())
     except Exception:
         return False
 
 
 def get_lockstate() -> bool:
-    return bool(_get_cfg("locked", True))
-
-
-# unlock bootloader 专属部分
-def return_token():
-    res = _call("return_token")
-    if res is not None:
-        ok, val = res
-        if ok:
-            return val
-    import kernel
-    return kernel.token
+    try:
+        import main
+        import secure_boot
+        return secure_boot.read_locked(main.root_dir)
+    except Exception:
+        return True
 
 
 # API: 进入内核主循环（子进程中不允许）

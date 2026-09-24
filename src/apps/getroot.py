@@ -13,6 +13,9 @@ def main():
             print("操作已取消。")
             return
         api.api_info("准备获取 ROOT 权限...")
+        if not api.authorize_root():
+            api.api_error("ROOT 授权被拒绝")
+            return
         if api.set_rootstate(True): # 设置root状态为真
             api.api_ok("已获取 ROOT 权限！（本次操作已审计）")
         else:

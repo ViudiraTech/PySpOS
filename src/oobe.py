@@ -8,7 +8,7 @@
 #   下次启动重新进入。
 #
 #   步骤：欢迎 → 语言（立即生效）→ 许可证（必接受）→ 时区（地区/城市两级，
-#   即时预览）→ 显示名 → ROOT → Bootloader 说明 → OTA 通道 → Token 指引 →
+#   即时预览）→ 显示名 → ROOT → Bootloader 说明 → OTA 通道 → 安全策略指引 →
 #   汇总确认 → 写入 → 完成。
 #
 
@@ -209,18 +209,21 @@ def _live_ctx(root_dir):
         cfg = btcfg.load_bootcfg()
     except Exception:
         pass
+    try:
+        import secure_boot
+        locked = secure_boot.read_locked(root_dir)
+    except Exception:
+        locked = bool(cfg.get("locked", False))
 
     def persist(values):
         import main
+        effective_root = bool(values["root"] and not locked)
         btcfg.set_bootcfg_value("lang", values["lang"])
         btcfg.set_bootcfg_value("timezone", values["timezone"])
         btcfg.set_bootcfg_value("display_name", values["display_name"])
         btcfg.set_bootcfg_value("ota_channel", values["channel"])
-        if values["root"]:
-            btcfg.set_bootcfg_value("rootstate", True)
-        else:
-            btcfg.set_bootcfg_value("rootstate", False)
-        main.rootstate = bool(values["root"])
+        btcfg.set_bootcfg_value("rootstate", effective_root)
+        main.rootstate = effective_root
         syslocale.init_from_bootcfg({"lang": values["lang"],
                                      "timezone": values["timezone"]})
         etc = os.path.join(root_dir, "etc")
@@ -229,7 +232,7 @@ def _live_ctx(root_dir):
             f.write("oobe-done-v1\n")
 
     return {"root_dir": root_dir, "username": username,
-            "locked": bool(cfg.get("locked", True)), "persist": persist}
+            "locked": bool(locked), "persist": persist}
 
 
 def maybe_run_oobe(root_dir):

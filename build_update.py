@@ -11,6 +11,7 @@ import os
 import zipfile
 import hashlib
 import json
+import secure_boot
 from datetime import datetime
 
 # 排除的目录和文件
@@ -25,6 +26,7 @@ EXCLUDE_FILES = {'.hotreset'}
 ROOT_FILES = [
     'launcher.py', 'start.bat', 'start.sh', 'build_update.py',
     'requirements.txt', 'pyproject.toml', 'LICENSE', 'README.md',
+    'secure_boot.py',
 ]
 
 # 站内静态页里内嵌了一份 version.json 的副本做兜底（fetch 失败时用）。
@@ -68,46 +70,49 @@ def sync_static_fallback(version_data=None):
     return True
 
 
+def _should_include(relative_path):
+    relative_path = relative_path.replace(os.sep, "/")
+    if relative_path in EXCLUDE_FILES:
+        return False
+    if relative_path in {"src/current_slot", "src/.hotreset",
+                         "src/boot_manifest.json", "src/boot_manifest.sig",
+                         "boot_manifest.json", "boot_manifest.sig"}:
+        return False
+    if relative_path.startswith("keys/") or "/keys/" in relative_path:
+        return False
+    return not relative_path.endswith(".pyc")
+
+
+def _iter_payload_files():
+    paths = []
+    for base in ("src", "splibc"):
+        if not os.path.exists(base):
+            continue
+        for root, dirs, files in os.walk(base):
+            dirs[:] = sorted(d for d in dirs
+                             if d not in EXCLUDE_DIRS
+                             and not d.startswith('__pycache__'))
+            for name in sorted(files):
+                path = os.path.join(root, name)
+                relative = path.replace(os.sep, "/")
+                if _should_include(relative):
+                    paths.append((path, relative))
+    for name in ROOT_FILES:
+        if os.path.isfile(name):
+            paths.append((name, name))
+    return sorted(paths, key=lambda item: item[1])
+
+
 # 创建PySpOS更新包
 def create_zip_file(version):
     create_date = datetime.now().strftime("%Y%m%d")
     zip_filename = f"PySpOS-{version}-{create_date}.zip"
-    
+
     zip_path = os.path.join('docs', 'ota', zip_filename)
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-    
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # 复制 src 目录
-        for root, dirs, files in os.walk('src'):
-            # 排除特定目录
-            dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith('__pycache__')]
-            
-            for file in files:
-                if file in EXCLUDE_FILES or file.endswith('.pyc'):
-                    continue
-                file_path = os.path.join(root, file)
-                arcname = file_path
-                zipf.write(file_path, arcname)
-        
-        # 复制 splibc 目录
-        if os.path.exists('splibc'):
-            for root, dirs, files in os.walk('splibc'):
-                dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith('__pycache__')]
-                for file in files:
-                    if file in EXCLUDE_FILES or file.endswith('.pyc'):
-                        continue
-                    file_path = os.path.join(root, file)
-                    arcname = file_path
-                    zipf.write(file_path, arcname)
-        
-        # 复制根目录文件（不含 current_slot）
-        # 2026-09-24 修正：原列表含根目录的 current_slot。那是**构建机的运行期
-        # 状态**（内容形如 "slot_a"），打进包里会让新装系统以为该从某个槽位启动。
-        # 槽位校验需要的 src/current_slot 仍在（src 目录遍历会带上它）。
-        for file in ROOT_FILES:
-            if os.path.exists(file):
-                zipf.write(file, file)
-
+        for path, relative in _iter_payload_files():
+            zipf.write(path, relative)
     return zip_path, zip_filename
 
 # 计算文件的SHA256哈希值
@@ -142,7 +147,8 @@ def load_version_json():
 # 更新version.json文件
 def update_version_json(zip_filename, file_size, sha256, version, release_notes,
                         stage=None, release_type=None, changes=None,
-                        min_version=None, date=None, non_interactive=False):
+                        min_version=None, date=None, non_interactive=False,
+                        security_version=None, signature_key_id=None):
     version_json_path = os.path.join('docs', 'ota', 'version.json')
     today = date or datetime.now().strftime("%Y-%m-%d")
 
@@ -160,6 +166,8 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
             "sha256": sha256,
             "min_version": "3.0.0",
             "file_size": file_size,
+            "security_version": security_version,
+            "signature_key_id": signature_key_id,
             "changelog": []
         }
 
@@ -170,6 +178,10 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
     version_data['download_url'] = zip_filename
     version_data['sha256'] = sha256
     version_data['file_size'] = file_size
+    if security_version is not None:
+        version_data['security_version'] = security_version
+    if signature_key_id is not None:
+        version_data['signature_key_id'] = signature_key_id
     if stage:
         version_data['develop_stage'] = stage
     if min_version:
@@ -184,6 +196,8 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
             entry['sha256'] = sha256
             entry['file_size'] = file_size
             entry['download_url'] = zip_filename
+            entry['security_version'] = security_version
+            entry['signature_key_id'] = signature_key_id
             entry['date'] = today
             if release_notes:
                 entry['changes'] = (changes if changes
@@ -230,6 +244,8 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
             "download_url": zip_filename,
             "sha256": sha256,
             "file_size": file_size,
+            "security_version": security_version,
+            "signature_key_id": signature_key_id,
             "changes": changes
         }
 
@@ -281,6 +297,9 @@ def _parse_args(argv=None):
     p.add_argument("--min-version", default=None,
                    help="最低可升级版本，缺省沿用现有值或 3.0.0")
     p.add_argument("--date", help="发布日期 YYYY-MM-DD，缺省取今天（便于复现构建）")
+    p.add_argument("--private-key", help="Ed25519 私钥 PEM；提供后生成签名 manifest")
+    p.add_argument("--security-version", type=int, default=1,
+                   help="manifest 的防回滚版本，缺省 1")
     p.add_argument("--quiet", action="store_true", help="只输出关键信息")
     return p.parse_args(argv)
 
@@ -288,7 +307,8 @@ def _parse_args(argv=None):
 def main(argv=None):
     args = _parse_args(argv)
     non_interactive = bool(args.version or args.note or args.quiet
-                           or args.date or args.min_version or args.stage)
+                           or args.date or args.min_version or args.stage
+                           or args.private_key)
 
     def say(*a):
         if not args.quiet:
@@ -323,6 +343,13 @@ def main(argv=None):
 
         # 创建zip文件
         zip_path, zip_filename = create_zip_file(build_version)
+        signed_manifest = None
+        if args.private_key:
+            signed_manifest = secure_boot.sign_package(
+                zip_path, build_version, args.security_version, args.private_key)
+            say(f"✓ 已生成 Ed25519 签名 manifest，security_version={args.security_version}")
+        else:
+            say("⚠ 未提供私钥：生成的是未签名开发包，锁定设备会拒绝启动")
         say(f"✓ 成功创建更新包: {zip_path}")
 
         # 获取文件大小
@@ -358,7 +385,11 @@ def main(argv=None):
                             stage=args.stage, release_type=args.release_type,
                             changes=release_notes_list,
                             min_version=args.min_version, date=args.date,
-                            non_interactive=non_interactive)
+                            non_interactive=non_interactive,
+                            security_version=(signed_manifest["security_version"]
+                                               if signed_manifest else None),
+                            signature_key_id=(signed_manifest["key_id"]
+                                              if signed_manifest else None))
 
         say("\n✓ 构建完成\n")
         say("现在可以通过以下方式访问:")

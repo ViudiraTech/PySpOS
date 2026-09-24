@@ -64,10 +64,22 @@ def cmd_clear():
         os.system("clear")
 
 def cmd_python():
+    try:
+        if main.boot_locked:
+            main.require_root("python")
+    except PermissionError as exc:
+        printk.error(f"{exc}\n")
+        return
     os.system("python")
     print()
 
 def cmd_recovery():
+    try:
+        if main.boot_locked:
+            main.require_root("recovery")
+    except PermissionError as exc:
+        printk.error(f"{exc}\n")
+        return
     recovery.recovery_main("kernel_jump")
 
 def cmd_shb():
@@ -187,63 +199,75 @@ def cmd_testroot():
         print("当前未处于 ROOT 权限状态。")
         print(f"rootstate 变量值为: {main.rootstate}\n")
 
+
+def cmd_bootloader_status():
+    try:
+        main.require_root("查看 Bootloader 状态")
+    except PermissionError as exc:
+        printk.error(f"{exc}\n")
+        return
+    try:
+        import ota
+        import secure_boot
+        root_dir = main.root_dir
+        policy = secure_boot.read_policy(root_dir)
+        locked = secure_boot.read_locked(root_dir)
+        state = secure_boot.load_state(root_dir)
+        current = ota.get_current_slot()
+        floor = max(state["rollback_index"],
+                    secure_boot.policy_rollback_index(root_dir))
+        manifest = secure_boot.verify_slot(
+            root_dir, current, locked=locked, floor=floor)
+        print("Bootloader 状态")
+        print(f"  信任域: {'LOCKED' if locked else 'UNLOCKED'}")
+        print(f"  policy: {'已签名' if policy else '缺失（按锁定处理）'}")
+        print(f"  当前槽位: {current}")
+        print(f"  镜像: {'签名有效' if manifest else '未签名/开发镜像'}")
+        if manifest:
+            print(f"  签名 key_id: {manifest['key_id']}")
+            print(f"  security_version: {manifest['security_version']}")
+        print(f"  防回滚下限: {floor}")
+        print(f"  ROOT: {'持久/临时权限已启用' if main.is_root() else '未启用'}")
+        print("  结论: ROOT 只影响运行时权限，不能修改 OEM 公钥或 policy 签名。")
+    except Exception as exc:
+        printk.error(f"Bootloader 状态不可用: {exc}\n")
+
+
 def cmd_open(app_name: str):
+
     if not app_name.endswith(".py"):
         app_name += ".py"
-
     if not main.is_safe_filename(app_name):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
         return
-
     app_path = main.get_app_path(app_name)
-
-    if not os.path.exists(app_path) or not os.path.isfile(app_path):
+    if not os.path.isfile(app_path):
         printk.error(f"未找到可执行文件: {app_name}\n")
         return
+    import forkexec
+    pcb = forkexec.fork_exec(
+        f"app:{app_name}", kind="app", src_dir=main.script_dir,
+        apps_dir=os.path.join(main.script_dir, "apps"))
+    forkexec.wait(pcb.pid, timeout=None)
+    proc.reap_children(pcb.ppid)
 
-    pcb = proc.spawn(f"open {app_name}", kind="app")
-    try:
-        with open(app_path, 'r', encoding='utf-8') as f:
-            code = f.read()
-
-        # 2026-09-24 修复：此前这里只放行了十几个 builtins，导致 apps 里
-        # 正常的 open()/input()/FileNotFoundError/json/os 等全部 NameError
-        #（如 open gettoken 直接崩）。apps 与 shell 同属本地可信代码，
-        # 历史上的“受限 builtins”并未提供真正的隔离（__import__ 本就放行），
-        # 现改为完整 builtins + 独立命名空间，保证 apps 正常运行。
-        exec_namespace = {
-            '__name__': '__exec__',
-            '__builtins__': __builtins__,
-        }
-
-        exec(code, exec_namespace)
-        proc.finish(pcb.pid, 0)
-
-    except Exception as e:
-        proc.finish(pcb.pid, 1, failed=True)
-        printk.error(f"执行 {app_name} 失败: {str(e)}\n")
 
 def cmd_openspf(app_name: str):
     if not app_name.endswith(".spf"):
         app_name += ".spf"
-
     if not main.is_safe_filename(app_name):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
         return
-
     app_path = main.get_spf_path(app_name)
-
-    if not os.path.exists(app_path) or not os.path.isfile(app_path):
+    if not os.path.isfile(app_path):
         printk.error(f"未找到可执行文件: {app_name}\n")
         return
-
-    pcb = proc.spawn(f"openspf {app_name}", kind="spf")
-    try:
-        parse_spf.run_spf(app_path)
-        proc.finish(pcb.pid, 0)
-    except Exception as e:
-        proc.finish(pcb.pid, 1, failed=True)
-        printk.error(f"执行 {app_name} 失败: {str(e)}\n")
+    import forkexec
+    pcb = forkexec.fork_exec(
+        f"spf:{app_path}", kind="spf", src_dir=main.script_dir,
+        apps_dir=os.path.join(main.script_dir, "apps"))
+    forkexec.wait(pcb.pid, timeout=None)
+    proc.reap_children(pcb.ppid)
 
 
 def cmd_pwd():

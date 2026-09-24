@@ -43,6 +43,12 @@ def _remove(path):
 def factory_reset(root_dir, include_host_history=True):
     """执行出厂重置。永不抛异常，逐项记录结果。"""
     report = {}
+    try:
+        import secure_boot
+        policy = secure_boot.read_policy(root_dir)
+        locked = bool(policy and policy.get("locked"))
+    except Exception:
+        locked = True
 
     # 1. etc/
     etc_path = os.path.join(root_dir, "etc")
@@ -73,19 +79,24 @@ def factory_reset(root_dir, include_host_history=True):
     # 3. 槽位
     for slot in ("slot_a", "slot_b"):
         slot_path = os.path.join(root_dir, slot)
-        if _rmtree(slot_path):
+        if locked:
+            report[f"slot_{slot}"] = (True, f"锁定模式保留已验证槽位 {slot}")
+        elif _rmtree(slot_path):
             report[f"slot_{slot}"] = (True, f"已删除槽位 {slot}")
         else:
             report[f"slot_{slot}"] = (True, f"槽位 {slot} 不存在")
 
     # 4. current_slot 重置为默认
     slot_file = os.path.join(root_dir, "current_slot")
-    try:
-        with open(slot_file, "w", encoding="utf-8") as f:
-            f.write(DEFAULT_SLOT)
-        report["current_slot"] = (True, f"已重置为默认槽位 {DEFAULT_SLOT}")
-    except OSError as e:
-        report["current_slot"] = (False, f"重置 current_slot 失败: {e}")
+    if locked:
+        report["current_slot"] = (True, "锁定模式保留当前槽位选择")
+    else:
+        try:
+            with open(slot_file, "w", encoding="utf-8") as f:
+                f.write(DEFAULT_SLOT)
+            report["current_slot"] = (True, f"已重置为默认槽位 {DEFAULT_SLOT}")
+        except OSError as e:
+            report["current_slot"] = (False, f"重置 current_slot 失败: {e}")
 
     # 5. ota 更新包（删 zip，留目录）
     ota_dir = os.path.join(root_dir, "ota")
