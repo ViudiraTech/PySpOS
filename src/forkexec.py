@@ -102,8 +102,23 @@ def _run_spf_file(path):
     parse_spf.run_spf(path)
 
 
-def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd):
-    """真子进程主体。运行在独立进程，不得引用 parent 的任何内存状态。"""
+def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
+                parent_fds=()):
+    """真子进程主体。运行在独立进程，不得引用 parent 的任何内存状态。
+
+    parent_fds 是父进程持有的那几端（stdout 管的读端、stdin 管的写端），
+    本进程因为 fork 同样持有它们的副本，**必须先关掉**。
+
+    这是 2026-09-24 实测到的一个真 bug：父进程关掉自己的 in_w 并不够，
+    子进程自己手里还捏着一个写端，于是它的 in_r 永远等不到 EOF——前台
+    交互式 app 会一直挂在 input() 上不退出。pty 手动喂输入的测试会掩盖
+    这条路径，因为它绕过了 EOF。
+    """
+    for fd in parent_fds:
+        try:
+            os.close(fd)
+        except (OSError, TypeError):
+            pass
     _relay_child_stdio(out_fd, in_fd)
     for p in (src_dir, apps_dir):
         if p and p not in sys.path:
@@ -434,10 +449,15 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
         in_r, in_w = os.pipe()
         in_fd = in_r              # child 读 stdin
 
+    # 父进程持有的那两端要交给子进程去关掉：fork 会让子进程继承它们的副本，
+    # 子进程若自己捏着 stdin 管的写端，它的读端就永远等不到 EOF
+    # （前台交互式 app 挂在 input() 上退不掉的根因）。
+    parent_fds = tuple(fd for fd in (out_r, in_w) if fd is not None)
+
     handle = _CTX.Process(
         target=_child_main,
         args=(payload, addr, src_dir, apps_dir, env or {},
-              out_fd, in_fd),
+              out_fd, in_fd, parent_fds),
         daemon=False,
     )
     proc._table().handles[pcb.pid] = handle
