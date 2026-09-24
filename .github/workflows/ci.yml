@@ -1,10 +1,16 @@
 name: CI
 
+# 分层节奏：日常 push/PR 只跑 1 个测试 job 求快，全平台矩阵留给发版 tag。
+#
+# 依据：本项目测试套件单 runner 不到 1 秒，矩阵带来的额外信号极少；
+# 而 macOS runner 计费是 Linux 的 10 倍、Windows 是 2 倍，日常跑全矩阵
+# 是纯浪费。「需要可复现的全平台证明」的那一刻是发版，不是每次提交。
 on:
   push:
-    branches: ["**"]
-    tags: ["v*"]
+    branches: [master]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +24,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -32,31 +39,21 @@ jobs:
       # 故意不启用 F401 未用导入：main.py 是兼容 facade，重导出是有意为之，
       # 全开会产生大量误报。风格类规则留给本地按需开启。
       - name: Ruff
-        run: python -m ruff check --no-cache --select E9,F63,F7,F82,F811,F821 src/ tests/ launcher.py build_update.py
+        run: python -m ruff check --no-cache src/ tests/ launcher.py build_update.py
 
+  # ── 日常档：每次 push / PR，一格 ubuntu，最快反馈 ──────────────
+  # 发版/手动时跳过：test-full 里已经有 ubuntu + 3.12 这一格，不重复消耗
   test:
-    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # Windows 覆盖 README 声明的跨平台支持；macOS 默认走 multiprocessing
-        # 的 spawn 启动方式，正好压到 forkexec 里的 spawn 分支。
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12"]
-        include:
-          - os: ubuntu-latest
-            python-version: "3.10"
-          - os: ubuntu-latest
-            python-version: "3.14"
-
+    name: Test
+    if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -71,11 +68,57 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q -p no:warnings
 
-      # 测试会写 etc/ 与题库 history，仓库里是干净副本，这里确认没被改脏
-      - name: Check working tree stays clean
-        if: matrix.os == 'ubuntu-latest'
+  # ── 发版档：Release 发布时 / 手动触发，跑全平台矩阵 ──────────────
+  # macOS 默认走 multiprocessing 的 spawn 启动方式，正好压到 forkexec 的
+  # spawn 分支；Windows 覆盖 README 声明的跨平台支持。
+  test-full:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    # 不因某个平台变红就掐掉其余：发版门禁要看清全部失败，而不是只看第一个
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.14"
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          # 依赖清单进 key：否则依赖更新后会静默复用旧缓存
+          key: pip-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      - name: Install dependencies
         run: |
-          git status --porcelain
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Show environment
+        run: |
+          python -VV
+          python -c "import unicorn; print('unicorn', unicorn.__version__)"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q -p no:warnings
+
+      # 测试会写 etc/ 与题库 history，确认没污染仓库副本
+      - name: Check working tree stays clean
+        run: |
           if [ -n "$(git status --porcelain -- src/apps/question_bank.json)" ]; then
             echo "::error::测试污染了 question_bank.json"
             exit 1
