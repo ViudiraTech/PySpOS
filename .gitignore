@@ -1,5 +1,6 @@
 # PySpOS .gitignore
-# 说明：OTA 文件本身保留在仓库（ota.py 等源码），但本地运行产物、更新包、槽位不入库
+# 说明：OTA 源码本身保留在仓库（ota.py 等）；docs/ota/ 是站点内容也入库。
+# 不入库的只有运行期产物：根级下载缓存 ota/、A/B 槽位、用户数据、缓存目录。
 
 # Python
 __pycache__/
@@ -18,10 +19,12 @@ current_slot
 .hotreset
 src/.hotreset
 
-# OTA 本地更新包（保留 docs/ota/version.json，zip 包不入库）
-ota/
-docs/ota/*.zip
-!docs/ota/version.json
+# OTA 运行时下载缓存（repo 根级，即 ota.py 的 OTA_PACKAGE_DIR）
+# 必须写成 /ota/ 只锚定根级：原来的 `ota/` 会连 docs/ota/ 一起忽略，
+# 而 docs/ota/ 是 GitHub Pages 的站点内容（version.json + 更新包 zip），必须入库。
+# 历史上那几个 zip 还在仓库里，只是因为提交早于这条规则——gitignore 对已跟踪
+# 文件无效，纯属侥幸，新包会直接被静默漏掉。
+/ota/
 
 # 用户数据
 etc/

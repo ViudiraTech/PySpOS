@@ -9,7 +9,12 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- 设计 token 必须在 style.css 之前：它把旧变量桥接到语义 token，
+         存量样式因此自动吃到统一值 -->
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/style.css">
+    <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
+    <link rel="stylesheet" href="css/cards.css">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233776ab' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
 </head>
 <body class="product-page pyspos-page">
@@ -83,18 +88,19 @@
                 <div class="intro-content">
                     <div class="intro-text">
                         <h3><i class="fas fa-question-circle"></i> 什么是 PySpOS？</h3>
-                        <p>PySpOS 是用 Python 写的操作系统模拟器。不是真的操作系统，是在 Python 环境里模拟操作系统行为。</p>
-                        <p>从 2022 年的"MP4 架构狗头 OS"开始，现在迭代到 v3.0 版本。能运行命令、管理文件、支持 OTA 更新。</p>
-                        
+                        <p>PySpOS 是用 Python 写的操作系统模拟器。不是真的操作系统，是在 Python 环境里模拟操作系统行为。目标是让人能直接读源码、改源码，看清一个内核的每个决定是怎么做出来的。</p>
+                        <p>从 2022 年的「MP4 架构狗头 OS」一路迭代到现在的 v3.2.0：能跑命令、管文件、执行 ELF 程序，apps 是独立进程，调度器对标 Linux。</p>
+
                         <h3><i class="fas fa-code-branch"></i> 架构设计</h3>
-                        <p>模块化设计：内核（kernel.py）、文件系统（fs.py）、OTA 模块（ota.py）、SPF 解析器（parse_spf.py）。每个模块独立，好维护。</p>
-                        <p>A/B 双槽位升级：更新装到非活动槽位，验证后再切换。失败了可以回滚到之前的版本。</p>
-                        
+                        <p>3.2.0 起 1217 行的 <code>main.py</code> 拆成 <code>src/shell/*</code> 包（sys / elf / ota / proc / dispatch），原文件保留兼容 facade。调度在 <code>process.py</code>，进程引擎在 <code>forkexec.py</code>。</p>
+                        <p>A/B 双槽位升级：更新装到非活动槽位，校验通过后切换，失败可回滚到上一个版本。</p>
+
                         <h3><i class="fas fa-terminal"></i> 命令行界面</h3>
-                        <p>类 busybox 命令行，支持 cd、ls、echo 等命令。可以运行 apps 目录下的 Python 程序。</p>
-                        
+                        <p>命令走元数据注册表，提供分组 help、<code>help &lt;cmd&gt;</code>、Tab 补全，支持管道与重定向；<code>PATH=apps/</code> 下的外部程序可直接执行。支持 <code>cmd &amp;</code> 后台作业与 <code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>。</p>
+
                         <h3><i class="fas fa-play-circle"></i> ELF 程序执行</h3>
-                        <p>内置完整的 ELF 加载器和 CPU 模拟器，能够直接运行 Linux x86/x86_64 ELF 可执行文件。支持动态链接、重定位、系统调用模拟，无需真实 Linux 环境。</p>
+                        <p>默认由 Unicorn Engine 执行真实 x86_64 指令，syscall 转发到内置模拟层；缺少 unicorn 时降级到自研的 <code>SpaceCPU 1 Pro</code> 模拟器。支持 <code>--stats</code> / <code>--map</code> / <code>--disasm</code> / <code>--strace</code> 观测。动态链接（INTERP）与 TLS 尚在路线图上。</p>
+                    </div>
                     <div class="intro-stats">
                         <div class="stat-item">
                             <div class="stat-number">v3.0</div>
@@ -133,73 +139,153 @@
             </div>
         </section>
 
-        <section class="features-section" id="features">
+        <section class="ps-section" id="features">
             <div class="container">
-                <h2 class="section-title">核心特性</h2>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-wifi"></i>
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">v3.2.0</span>
+                    <h2 class="ps-section__title">核心特性</h2>
+                    <p class="ps-section__lead">
+                        3.2.0 是一次内核级重构：apps 从协作式模拟变成真子进程，
+                        调度器对标 Linux 6.6+，并首次带上了完整的首次开机向导。
+                    </p>
+                </div>
+
+                <div class="ps-grid">
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-people-arrows"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">真子进程</h3>
+                            <div class="ps-card__body">
+                                apps 不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell
+                                三级引导，孤儿被 init 收养、退出后回收为僵尸再清理。
+                            </div>
                         </div>
-                        <h3>OTA 在线更新</h3>
-                        <p>从云端检查更新、下载、验证、安装。支持 A/B 槽位升级，更新失败可回滚。支持 requests、urllib、curl 多种下载方式。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-file-code"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-sliders-h"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">EEVDF 调度</h3>
+                            <div class="ps-card__body">
+                                Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：
+                                nice 权重表、vruntime 推进、虚拟截止期与信号状态机。
+                            </div>
                         </div>
-                        <h3>SPF 可执行文件</h3>
-                        <p>SPF（Space Portable Format）是自研可执行文件格式。目前支持 putchar() 输出和 exit() 退出，适合教学实验。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cogs"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">Unicorn ELF</h3>
+                            <div class="ps-card__body">
+                                默认由 Unicorn Engine 执行真实 x86_64 指令，syscall 转发到模拟层；
+                                没装 unicorn 就降级到自研 <code>SpaceCPU 1 Pro</code>。Windows 也能跑。
+                            </div>
                         </div>
-                        <h3>ELF 程序运行</h3>
-                        <p>支持运行 Linux x86/x86_64 ELF 可执行文件。内置 CPU 模拟器、系统调用模拟器，无需真实 Linux 环境即可运行 ELF 程序。这可能是全网唯一的支持 ELF 程序运行的操作系统模拟器。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-hdd"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-user-check"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">OOBE 首次开机</h3>
+                            <div class="ps-card__body">
+                                11 步 curses 向导，语言与时区真实生效（<code>zoneinfo</code> + <code>TZ</code>），
+                                完成标记写入 <code>etc/.oobe_done</code>，可随时用 <code>oobe</code> 重跑。
+                            </div>
                         </div>
-                        <h3>文件系统模拟</h3>
-                        <p>完整的文件系统 API，支持目录创建、文件读写、复制移动。基于宿主机文件系统，实现类 Unix 目录导航。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-shield-alt"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-terminal"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">终端可靠性</h3>
+                            <div class="ps-card__body">
+                                TUI 按显示宽度排版（CJK 双宽），剥离完整 ANSI 转义序列。
+                                <code>stty sane</code> 自愈 + 输入归一化 + 重试上限——
+                                按 Enter 疯狂刷 <code>^M</code> 的问题不会再出现。
+                            </div>
                         </div>
-                        <h3>ROOT 权限管理</h3>
-                        <p>支持 ROOT 权限切换，通过配置文件控制权限。提供 testroot 命令验证权限。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cubes"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">后台作业</h3>
+                            <div class="ps-card__body">
+                                <code>cmd &amp;</code>、<code>jobs</code> / <code>fg</code> / <code>bg</code> /
+                                <code>wait</code>、<code>$!</code>、进程组与会话。前台交互经裸管道中继，
+                                后台作业 stdin 接 <code>/dev/null</code>。
+                            </div>
                         </div>
-                        <h3>模块化架构</h3>
-                        <p>kernel.py（内核）、main.py（入口）、fs.py（文件）、printk.py 和 logk.py（日志）。每个模块职责单一。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-undo"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-file-code"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">SpaceConfig v2</h3>
+                            <div class="ps-card__body">
+                                <code>.spc</code> 格式：转义、行尾注释、<code>null</code>、列表类型，
+                                外加 Schema 校验与 <code>spc_get/set/migrate</code> 工具链。
+                            </div>
                         </div>
-                        <h3>A/B 槽位升级</h3>
-                        <p>双槽位设计，更新装到非活动槽位，验证成功后切换。槽位状态记录在 current_slot 文件中。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-terminal"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-list-ol"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">命令注册表</h3>
+                            <div class="ps-card__body">
+                                元数据驱动的分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，
+                                以及 <code>PATH=apps/</code> 外部命令解析。
+                            </div>
                         </div>
-                        <h3>命令行界面</h3>
-                        <p>提供 ls、cd、echo、osver、python 等命令。支持运行 apps 目录下的 Python 程序。</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-heart"></i>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-undo"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">A/B 槽位与回滚</h3>
+                            <div class="ps-card__body">
+                                更新装到非活动槽位，校验通过后切换，失败可回滚。
+                                OTA 云端维护中（<code>src/pyspos.py: OTA_ENABLED</code>），
+                                本地安装与回滚不受影响。
+                            </div>
                         </div>
-                        <h3>完全开源</h3>
-                        <p>无许可证（不做限制），开源免费。代码在 GitHub，欢迎提 issue 和 PR。适合操作系统初学者学习。</p>
-                    </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-broom"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">真出厂重置</h3>
+                            <div class="ps-card__body">
+                                <code>recovery.erase</code> 清理 8 类数据，含题库历史、shell 历史
+                                与全树 <code>__pycache__</code>。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fab fa-python"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">SPF 脚本</h3>
+                            <div class="ps-card__body">
+                                SPF（Space Portable Format）自研脚本格式，支持变量、算术、
+                                输入与引入。
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ps-card ps-card--flat ps-card--compact">
+                        <div class="ps-card__icon"><i class="fas fa-shield-halved"></i></div>
+                        <div class="ps-card__heading">
+                            <h3 class="ps-card__title">MIT 开源</h3>
+                            <div class="ps-card__body">
+                                3.2.0 起采用 MIT 协议。代码在
+                                <a href="https://github.com/ViudiraTech/PySpOS" target="_blank">ViudiraTech/PySpOS</a>，
+                                113 项测试由 GitHub Actions 把关。
+                            </div>
+                        </div>
+                    </article>
                 </div>
             </div>
         </section>

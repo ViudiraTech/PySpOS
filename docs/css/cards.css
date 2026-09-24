@@ -1,0 +1,530 @@
+/* =============================================================================
+   PySpOS 统一组件层 —— 卡片 / 徽标 / 状态横幅
+   -----------------------------------------------------------------------------
+   必须在 style.css **之后**加载：这里定义的是全站统一的组件外观，
+   要盖过 style.css 里各页零散写的同名类。
+
+   铁律：组件里不出现任何裸 hex / rgba / px 硬编码值。
+   颜色一律 var(--ps-*)，间距/圆角/字号一律 var(--ps-ref-*)。
+   改一个 token，全站跟着变；换主题只需换 token，不用碰组件。
+
+   卡片结构（对齐成熟设计系统的四段式）：
+     .ps-card          容器
+     .ps-card__head    标题区（图标 + 标题 + 徽标）
+     .ps-card__body    正文区
+     .ps-card__meta    元信息（版本、日期等弱化文字）
+     .ps-card__actions 行动区（每卡最多 3 个 CTA）
+   ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+   卡片容器
+   -------------------------------------------------------------------------- */
+
+.ps-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ps-ref-space-3);
+    padding: var(--ps-card-padding);
+    background: var(--ps-card-bg);
+    border: var(--ps-ref-border-width-sm) solid var(--ps-card-border);
+    border-radius: var(--ps-card-radius);
+    box-shadow: var(--ps-card-shadow);
+    backdrop-filter: blur(var(--ps-ref-blur-card));
+    -webkit-backdrop-filter: blur(var(--ps-ref-blur-card));
+    overflow: hidden;
+    transition:
+        transform var(--ps-card-transition),
+        border-color var(--ps-card-transition),
+        box-shadow var(--ps-card-transition),
+        background-color var(--ps-card-transition);
+}
+
+/* 顶部强调条：只靠颜色不承载语义，必须配合徽标文字 */
+.ps-card::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: var(--ps-card-accent-bar-height);
+    background: var(--ps-card-accent);
+    opacity: 0.9;
+}
+
+.ps-card--accent-success { --ps-card-accent: var(--ps-status-success-fg); }
+.ps-card--accent-warning { --ps-card-accent: var(--ps-status-warning-fg); }
+.ps-card--accent-danger  { --ps-card-accent: var(--ps-status-danger-fg); }
+.ps-card--accent-info    { --ps-card-accent: var(--ps-status-info-fg); }
+.ps-card--accent-neutral { --ps-card-accent: var(--ps-status-neutral-fg); }
+
+/* 整卡可点：必须有 hover / focus-visible / active 三态，
+   否则键盘用户看不出焦点落在哪 */
+.ps-card--interactive {
+    cursor: pointer;
+}
+
+.ps-card--interactive:hover,
+.ps-card--interactive:focus-within {
+    transform: translateY(-3px);
+    border-color: var(--ps-card-border-hover);
+    box-shadow: var(--ps-card-shadow-hover);
+    background: var(--ps-card-bg-elevated);
+}
+
+.ps-card--interactive:active {
+    transform: translateY(-1px);
+}
+
+.ps-card--interactive:focus-visible {
+    outline: var(--ps-focus-ring-width) solid var(--ps-focus-ring);
+    outline-offset: var(--ps-focus-ring-offset);
+}
+
+/* 扁平变体：列表内密集排布时用，不要阴影 */
+.ps-card--flat {
+    box-shadow: none;
+    background: var(--ps-bg-surface-inset);
+}
+
+.ps-card--flat:hover {
+    box-shadow: none;
+}
+
+/* 紧凑变体：横向排布（特性条目、配置行） */
+.ps-card--compact {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--ps-ref-space-4);
+    padding: var(--ps-ref-space-4);
+    border-radius: var(--ps-card-radius-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   停用态
+   2026-09-24 修正：原先用 `opacity: 0.62` 让整卡变淡。视觉上确实像「不活跃」，
+   但 opacity 作用在整张卡上会**连带把正文一起冲淡**，实测对比度跌破 WCAG AA
+   下限——「看起来更 inactive」和「读得清」不能二选一，这里必须选读得清。
+
+   现在的做法：文字保持满对比度，「已停止」由两处承载——
+     1. 顶部强调条与图标换成中性灰（.ps-card--accent-neutral 负责）
+     2. .ps-badge 的「已停止开发」文字（状态的主载体，不依赖颜色感知）
+   弱化只作用在非文字元素上，所以正文对比度不受影响。
+   -------------------------------------------------------------------------- */
+
+.ps-card--retired .ps-card__icon {
+    background: var(--ps-status-neutral-bg);
+    color: var(--ps-status-neutral-fg);
+}
+
+.ps-card--retired .ps-card__subtitle,
+.ps-card--retired .ps-card__meta {
+    color: var(--ps-fg-subtle);
+}
+
+/* 悬停时允许轻微提亮，强调「这页还能看，只是没人维护了」 */
+.ps-card--retired:hover {
+    border-color: var(--ps-border-default);
+}
+
+/* -----------------------------------------------------------------------------
+   卡片头
+   -------------------------------------------------------------------------- */
+
+.ps-card__head {
+    display: flex;
+    align-items: center;
+    gap: var(--ps-ref-space-3);
+    flex-wrap: wrap;
+}
+
+.ps-card__icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--ps-ref-radius-md);
+    background: var(--ps-brand-subtle-bg);
+    color: var(--ps-brand);
+    font-size: var(--ps-ref-text-lg);
+}
+
+.ps-card__heading {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+}
+
+.ps-card__title {
+    margin: 0;
+    font-size: var(--ps-ref-text-xl);
+    line-height: var(--ps-ref-leading-tight);
+    color: var(--ps-card-title-color);
+    font-weight: 700;
+}
+
+.ps-card__subtitle {
+    display: block;
+    margin-block-start: var(--ps-ref-space-1);
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-card-meta-color);
+}
+
+/* -----------------------------------------------------------------------------
+   卡片正文与元信息
+   -------------------------------------------------------------------------- */
+
+.ps-card__body {
+    flex: 1 1 auto;
+    color: var(--ps-card-body-color);
+    font-size: var(--ps-ref-text-md);
+    line-height: var(--ps-ref-leading-relaxed);
+}
+
+.ps-card__body > :first-child { margin-block-start: 0; }
+.ps-card__body > :last-child { margin-block-end: 0; }
+
+.ps-card__body code,
+.ps-card__meta code {
+    padding: 0.15em 0.4em;
+    border-radius: var(--ps-ref-radius-sm);
+    background: var(--ps-bg-surface-inset);
+    color: var(--ps-fg-default);
+    font-family: var(--ps-ref-font-mono);
+    font-size: 0.9em;
+}
+
+.ps-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ps-ref-space-2) var(--ps-ref-space-4);
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-card-meta-color);
+}
+
+.ps-card__meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ps-ref-space-1);
+}
+
+/* -----------------------------------------------------------------------------
+   行动区：每卡最多 3 个 CTA
+   -------------------------------------------------------------------------- */
+
+.ps-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ps-ref-space-2);
+    margin-block-start: var(--ps-ref-space-1);
+}
+
+.ps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ps-ref-space-2);
+    padding: var(--ps-ref-space-2) var(--ps-ref-space-4);
+    border: var(--ps-ref-border-width-sm) solid transparent;
+    border-radius: var(--ps-ref-radius-pill);
+    font-size: var(--ps-ref-text-sm);
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color var(--ps-ref-duration-fast) var(--ps-ref-ease-standard),
+        color var(--ps-ref-duration-fast) var(--ps-ref-ease-standard),
+        border-color var(--ps-ref-duration-fast) var(--ps-ref-ease-standard);
+}
+
+.ps-btn:focus-visible {
+    outline: var(--ps-focus-ring-width) solid var(--ps-focus-ring);
+    outline-offset: var(--ps-focus-ring-offset);
+}
+
+.ps-btn--primary {
+    background: var(--ps-brand);
+    color: var(--ps-fg-on-brand);
+}
+
+.ps-btn--primary:hover { background: var(--ps-brand-hover); }
+.ps-btn--primary:active { background: var(--ps-brand-active); }
+
+.ps-btn--secondary {
+    background: transparent;
+    border-color: var(--ps-border-default);
+    color: var(--ps-fg-default);
+}
+
+.ps-btn--secondary:hover {
+    border-color: var(--ps-border-brand);
+    background: var(--ps-brand-subtle-bg);
+    color: var(--ps-fg-strong);
+}
+
+.ps-btn--ghost {
+    background: transparent;
+    color: var(--ps-fg-muted);
+    padding-inline: var(--ps-ref-space-2);
+}
+
+.ps-btn--ghost:hover { color: var(--ps-brand); }
+
+.ps-btn[disabled],
+.ps-btn--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* -----------------------------------------------------------------------------
+   徽标：状态必须有文字，不能只靠颜色
+   -------------------------------------------------------------------------- */
+
+.ps-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ps-ref-space-1);
+    padding: 0.2em 0.65em;
+    border: var(--ps-ref-border-width-sm) solid transparent;
+    border-radius: var(--ps-ref-radius-pill);
+    font-size: var(--ps-ref-text-xs);
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.ps-badge--success {
+    color: var(--ps-status-success-fg);
+    background: var(--ps-status-success-bg);
+    border-color: var(--ps-status-success-border);
+}
+
+.ps-badge--warning {
+    color: var(--ps-status-warning-fg);
+    background: var(--ps-status-warning-bg);
+    border-color: var(--ps-status-warning-border);
+}
+
+.ps-badge--danger {
+    color: var(--ps-status-danger-fg);
+    background: var(--ps-status-danger-bg);
+    border-color: var(--ps-status-danger-border);
+}
+
+.ps-badge--info {
+    color: var(--ps-status-info-fg);
+    background: var(--ps-status-info-bg);
+    border-color: var(--ps-status-info-border);
+}
+
+.ps-badge--neutral {
+    color: var(--ps-status-neutral-fg);
+    background: var(--ps-status-neutral-bg);
+    border-color: var(--ps-status-neutral-border);
+}
+
+/* -----------------------------------------------------------------------------
+   状态横幅（页面顶部的停止开发 / 迁移提示）
+   -------------------------------------------------------------------------- */
+
+.ps-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ps-ref-space-3);
+    padding: var(--ps-ref-space-4) var(--ps-ref-space-5);
+    border: var(--ps-ref-border-width-sm) solid var(--ps-border-default);
+    border-inline-start: var(--ps-ref-border-width-md) solid var(--ps-fg-subtle);
+    border-radius: var(--ps-card-radius-sm);
+    background: var(--ps-status-neutral-bg);
+    color: var(--ps-fg-default);
+    line-height: var(--ps-ref-leading-normal);
+}
+
+.ps-banner__icon {
+    flex: 0 0 auto;
+    font-size: var(--ps-ref-text-lg);
+    line-height: 1.3;
+}
+
+.ps-banner__content { flex: 1 1 auto; min-inline-size: 0; }
+.ps-banner__content > :first-child { margin-block-start: 0; }
+.ps-banner__content > :last-child { margin-block-end: 0; }
+
+.ps-banner__title {
+    margin: 0 0 var(--ps-ref-space-1);
+    font-size: var(--ps-ref-text-md);
+    font-weight: 700;
+    color: var(--ps-fg-strong);
+}
+
+.ps-banner--warning {
+    border-inline-start-color: var(--ps-status-warning-fg);
+    background: var(--ps-status-warning-bg);
+    border-color: var(--ps-status-warning-border);
+}
+
+.ps-banner--warning .ps-banner__icon,
+.ps-banner--warning .ps-banner__title {
+    color: var(--ps-status-warning-fg);
+}
+
+.ps-banner--danger {
+    border-inline-start-color: var(--ps-status-danger-fg);
+    background: var(--ps-status-danger-bg);
+    border-color: var(--ps-status-danger-border);
+}
+
+.ps-banner--danger .ps-banner__icon,
+.ps-banner--danger .ps-banner__title {
+    color: var(--ps-status-danger-fg);
+}
+
+.ps-banner--info {
+    border-inline-start-color: var(--ps-status-info-fg);
+    background: var(--ps-status-info-bg);
+    border-color: var(--ps-status-info-border);
+}
+
+.ps-banner--info .ps-banner__icon,
+.ps-banner--info .ps-banner__title {
+    color: var(--ps-status-info-fg);
+}
+
+/* 页面顶部的横幅：main 已经用 margin-top 让开了固定头部，
+   这里只补一点呼吸空间，别再叠一个大 padding */
+.ps-banner--page-top {
+    margin-block: var(--ps-ref-space-5) var(--ps-ref-space-6);
+}
+
+/* -----------------------------------------------------------------------------
+   卡片网格
+   -------------------------------------------------------------------------- */
+
+.ps-grid {
+    display: grid;
+    gap: var(--ps-ref-space-5);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.ps-grid--wide {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+}
+
+.ps-grid--narrow {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+/* -----------------------------------------------------------------------------
+   区块标题
+   -------------------------------------------------------------------------- */
+
+.ps-section {
+    padding-block: var(--ps-ref-space-7);
+}
+
+.ps-section__head {
+    margin-block-end: var(--ps-ref-space-5);
+}
+
+.ps-section__title {
+    margin: 0;
+    font-size: var(--ps-ref-text-2xl);
+    line-height: var(--ps-ref-leading-tight);
+    color: var(--ps-fg-strong);
+}
+
+.ps-section__lead {
+    margin: var(--ps-ref-space-2) 0 0;
+    max-inline-size: 46rem;
+    color: var(--ps-fg-muted);
+    line-height: var(--ps-ref-leading-relaxed);
+}
+
+.ps-section__eyebrow {
+    display: block;
+    margin-block-end: var(--ps-ref-space-2);
+    font-size: var(--ps-ref-text-sm);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ps-brand);
+}
+
+/* -----------------------------------------------------------------------------
+   特性清单：卡片内的紧凑条目
+   -------------------------------------------------------------------------- */
+
+.ps-feature-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--ps-ref-space-2);
+}
+
+.ps-feature-list__item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ps-ref-space-2);
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-fg-muted);
+}
+
+.ps-feature-list__item::before {
+    content: '';
+    flex: 0 0 auto;
+    inline-size: 0.4rem;
+    block-size: 0.4rem;
+    margin-block-start: 0.6em;
+    border-radius: 50%;
+    background: var(--ps-brand);
+}
+
+/* -----------------------------------------------------------------------------
+   响应式
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .ps-card {
+        padding: var(--ps-ref-space-4);
+        border-radius: var(--ps-card-radius-sm);
+    }
+
+    .ps-card--compact {
+        flex-direction: column;
+    }
+
+    .ps-card__title {
+        font-size: var(--ps-ref-text-lg);
+    }
+
+    .ps-section {
+        padding-block: var(--ps-ref-space-6);
+    }
+
+    .ps-section__title {
+        font-size: var(--ps-ref-text-xl);
+    }
+
+    .ps-card__actions .ps-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   无障碍：尊重系统的减少动效偏好
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .ps-card,
+    .ps-card--interactive,
+    .ps-btn {
+        transition: none;
+    }
+
+    .ps-card--interactive:hover,
+    .ps-card--interactive:focus-within {
+        transform: none;
+    }
+}

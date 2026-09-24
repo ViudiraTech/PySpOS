@@ -226,9 +226,16 @@ body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     line-height: 1.7;
     color: var(--text-color);
-    background: var(--bg-image) no-repeat center center fixed;
-    background-size: cover;
+    /* 2026-09-24：背景图保持不变（--bg-image 仍是同一张 picsum 素材），
+       只是在它上面叠一层蒙版渐变。背景照片明暗不可控，不压蒙版的话
+       浅色区域上的正文对比度会塌到不达标。用 background-image 双层而不是
+       替换图片或加 z-index 覆盖层——后者会撞上 fixed 头部与层叠上下文。 */
     background-color: var(--bg-color);
+    background-image: var(--ps-bg-scrim), var(--bg-image);
+    background-size: cover, cover;
+    background-position: center center, center center;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: fixed, fixed;
     min-height: 100vh;
     font-weight: 400;
     -webkit-font-smoothing: antialiased;

@@ -41,6 +41,31 @@ jobs:
       - name: Ruff
         run: python -m ruff check --no-cache src/ tests/ launcher.py build_update.py
 
+  # 官网是纯静态站，没有测试框架兜底——死链、标签不配平、设计 token
+  # 漂移都只能靠机器查。这里把它们变成会红的检查，而不是靠眼睛。
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Design token 对比度（WCAG AA）
+        run: python tests/check_tokens_contrast.py
+
+      - name: 设计层纪律（组件无硬编码 / token 引用完整）
+        run: python tests/check_design_layer.py
+
+      - name: HTML 结构 / 死链 / 锚点
+        run: python tests/check_docs_html.py
+
+      - name: OTA 清单与实际文件一致
+        run: python tests/check_ota_manifest.py
+
   # ── 日常档：每次 push / PR，一格 ubuntu，最快反馈 ──────────────
   # 发版/手动时跳过：test-full 里已经有 ubuntu + 3.12 这一格，不重复消耗
   test:

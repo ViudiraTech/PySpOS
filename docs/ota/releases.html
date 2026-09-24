@@ -127,30 +127,81 @@
     </footer>
 
     <script>
-        const fallbackVersionData = { 
-            "changelog": [
-                {
-                    "version": "3.0.1-pre",
-                    "date": "2026-02-04",
-                    "type": "beta",
-                    "changes": [
-                        "支持在线 OTA 更新。我花了很久实现了这个功能",
-                        "重构优化了部分代码",
-                        "添加一个猎奇网页"
-                    ]
-                },
-                {
-                    "version": "3.0.0",
-                    "date": "2026-01-24",
-                    "type": "beta",
-                    "changes": [
-                        "完善了 zzlsb 猜数字游戏",
-                        "修复若干 bug",
-                        "实现了简易的 recovery 和日志处理"
-                    ]
-                }
+        const fallbackVersionData = {
+    "changelog": [
+        {
+            "version": "3.2.0",
+            "date": "2026-09-24",
+            "type": "rc",
+            "download_url": "PySpOS-3.2.0-20260924.zip",
+            "sha256": "d88f7969a6985a447d8d19760bf9a6a807df98878eb75e887cb45ad41cd1bbc8",
+            "file_size": 251027,
+            "changes": [
+                "apps 升级为真子进程 fork/exec，PID 0/1/2 引导与孤儿收养",
+                "新增 11 步 OOBE 首次开机向导，真实时区（zoneinfo + TZ）与语言",
+                "EEVDF 调度器对标 Linux 6.6+，含 nice 权重表与信号状态机",
+                "终端输入自愈：stty sane 恢复 + 输入归一化，修复按 Enter 刷 ^M",
+                "修复子进程 stdio 中继协议不匹配导致输出丢失、后台作业挂死",
+                "新增 SpaceConfig v2、命令注册表与 Tab 补全、真出厂重置",
+                "main.py 拆分为 src/shell/*，保留兼容 facade",
+                "更新包补齐 requirements.txt / LICENSE / README.md",
+                "CI 改为分层节奏：日常单格，发版才跑全平台矩阵"
             ]
-        };
+        },
+        {
+            "version": "3.1.0",
+            "date": "2026-03-15",
+            "type": "release",
+            "download_url": "PySpOS-3.1.0-20260315.zip",
+            "sha256": "71071326215fa17a3d913857216cd5134d0478bb7a6d788d6f8e447e83bef64e",
+            "file_size": 167000,
+            "changes": [
+                "添加ELF运行功能（Windows也可以跑）",
+                "优化网页。",
+                "使用部分C代码写ELF程序。"
+            ]
+        },
+        {
+            "version": "3.0.1-pre(重构建)",
+            "date": "2026-02-05",
+            "type": "beta",
+            "download_url": "PySpOS-3.0.1-pre-20260205.zip",
+            "sha256": "64e8cd09f351fa37b18eb0c8adab2e8603262628bec6b6ec2487b449bd203298",
+            "file_size": 37849,
+            "changes": [
+                "优化项目结构。",
+                "优化网页。",
+                "优化OTA策略。"
+            ]
+        },
+        {
+            "version": "3.0.1-pre",
+            "date": "2026-02-04",
+            "type": "beta",
+            "download_url": "PySpOS-3.0.1-pre-20260228.zip",
+            "sha256": "7549405d5c585a41836b5b77d2ad265a3555f9689ad8e987c099ba214778a76b",
+            "file_size": 38542,
+            "changes": [
+                "支持在线 OTA 更新。我花了很久实现了这个功能",
+                "重构优化了部分代码",
+                "添加一个猎奇网页"
+            ]
+        },
+        {
+            "version": "3.0.0",
+            "date": "2026-01-24",
+            "type": "beta",
+            "download_url": "https://github.com/GoutouStdio-cn/PySpOS/releases/download/beta_version/PySpOS.zip",
+            "sha256": null,
+            "file_size": null,
+            "changes": [
+                "完善了zzlsb猜数字游戏",
+                "修复若干bug",
+                "实现了简易的recovery和日志处理"
+            ]
+        }
+    ]
+};
 
         async function loadVersionData() {
             try {

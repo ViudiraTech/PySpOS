@@ -9,7 +9,12 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- 设计 token 必须在 style.css 之前：它把旧变量桥接到语义 token，
+         存量样式因此自动吃到统一值 -->
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/style.css">
+    <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
+    <link rel="stylesheet" href="css/cards.css">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230ea5e9' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
 </head>
 <body class="product-page spaceos6-page">
@@ -50,6 +55,21 @@
     </header>
 
     <main>
+        <!-- 停更横幅：状态靠文字承载，不只靠颜色 -->
+        <div class="container">
+            <div class="ps-banner ps-banner--warning ps-banner--page-top" role="status">
+                <i class="fas fa-circle-exclamation ps-banner__icon" aria-hidden="true"></i>
+                <div class="ps-banner__content">
+                    <p class="ps-banner__title">SpaceOS 6 已停止开发</p>
+                    <p>
+                        该技术路线不再维护，本页面仅作历史存档。请勿基于它继续投入；
+                        也不再接受 issue、功能请求或移植。当前唯一在维护的产物是
+                        <a href="pyspos.html">PySpOS</a>，代码已迁移至
+                        <a href="https://github.com/ViudiraTech/PySpOS" target="_blank">ViudiraTech/PySpOS</a>。
+                    </p>
+                </div>
+            </div>
+        </div>
         <section class="product-hero" id="spaceos6-hero" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);">
             <div class="container">
                 <div class="product-hero-content">

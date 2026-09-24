@@ -76,24 +76,28 @@
             <div class="container">
                 <h2 class="section-title">版本信息</h2>
                 <div id="version-info-container">
+                    <!-- 静态兜底：仅在 fetch('version.json') 失败时显示。
+                         2026-09-24 更新为 3.2.0——原来这里一直写死 3.0.1-pre，
+                         网络一抖就展示过期版本。文件大小与 SHA256 仍由 JS 覆盖，
+                         这里只保证「不至于显示错的版本号」。 -->
                     <div class="version-cards">
-                        <div class="version-card current">
-                            <h3>当前版本 <span class="badge badge-beta">测试版</span></h3>
-                            <div class="version">3.0.1-pre</div>
-                            <div class="meta-info">
-                                <div class="date">2026-02-04</div>
-                                <div class="file-size">62.4 KB</div>
-                            </div>
-                        </div>
                         <div class="version-card latest">
-                            <h3>最新版本 <span class="badge badge-new">NEW</span> <span class="badge badge-beta">测试版</span></h3>
-                            <div class="version">3.0.1-pre</div>
+                            <h3>最新版本 <span class="badge badge-new">NEW</span> <span class="badge badge-beta">候选发布版</span></h3>
+                            <div class="version">3.2.0</div>
                             <div class="meta-info">
-                                <div class="date">2026-02-04</div>
-                                <div class="file-size">62.4 KB</div>
+                                <div class="date">2026-09-24</div>
+                                <div class="file-size">加载中…</div>
                             </div>
                         </div>
                     </div>
+                    <noscript>
+                        <p style="margin-top: 12px;">
+                            当前环境禁用了 JavaScript，版本信息无法自动读取。
+                            请直接查看
+                            <a href="version.json">version.json</a> 或
+                            <a href="releases.html">版本历史</a>。
+                        </p>
+                    </noscript>
                 </div>
             </div>
         </section>
@@ -103,15 +107,15 @@
                 <h2 class="section-title">下载更新包</h2>
                 <div id="download-container">
                     <div class="download-buttons">
-                        <a href="PySpOS.zip" class="btn btn-primary">
-                            下载 v3.0.1-pre 源代码 <i class="fas fa-download"></i>
+                        <a href="PySpOS-3.2.0-20260924.zip" class="btn btn-primary">
+                            下载 v3.2.0 更新包 <i class="fas fa-download"></i>
                         </a>
                         <a href="releases.html" class="btn btn-secondary">
                             查看所有版本 <i class="fas fa-list"></i>
                         </a>
                     </div>
                     <p style="margin-top: 20px; color: #e5e5e5; font-size: 14px;">
-                        文件大小：62.4 KB<br>
+                        文件大小：245.1 KB<br>
                         SHA256: <code>124ea876d602cb51d9212f9c9b73091d09690b29a17e55607b171605452a7b87</code>
                     </p>
                 </div>
@@ -235,9 +239,17 @@
             const fileSize = formatFileSize(versionData.file_size);
             const sha256 = versionData.sha256;
             const releaseNotes = versionData.release_notes;
-            const isBeta = versionData.develop_stage === 'beta';
-            const badgeClass = isBeta ? 'badge-beta' : 'badge-stable';
-            const badgeText = isBeta ? '测试版' : '正式版';
+            // 预发布判定：beta / rc / pre / alpha 都算预发布。
+            // 2026-09-24 修正：原先只判 === 'beta'，于是 3.2.0 的 develop_stage
+            // 一旦标成 rc，就会被显示成「正式版」——RC 被当成 GA 卖。
+            const stage = (versionData.develop_stage || '').toLowerCase();
+            const isPrerelease = ['beta', 'rc', 'pre', 'alpha', 'dev', 'nightly']
+                .some(s => stage.includes(s));
+            const STAGE_TEXT = { rc: '候选发布版', beta: '测试版', pre: '预发布版' };
+            const badgeClass = isPrerelease ? 'badge-beta' : 'badge-stable';
+            const badgeText = isPrerelease
+                ? (STAGE_TEXT[stage] || '预发布版')
+                : '正式版';
 
             // 确定下载链接
             let downloadUrl;
