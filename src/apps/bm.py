@@ -17,8 +17,13 @@ def disable_root():
 def main():
     print("BM：Bootloader CFG 管理工具")
     print("版本 2.0")
-    
-    ut = input("请输入Unlock Token：")
+
+    # 2026-09-24：token 输入也要处理 EOF，否则后台/管道运行时会直接崩栈
+    try:
+        ut = input("请输入Unlock Token：")
+    except (EOFError, KeyboardInterrupt):
+        print("\n输入已结束，退出 bm。")
+        return
 
     token = api.return_token()
     if ut.strip() != token:
@@ -67,6 +72,10 @@ def main():
                     print(f"找不到 {pm} 命令")
         except KeyboardInterrupt:
             print("\nExiting...")
+        except EOFError:
+            # 2026-09-24：stdin 关闭时必须退出，否则真子进程会空转吃 CPU
+            print("\n输入已结束，退出 bm。")
+            return
 
 if __name__ == "__exec__":
     main()

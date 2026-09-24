@@ -24,9 +24,15 @@ def main():
 
     print("在开始前，我们需要验证您的 Unlock Token。请输入你得到的 Token。")
     while 1:
-        key = input("> ")
+        # 2026-09-24：stdin 关闭（EOF/Ctrl-D）时必须退出，
+        # 否则 apps 变成真子进程后会无限空转吃满 CPU。
+        try:
+            key = input("> ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n输入已结束，退出 lock。")
+            return
 
-        # 2026-09-24：改用常时比较，避免时序侧信道（行为不变）。
+        # 改用常时比较，避免时序侧信道（行为不变）。
         if hmac.compare_digest(key.strip(), api.return_token()):
             lock()
         elif key == "exit":

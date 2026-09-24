@@ -40,6 +40,11 @@ bootcfg = btcfg.load_bootcfg()
 rootstate = bool(btcfg.get_bootcfg('rootstate'))
 boot_time = logk.get_boot_time()
 
+# 进程树顶层（Linux 语义）：0=idle(swapper) / 1=init / 2=shell
+# 必须在 shell 之外建立：import 时即登记，任何命令执行前 ps 就能看到 init。
+import process as _process
+_process.boot_system()
+
 # 获取根目录（main.py所在目录的父目录）
 # 统一走 common.paths，失败时回退到历史逻辑（兼容旧槽位布局）。
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -88,10 +93,18 @@ else:
 
 # 主函数
 def main():
-    logk.printl("main", "加载 PySpKernel...", boot_time)
-    logk.printl("main", f"Bootloader：{'已上锁' if bootcfg['locked'] else '已解锁'}，ROOT 权限：{'未启用' if not bootcfg['rootstate'] else '已启用'}", boot_time)
-    logk.printl("main", f"加载完成，您使用的操作系统为：{sys.platform}", boot_time)
-    logk.printl("main", "ROOT已启用" if rootstate else "ROOT未启用", boot_time)
+    import syslocale
+    from syslocale import _
+    syslocale.init_from_bootcfg(bootcfg)
+    logk.printl("main", _("boot.loading"), boot_time)
+    logk.printl("main", f"Bootloader：{ _('boot.locked') if bootcfg['locked'] else _('boot.unlocked')}，ROOT 权限：{ _('boot.root_off') if not bootcfg['rootstate'] else _('boot.root_on')}", boot_time)
+    logk.printl("main", f"{_('boot.loaded')}{sys.platform}", boot_time)
+    logk.printl("main", _("boot.root_enabled") if rootstate else _("boot.root_disabled"), boot_time)
+
+    # OOBE 实际在 kernel.loop() 里触发（覆盖 hotreset_env 直连路径），此处保留
+    # 仅为直接以 `python main.py` 启动的兼容场景。
+    import oobe
+    oobe.maybe_run_oobe(root_dir)
 
     kernel.loop()
 
@@ -108,6 +121,7 @@ from shell.sys_cmds import (
     cmd_pwd, cmd_whoami, cmd_cat, cmd_grep, cmd_mkdir, cmd_touch,
     cmd_cp, cmd_mv, cmd_history, cmd_spc_show, cmd_spc_export,
     cmd_spc_validate, cmd_spc_get, cmd_spc_set, cmd_spc_migrate,
+    cmd_oobe, cmd_locale,
 )
 from shell.elf_cmd import cmd_run
 from shell.ota_cmds import (
@@ -130,6 +144,7 @@ __all__ = [
     "cmd_mkdir", "cmd_touch",     "cmd_cp", "cmd_mv", "cmd_history",
     "cmd_spc_show", "cmd_spc_export",
     "cmd_spc_validate", "cmd_spc_get", "cmd_spc_set", "cmd_spc_migrate",
+    "cmd_oobe", "cmd_locale",
     "cmd_run",
     "cmd_ota_check", "cmd_ota_update", "cmd_ota_status", "cmd_ota_rollback",
     "cmd_ota_clean",

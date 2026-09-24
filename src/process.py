@@ -25,7 +25,7 @@ import heapq
 import itertools
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # --------------------------------------------------------------------------
 # 常量：对齐内核语义（数值按教学可读性取用，单位：毫秒浮点）
@@ -33,6 +33,13 @@ from typing import Dict, List, Optional, Tuple
 
 NICE_0_LOAD = 1024          # 内核 NICE_0_LOAD
 PID_MAX = 32768             # 内核 PID_MAX_DEFAULT（简化版位图上限）
+
+# 保留 PID（Linux 语义）：0=idle/swapper（不可见调度器驱动），
+# 1=init（孤儿收养+僵尸回收+信号转发），2=shell（init 的子进程，交互驱动）。
+PID_IDLE = 0
+PID_INIT = 1
+PID_SHELL = 2
+RESERVED_PIDS = (PID_IDLE, PID_INIT, PID_SHELL)
 
 BASE_SLICE_MS = 6.0         # sysctl_sched_base_slice（内核默认约 3~6ms 量级）
 MIN_SLICE_MS = 0.75         # 最小切片保护（内核 sysctl_sched_min_granularity 思想）
@@ -110,6 +117,8 @@ class PCB:
     comm: str                       # 任务名（Linux task_struct.comm）
     state: str = TASK_RUNNING
     ppid: int = 0
+    pgrp: int = 0                   # 进程组（默认 = pid，自成一组，如 bash 每条命令）
+    session: int = 0                # 会话（默认 = shell 会话）
     nice: int = 0
     static_prio: int = 120          # 内核 static_prio = MAX_RT_PRIO(100) + nice + 20
     weight: int = NICE_0_LOAD
@@ -124,7 +133,9 @@ class PCB:
     pending: List[int] = field(default_factory=list)  # 待处理信号队列
     start_time: float = field(default_factory=time.time)
     end_time: Optional[float] = None
-    kind: str = "app"               # app | elf | spf | shell | kthread
+    kind: str = "app"               # app | elf | spf | shell | init | idle | kthread
+    remote: bool = False            # True=跑在真实 OS 子进程里，不进 EEVDF 就绪队
+    job_id: Optional[int] = None    # 所属后台作业号
     note: str = ""
     cmd: str = ""                   # 旧 proc.py 兼容：完整命令行
     _gen: int = 0                   # runqueue 堆条目版本号（内部）
@@ -132,6 +143,10 @@ class PCB:
     def __post_init__(self):
         if not self.cmd:
             self.cmd = self.comm
+        if not self.pgrp:
+            self.pgrp = self.pid
+        if not self.session:
+            self.session = PID_SHELL
         self.static_prio = 100 + self.nice + 20
         self.weight = nice_to_weight(self.nice)
 
@@ -165,6 +180,12 @@ class PidAllocator:
     def free(self, pid: int) -> None:
         self._used.discard(pid)
 
+    def reserve(self, pid: int) -> None:
+        """占用保留 PID（0/1/2 由 boot_system 登记）。"""
+        self._used.add(pid)
+        if self._next <= pid:
+            self._next = pid + 1
+
     def reset(self) -> None:
         self._used.clear()
         self._next = 1
@@ -192,6 +213,9 @@ class EEVDFRunQueue:
     def enqueue(self, pcb: PCB) -> None:
         # SIMPLIFY: place_entity 简化——唤醒任务 vruntime 箝位到 min_vruntime，
         # 保留“欠账者优先”，但不实现内核的 PLACE_LAG/vlag 衰减全套逻辑。
+        # remote 任务跑在真实 OS 子进程上，由宿主 CPU 并发执行，不进虚拟就绪队。
+        if pcb.remote:
+            return
         if pcb.state == TASK_RUNNING:
             if pcb.vruntime < self.min_vruntime:
                 pcb.vruntime = self.min_vruntime
@@ -358,21 +382,77 @@ class EEVDFRunQueue:
 # 进程表（全局单例思想，对应内核 pid 哈希 + 全局 runqueue）
 # --------------------------------------------------------------------------
 
+@dataclass
+class Job:
+    """后台作业（bash jobs 语义的子集）：一组同 pgrp 的进程 + 命令行。"""
+    job_id: int
+    cmdline: str
+    pids: List[int] = field(default_factory=list)
+    background: bool = True
+    state: str = TASK_RUNNING       # Running | Stopped | Done
+    started: float = field(default_factory=time.time)
+
+
+TERMINAL_STATES = (DONE, FAILED, "Killed", EXIT_ZOMBIE, EXIT_DEAD)
+
+
 class ProcessTable:
     def __init__(self):
         self.pids = PidAllocator()
         self.tasks: Dict[int, PCB] = {}
         self.rq = EEVDFRunQueue()
+        # 真子进程句柄（multiprocessing.Process，不透明存放在此以保持 PCB 可拷贝）
+        self.handles: Dict[int, Any] = {}
+        self.jobs: Dict[int, Job] = {}
+        self._job_seq = itertools.count(1)
+        self.last_bg_pid: Optional[int] = None   # $!
+        # remote 信号后端（forkexec 注册；未注册时 remote 退化为纯模拟）
+        self._remote_signal_backend = None
+
+    def set_remote_signal_backend(self, fn) -> None:
+        self._remote_signal_backend = fn
+
+    # -- 启动：idle(0) / init(1) / shell(2) ----------------------------------
+
+    def boot_system(self) -> Dict[str, PCB]:
+        """建立 PID 语义顶层，供 kernel 启动时调用一次（幂等：已存在则直接返回）。"""
+        if PID_INIT in self.tasks:
+            return {"idle": self.tasks[PID_IDLE], "init": self.tasks[PID_INIT],
+                    "shell": self.tasks[PID_SHELL]}
+        for pid in RESERVED_PIDS:
+            self.pids.reserve(pid)
+        idle = PCB(pid=PID_IDLE, comm="swapper/0", kind="idle",
+                   state=TASK_INTERRUPTIBLE, ppid=PID_IDLE)
+        init = PCB(pid=PID_INIT, comm="init", kind="init",
+                   state=TASK_INTERRUPTIBLE, ppid=PID_IDLE)
+        shell = PCB(pid=PID_SHELL, comm="pyspos-sh", kind="shell",
+                    state=TASK_RUNNING, ppid=PID_INIT,
+                    cmd="pyspos-sh")
+        self.tasks[PID_IDLE] = idle
+        self.tasks[PID_INIT] = init
+        self.tasks[PID_SHELL] = shell
+        return {"idle": idle, "init": init, "shell": shell}
+
+    def is_booted(self) -> bool:
+        return PID_INIT in self.tasks
+
+    def current_shell_pid(self) -> int:
+        return PID_SHELL if self.is_booted() else 0
 
     # -- 创建 / 退出 ------------------------------------------------------
 
     def spawn(self, comm: str, kind: str = "app", nice: int = 0,
-              ppid: int = 0, note: str = "") -> PCB:
+              ppid: int = 0, note: str = "", remote: bool = False,
+              pgrp: int = 0, enqueue_rq: bool = True) -> PCB:
+        if not ppid:
+            ppid = self.current_shell_pid()
         pid = self.pids.alloc()
         pcb = PCB(pid=pid, comm=comm, kind=kind, nice=nice, ppid=ppid,
-                  note=note, cmd=comm)
+                  note=note, cmd=comm, remote=remote,
+                  pgrp=pgrp or pid)
         self.tasks[pid] = pcb
-        self.rq.enqueue(pcb)
+        if enqueue_rq and not remote:
+            self.rq.enqueue(pcb)
         return pcb
 
     fork_task = spawn  # 别名：教学上 fork ≈ spawn
@@ -389,7 +469,58 @@ class ProcessTable:
         if state in (DONE, FAILED, "Killed", EXIT_DEAD):
             # 兼容旧 proc.py 的结束态命名
             pass
+        # Linux 语义：父进程消亡时子进程过继给 init（收养后僵尸子女立即由 init 回收）
+        self.adopt_orphans(pid)
         return pcb
+
+    def child_exited(self, pid: int, exit_code: int = 0,
+                     wall_ms: float = 0.0) -> Optional[PCB]:
+        """真子进程退出时由 pump 线程回调：结算 CPU 时间并转僵尸。"""
+        pcb = self.tasks.get(pid)
+        if pcb is None:
+            return None
+        if wall_ms > 0:
+            self.charge_remote(pid, wall_ms)
+        return self.exit_task(pid, exit_code=exit_code, state=EXIT_ZOMBIE)
+
+    def charge_remote(self, pid: int, wall_ms: float) -> None:
+        pcb = self.tasks.get(pid)
+        if pcb is None or wall_ms <= 0:
+            return
+        pcb.sum_exec_runtime += wall_ms
+        pcb.vruntime += self.rq.calc_delta_fair(wall_ms, pcb.weight)
+
+    def adopt_orphans(self, dead_pid: int) -> List[PCB]:
+        """孤儿收养：ppid 指向消亡者的任务过继给 init；已是僵尸的当场回收。"""
+        reaped = []
+        for pcb in list(self.tasks.values()):
+            if pcb.ppid == dead_pid and pcb.pid != dead_pid:
+                pcb.ppid = PID_INIT
+                if pcb.state in TERMINAL_STATES:
+                    self.reap(pcb.pid)
+                    reaped.append(pcb)
+        return reaped
+
+    def reap_children(self, ppid: int) -> List[PCB]:
+        """父进程回收自己的僵尸子女（wait 语义），返回回收到的 PCB。"""
+        done = []
+        for pcb in list(self.tasks.values()):
+            if pcb.ppid == ppid and pcb.state in TERMINAL_STATES:
+                self.reap(pcb.pid)
+                done.append(pcb)
+        if done:
+            self._refresh_job_states()
+        return done
+
+    def wait_for(self, pid: int, timeout: Optional[float] = 30.0) -> Optional[PCB]:
+        """阻塞等待指定 pid 进入终止态；timeout=None 表示无限等待。"""
+        deadline = None if timeout is None else time.time() + max(0.0, timeout)
+        while deadline is None or time.time() < deadline:
+            pcb = self.tasks.get(pid)
+            if pcb is None or pcb.state in TERMINAL_STATES:
+                return pcb
+            time.sleep(0.02)
+        return self.tasks.get(pid)
 
     def reap(self, pid: int) -> Optional[PCB]:
         """回收 ZOMBIE → 释放 pid（对应内核 release_task 简化）。"""
@@ -436,10 +567,30 @@ class ProcessTable:
             return False, f"没有 PID 为 {pid} 的进程"
         if pcb.state in (DONE, FAILED, EXIT_ZOMBIE, EXIT_DEAD):
             return False, f"进程 {pid} 已结束（{pcb.state}），无法发信号"
+        # 真子进程：先走 OS 级投递（terminate/kill/POSIX 信号），再落统一状态机
+        via = ""
+        if pcb.remote and self._remote_signal_backend is not None:
+            try:
+                delivered, note = self._remote_signal_backend(pcb, signum)
+            except Exception as e:
+                return False, f"向 {pid} 投递信号失败: {e}"
+            if not delivered:
+                return False, note
+            via = f"（{note}）"
+            if signum == SIGSTOP:
+                pcb.signal = signum
+                pcb.state = TASK_STOPPED
+                self.rq.dequeue(pcb)
+                return True, f"进程 {pid} 已暂停{via}"
+            if signum == SIGCONT:
+                pcb.signal = 0
+                if pcb.state == TASK_STOPPED:
+                    pcb.state = TASK_RUNNING
+                return True, f"进程 {pid} 已继续{via}"
         if signum in (SIGKILL, SIGTERM, SIGINT):
             pcb.signal = signum
             self.exit_task(pid, exit_code=128 + signum, state="Killed")
-            return True, f"已向 {pid} 发送信号 {signum}，进程已终止"
+            return True, f"已向 {pid} 发送信号 {signum}，进程已终止{via}"
         if signum == SIGSTOP:
             if self.block(pid, TASK_STOPPED):
                 pcb.signal = signum
@@ -454,8 +605,46 @@ class ProcessTable:
             return False, f"进程 {pid} 未被暂停（{pcb.state}）"
         pcb.pending.append(signum)
         pcb.signal = signum
-        pcb.note = (pcb.note + f" [sig{signum}]").strip()
-        return True, f"已向 {pid} 发送信号 {signum}"
+        if not via:
+            pcb.note = (pcb.note + f" [sig{signum}]").strip()
+        return True, f"已向 {pid} 发送信号 {signum}{via}"
+
+    # -- 后台作业（bash jobs 语义） -----------------------------------------
+
+    def new_job(self, cmdline: str, pids: Optional[List[int]] = None,
+                background: bool = True) -> Job:
+        job = Job(job_id=next(self._job_seq), cmdline=cmdline, pids=list(pids or []))
+        if not job.pids:
+            job.state = DONE
+        self.jobs[job.job_id] = job
+        for pid in job.pids:
+            pcb = self.tasks.get(pid)
+            if pcb is not None:
+                pcb.job_id = job.job_id
+        return job
+
+    def get_job(self, job_id: int) -> Optional[Job]:
+        return self.jobs.get(job_id)
+
+    def list_jobs(self) -> List[Job]:
+        self._refresh_job_states()
+        return [self.jobs[j] for j in sorted(self.jobs)]
+
+    def _refresh_job_states(self) -> None:
+        for job in self.jobs.values():
+            live = [self.tasks[p] for p in job.pids
+                    if p in self.tasks and self.tasks[p].state == TASK_RUNNING]
+            stopped = [self.tasks[p] for p in job.pids
+                       if p in self.tasks and self.tasks[p].state == TASK_STOPPED]
+            if stopped and not live:
+                job.state = TASK_STOPPED
+            elif live:
+                job.state = TASK_RUNNING
+            else:
+                job.state = DONE
+
+    def mark_last_bg(self, pid: int) -> None:
+        self.last_bg_pid = pid
 
     # -- 调度驱动 -------------------------------------------------------------
 
@@ -484,7 +673,8 @@ class ProcessTable:
         if include_done:
             return rows
         return [p for p in rows
-                if p.state in (TASK_RUNNING, TASK_STOPPED, TASK_INTERRUPTIBLE)]
+                if p.state in (TASK_RUNNING, TASK_STOPPED, TASK_INTERRUPTIBLE)
+                or p.remote and p.state not in TERMINAL_STATES]
 
     def get(self, pid: int) -> Optional[PCB]:
         return self.tasks.get(pid)
@@ -504,7 +694,11 @@ class ProcessTable:
 
     def reset(self) -> None:
         self.tasks.clear()
-        self.pids.reset()
+        self.handles.clear()
+        self.jobs.clear()
+        self._job_seq = itertools.count(1)
+        self.last_bg_pid = None
+        self._remote_signal_backend = None
         avg_w = self.rq
         self.rq = EEVDFRunQueue(base_slice=avg_w.base_slice,
                                 min_slice=avg_w.min_slice)
@@ -518,10 +712,59 @@ def _table() -> ProcessTable:
     return _pt
 
 
+def boot_system() -> Dict[str, PCB]:
+    """建立 idle(0)/init(1)/shell(2) 进程树顶层（幂等）。"""
+    return _pt.boot_system()
+
+
+def is_booted() -> bool:
+    return _pt.is_booted()
+
+
+def set_remote_signal_backend(fn) -> None:
+    _pt.set_remote_signal_backend(fn)
+
+
+def new_job(cmdline: str, pids: Optional[List[int]] = None,
+            background: bool = True) -> Job:
+    return _pt.new_job(cmdline, pids, background)
+
+
+def list_jobs() -> List[Job]:
+    return _pt.list_jobs()
+
+
+def get_job(job_id: int) -> Optional[Job]:
+    return _pt.get_job(job_id)
+
+
+def reap_children(ppid: int) -> List[PCB]:
+    return _pt.reap_children(ppid)
+
+
+def current_shell_pid() -> int:
+    return _pt.current_shell_pid()
+
+
+def adopt_orphans(dead_pid: int) -> List[PCB]:
+    return _pt.adopt_orphans(dead_pid)
+
+
+def wait_for(pid: int, timeout: Optional[float] = 30.0) -> Optional[PCB]:
+    return _pt.wait_for(pid, timeout)
+
+
+def last_bg_pid() -> Optional[int]:
+    return _pt.last_bg_pid
+
+
 # ---- 模块级便捷 API（shell 直接调用） ----
 
-def spawn(cmd: str, kind: str = "app", nice: int = 0, note: str = "") -> PCB:
-    return _pt.spawn(comm=cmd, kind=kind, nice=nice, note=note)
+def spawn(cmd: str, kind: str = "app", nice: int = 0, note: str = "",
+          remote: bool = False, pgrp: int = 0, enqueue_rq: bool = True,
+          ppid: int = 0) -> PCB:
+    return _pt.spawn(comm=cmd, kind=kind, nice=nice, note=note,
+                     remote=remote, pgrp=pgrp, enqueue_rq=enqueue_rq, ppid=ppid)
 
 
 def fork_task(comm: str, **kw) -> PCB:
@@ -531,6 +774,17 @@ def fork_task(comm: str, **kw) -> PCB:
 def finish(pid: int, exit_code: int = 0, failed: bool = False) -> Optional[PCB]:
     state = FAILED if failed else DONE
     return _pt.exit_task(pid, exit_code=exit_code, state=state)
+
+
+def exit_task(pid: int, exit_code: int = 0,
+              state: str = EXIT_ZOMBIE) -> Optional[PCB]:
+    """显式以指定状态退出（EXIT_ZOMBIE 即 Linux 的未回收僵尸）。"""
+    return _pt.exit_task(pid, exit_code=exit_code, state=state)
+
+
+def child_exited(pid: int, exit_code: int = 0,
+                 wall_ms: float = 0.0) -> Optional[PCB]:
+    return _pt.child_exited(pid, exit_code=exit_code, wall_ms=wall_ms)
 
 
 def send_signal(pid: int, signum: int) -> Tuple[bool, str]:

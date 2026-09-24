@@ -15,8 +15,13 @@ def main():
     print("请输入您获取的解锁 Token 以继续下一步操作")
 
     while 1:
-        token = input("> ")
-        # 2026-09-24：改用常时比较，避免时序侧信道（行为不变）。
+        # 2026-09-24：stdin 关闭时退出，避免真子进程空转吃 CPU
+        try:
+            token = input("> ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n输入已结束，退出 unlock。")
+            return
+        # 改用常时比较，避免时序侧信道（行为不变）。
         if hmac.compare_digest(token.strip(), api.return_token()):
             print("验证成功，您可以进行下一步了\n")
             if api.api_confirm("是否现在解锁 Bootloader？"):

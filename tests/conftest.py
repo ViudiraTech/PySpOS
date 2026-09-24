@@ -10,3 +10,17 @@ APPS = os.path.join(SRC, "apps")
 for p in (SRC, APPS):
     if p not in sys.path:
         sys.path.insert(0, p)
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _keep_cwd_at_repo_root():
+    """测试不应依赖 CWD：前面的用例改了目录时，后续用绝对路径的用例仍要正常。"""
+    root = os.getcwd()
+    yield
+    try:
+        os.chdir(root)
+    except OSError:
+        pass

@@ -8,6 +8,7 @@
 import main
 import kernel
 import logk
+import printk
 import shutil
 import os
 import gc
@@ -99,7 +100,7 @@ def recovery_main(jumpinfo) -> str:
 
         if prompt == "help":
             print("help     打印本帮助信息")
-            print("erase    清除bootcfg和pycache信息")
+            print("erase    出厂重置（清配置/槽位/缓存/答题记录，下次启动进入OOBE）")
             print("optimize 调用GC垃圾回收，让性能更高（实验性的）")
             print("ota_check  检查是否有可用的更新")
             print("ota_update 下载并安装更新")
@@ -108,43 +109,20 @@ def recovery_main(jumpinfo) -> str:
             print("ota_clean  清理更新包文件")
             print("exit     退出Recovery\n")
         elif prompt == "erase":
-            # 清除bootcfg和pycache信息（使用根目录绝对路径）
-            etc_path = os.path.join(root_dir, "etc")
-            if os.path.isdir(etc_path):
-                shutil.rmtree(etc_path)
-                logk.printl("recovery", f"已清除根目录下的etc文件夹: {etc_path}", main.boot_time)
+            # 出厂重置：与测试共用 common.reset 工厂实现，保证无残留、
+            # 且下次启动必进 OOBE（etc/.oobe_done 随 etc/ 一起被删）。
+            from common.reset import factory_reset
+            if not printk.confirm("erase 将删除全部用户数据并回到首次开机状态，继续？"):
+                print("操作已取消\n")
             else:
-                logk.printl("recovery", "根目录下的etc文件夹已经清除了", main.boot_time)
-            
-            # 清除根目录下的pycache
-            pycache_path = os.path.join(root_dir, "__pycache__")
-            if os.path.isdir(pycache_path):
-                shutil.rmtree(pycache_path)
-                logk.printl("recovery", f"已清除根目录下的pycache文件夹: {pycache_path}", main.boot_time)
-            else:
-                logk.printl("recovery", "根目录下的pycache文件夹已经清除了", main.boot_time)
-            
-            # 清除槽位内容
-            slots = ["slot_a", "slot_b"]
-            for slot in slots:
-                slot_path = os.path.join(root_dir, slot)
-                if os.path.isdir(slot_path):
-                    shutil.rmtree(slot_path)
-                    logk.printl("recovery", f"槽位 {slot} 已清除: {slot_path}", main.boot_time)
-                else:
-                    logk.printl("recovery", f"槽位 {slot} 已经清除了", main.boot_time)
-            
-            # 清除槽位内的pycache文件夹
-            for slot in slots:
-                slot_pycache_path = os.path.join(root_dir, slot, "__pycache__")
-                if os.path.isdir(slot_pycache_path):
-                    shutil.rmtree(slot_pycache_path)
-                    logk.printl("recovery", f"已清除槽位 {slot} 的pycache文件夹: {slot_pycache_path}", main.boot_time)
-                else:
-                    logk.printl("recovery", f"槽位 {slot} 的pycache文件夹已经清除了", main.boot_time)
-            
-            gc.collect()
-            logk.printl("recovery", "清除完成，请重启程序\n", main.boot_time)
+                report = factory_reset(root_dir)
+                for _name, (ok, msg) in report.items():
+                    if ok:
+                        printk.ok(msg)
+                    else:
+                        printk.error(msg)
+                gc.collect()
+                logk.printl("recovery", "出厂重置完成，重启后将进入首次开机向导（OOBE）\n", main.boot_time)
         elif prompt == "exit":
             break
         elif prompt == "optimize":

@@ -102,10 +102,12 @@ token = generate_token()
 
 # 打印提示符
 def print_prompt():
+    import syslocale
     # 实时获取当前工作目录
     current_dir_name = os.path.basename(os.getcwd())
-    username = get_system_username()
-    current_time = time.strftime("%H:%M:%S")
+    # OOBE 可设置显示名；缺省回退系统用户（bootcfg 缺键兼容旧配置）
+    username = main.bootcfg.get('display_name') or get_system_username()
+    current_time = syslocale.now_str("%H:%M:%S")
 
     if main.rootstate or main.bootcfg.get('rootstate', False):
         prompt_header = (
@@ -132,8 +134,17 @@ def screen_clear():
 
 # 内核主循环
 def loop():
+    from syslocale import _
+    import oobe
+    import main as _main_mod
+
+    # 首次开机向导：etc/.oobe_done 缺失即进入（出厂重置会删掉它）。
+    # 放在 kernel.loop 而不是 main.main()：hotreset_env 启动路径直接进
+    # kernel.loop()，放错位置会导致真实开机跳过 OOBE。
+    oobe.maybe_run_oobe(_main_mod.root_dir)
+
     screen_clear()
-    username = get_system_username()
+    username = main.bootcfg.get('display_name') or get_system_username()
     print(ascii_logo)
 
     ota.ota_init()
@@ -141,7 +152,7 @@ def loop():
     # 2026-09-24 安全加固：启动日志不再明文打印完整 Token（历史行为直接泄露），
     # 仅显示前 6 位 + 获取方式；完整 Token 仍可通过官方 gettoken 答题流程获取。
     logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心，Token = {token[:6]}****（完整 Token 请用 open gettoken 获取）", main.boot_time)
-    print(f"欢迎使用 PySpOS 操作系统，{username}！")
+    print(_("boot.welcome", user=username))
     print()
     while 1:
         try:

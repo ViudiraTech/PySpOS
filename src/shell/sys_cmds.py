@@ -32,45 +32,18 @@ def print_sunhb():
     print()
 
 # 命令处理函数
-def cmd_help():
-    print("clear      清屏")
-    print("echo       打印指定的字符串（支持 echo text > file / >> file）")
-    print("osver      查看系统和Python版本")
-    print("shutdown   关闭PySpOS")
-    print("python     启动Python")
-    print("shb        打印孙浩博是小可爱 n 次（n 指你的CPU逻辑核心数）")
-    print("ls/dir     列出当前目录下的文件和文件夹")
-    print("cd         切换工作目录")
-    print("pwd        打印当前工作目录")
-    print("whoami     打印当前用户名")
-    print("cat        打印文件内容（支持 cat a | grep foo）")
-    print("grep       过滤行（用法: grep <pattern> [file]）")
-    print("mkdir      创建目录（mkdir -p a/b）")
-    print("touch      创建空文件")
-    print("cp/mv      复制/移动文件")
-    print("rm         删除文件或文件夹")
-    print("finfo      查看指定文件的信息")
-    print("testroot   测试ROOT权限")
-    print("open       运行 apps 目录下的指定应用程序")
-    print("openspf    运行 spfapps 目录下的 SPF 脚本（SPF 2.0: var/set/add/input/include/sleep）")
-    print("run        加载并运行 ELF 可执行文件（run --stats/--map/--disasm/--strace）")
-    print("ps/jobs    列出模拟进程")
-    print("kill       终止模拟进程（kill <pid>）")
-    print("signal     向进程发信号（signal <pid> <SIGTERM|SIGKILL|SIGSTOP|SIGCONT|SIGUSR1>）")
-    print("history    查看命令历史")
-    print("sysmon     一屏总览（版本/槽位/进程/OTA）")
-    print("spc_show   以 SpaceConfig 格式打印当前 bootcfg")
-    print("spc_export 导出 bootcfg 为 .spc 文件（spc_export [path]）")
-    print("spc_validate 校验 spc 文件（语法+Schema，带行号）")
-    print("spc_get    读取配置项（spc_get <section.key> [path]）")
-    print("spc_set    写入配置项（spc_set <section.key> <value> [path]）")
-    print("spc_migrate json/spc 双向迁移（带校验）")
-    print("ota_check  检查是否有可用的更新（OTA 维护期间会直接提示禁用）")
-    print("ota_update 下载并安装更新")
-    print("ota_status 查看OTA更新状态")
-    print("ota_rollback 回滚到上一个版本")
-    print("ota_clean  清理更新包文件")
-    print("hotreset   热重启系统（重新加载代码）\n")
+def cmd_help(args: str = ""):
+    """help：按分组列出命令；help <命令> 显示单命令详情。
+
+    帮助文本由 commands.py 注册表元数据自动生成，新增命令无需再手写这里。
+    """
+    import commands as _reg
+    _reg.register_discovered()
+    topic = (args or "").strip()
+    if topic:
+        print(_reg.render_help(topic))
+        return
+    print(_reg.render_help())
 
 # 打印指定字符串
 def cmd_echo(text: str):
@@ -599,3 +572,48 @@ def cmd_spc_migrate(args: str):
 def cmd_hotreset():
     import hotreset_env
     hotreset_env.trigger()
+
+
+def cmd_oobe():
+    """手动重跑首次开机向导（开机仅在 etc/.oobe_done 缺失时自动进入）。"""
+    import oobe
+    ok = oobe.run_wizard(oobe._live_ctx(main.root_dir))
+    if ok:
+        printk.ok("OOBE 已完成并写入\n")
+    else:
+        printk.warn("OOBE 已中止，未写入标记\n")
+    print()
+
+
+def cmd_locale(args: str = ""):
+    """查看/切换语言、时区、显示名，立即生效并持久化到 bootcfg。"""
+    import syslocale
+    from syslocale import _
+    import btcfg
+    parts = (args or "").strip().split(None, 1)
+    if not parts:
+        user = main.bootcfg.get("display_name") or kernel.get_system_username()
+        print(_("locale.current", lang=syslocale.get_language(),
+               tz=syslocale.get_timezone(), user=user) + "\n")
+        return
+    if len(parts) != 2:
+        printk.error(_("locale.usage") + "\n")
+        return
+    field, value = parts[0].lower(), parts[1].strip()
+    if field == "lang":
+        if syslocale.set_language(value):
+            btcfg.set_bootcfg_value("lang", value)
+            printk.ok(_("locale.lang_ok", lang=value) + "\n")
+        else:
+            printk.error(_("locale.lang_bad", langs=",".join(syslocale.SUPPORTED_LANGS)) + "\n")
+    elif field in ("tz", "timezone"):
+        if syslocale.set_timezone(value):
+            btcfg.set_bootcfg_value("timezone", value)
+            printk.ok(_("locale.tz_ok", tz=value, now=syslocale.now_str("%H:%M:%S")) + "\n")
+        else:
+            printk.error(_("locale.tz_bad", tz=value) + "\n")
+    elif field == "user":
+        btcfg.set_bootcfg_value("display_name", value)
+        printk.ok(_("locale.user_ok", user=value) + "\n")
+    else:
+        printk.error(_("locale.usage") + "\n")

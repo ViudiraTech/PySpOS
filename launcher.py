@@ -27,7 +27,25 @@ def main():
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = script_dir
-    
+
+    # 防御：上一次 curses 会话若异常退出，tty 会留在坏状态（回车变 ^M）。
+    # 启动器是所有输入的入口，先恢复 sane，之后所有 input() 才可靠。
+    # ttyutil 导入失败时回退为裸 input，保证启动器永不因此崩溃。
+    sys.path.insert(0, os.path.join(root_dir, "src"))
+    try:
+        import ttyutil
+        ttyutil.ensure_sane_tty()
+    except Exception:
+        import types as _types
+        ttyutil = _types.SimpleNamespace(
+            ensure_sane_tty=lambda: False,
+            read_line=lambda prompt="": input(prompt).strip(),
+            read_choice=lambda prompt="", valid=("y", "n"), default="n",
+                                max_retries=0: (
+                (lambda s: s if s in [v.lower() for v in valid]
+                 else default)(input(prompt).strip().lower()) or default),
+        )
+
     logk.printl("launcher", "PySpOS launcher", boot_time)
     logk.printl("launcher", f"根目录: {root_dir}", boot_time)
     
@@ -45,10 +63,14 @@ def main():
                 
                 main_py = os.path.join(slot_path, "main.py")
                 if os.path.exists(main_py):
-                    print(f"\n[launcher] 检测到槽位 {current_slot}，是否从槽位启动？(y/n): ", end='', flush=True)
+                    # 循环读到合法值为止：空输入=默认 n；坏终端下 read_choice
+                    # 有重试上限兜底，不会像裸 input 那样被 ^M 卡死。
                     try:
-                        user_input = input().strip().lower()
-                        if user_input == 'y' or user_input == 'yes':
+                        user_input = ttyutil.read_choice(
+                            f"\n[launcher] 检测到槽位 {current_slot}，"
+                            f"是否从槽位启动？(y/n)[n]: ",
+                            valid=("y", "n"), default="n", max_retries=5)
+                        if user_input == 'y':
                             use_slot = True
                             logk.printl("launcher", "用户选择从槽位加载系统文件", boot_time)
                         else:
