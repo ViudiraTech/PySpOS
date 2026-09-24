@@ -191,6 +191,7 @@
     color: var(--ps-fg-default);
     font-family: var(--ps-ref-font-mono);
     font-size: 0.9em;
+    overflow-wrap: anywhere;
 }
 
 .ps-card__meta {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpaceOS 8 下载 - 敬请期待 | GoutouStdio</title>
+    <title>SpaceOS 8 抢先体验版下载 | GoutouStdio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
@@ -58,20 +58,20 @@
             <div class="container">
                 <div class="product-hero-content">
                     <div class="hero-badge">
-                        <i class="fas fa-hourglass-half"></i>
-                        <span>下载页面 · 敬请期待</span>
+                        <i class="fas fa-rocket"></i>
+                        <span>PUBLIC PREVIEW · 公开测试版</span>
                     </div>
-                    <h1 class="product-hero-title">SpaceOS 8 下载</h1>
-                    <p class="product-hero-subtitle">镜像与安装介质正在制作中，正式开放后会在这里提供下载、校验值和版本说明。</p>
+                    <h1 class="product-hero-title">SpaceOS 8 抢先体验版</h1>
+                    <p class="product-hero-subtitle">第一束光，已经抵达。抢先体验自研内核与 Linux 兼容环境，见证一个全新操作系统从启动到可用的过程。</p>
                     <div class="hero-buttons">
                         <a href="spaceos8.html" class="btn btn-secondary btn-lg">
                             <i class="fas fa-arrow-left"></i>
                             返回介绍
                         </a>
-                        <button type="button" class="btn btn-primary btn-lg ps-btn--disabled" disabled aria-disabled="true">
+                        <a href="spaceos8/Uinxed-x64-slim.iso" class="btn btn-primary btn-lg" download="Uinxed-x64-slim.iso">
                             <i class="fas fa-download"></i>
-                            敬请期待
-                        </button>
+                            立即下载 · 40 MiB
+                        </a>
                     </div>
                 </div>
             </div>
@@ -81,8 +81,8 @@
             <div class="ps-banner ps-banner--info ps-banner--page-top" role="status">
                 <i class="fas fa-circle-info ps-banner__icon" aria-hidden="true"></i>
                 <div class="ps-banner__content">
-                    <p class="ps-banner__title">当前暂无可下载镜像</p>
-                    <p>我们会在 SpaceOS 8 完成构建、启动验证和发布检查后，更新此页面。请不要使用来源不明的镜像。</p>
+                    <p class="ps-banner__title">第一版公开测试镜像现已上线</p>
+                    <p>这不是最终版的 SpaceOS 8，而是我们邀请你一起把系统做得更好的起点。请在虚拟机、测试机或可抛弃磁盘上体验。</p>
                 </div>
             </div>
         </div>
@@ -90,9 +90,9 @@
         <section class="ps-section" id="download-status">
             <div class="container">
                 <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">发布状态</span>
-                    <h2 class="ps-section__title">下载准备好了什么？</h2>
-                    <p class="ps-section__lead">页面先保留下载入口，正式发布时补充真实文件与校验信息。</p>
+                    <span class="ps-section__eyebrow">抢先体验内容</span>
+                    <h2 class="ps-section__title">先体验，再一起把它做完整</h2>
+                    <p class="ps-section__lead">这不是一次旁观式发布，而是一张发往未来的邀请函：下载镜像、启动系统、留下反馈，见证 SpaceOS8 的下一章。</p>
                 </div>
                 <div class="ps-grid">
                     <article class="ps-card">
@@ -101,8 +101,14 @@
                             <div class="ps-card__heading"><h3 class="ps-card__title">安装镜像</h3></div>
                         </div>
                         <div class="ps-card__body">
-                            <p>正式开放后将提供可启动的 ISO/镜像文件，以及对应的安装说明。</p>
-                            <p class="ps-badge ps-badge--warning">尚未发布</p>
+                            <p>可启动的 ISO 镜像，大小约 40 MiB，精简掉了一部分 Linux 应用。</p>
+                            <div class="ps-card__meta">
+                                <span class="ps-card__meta-item"><i class="fas fa-tag"></i> Uinxed 1.0.0-alpha.1</span>
+                                <span class="ps-card__meta-item"><i class="fas fa-microchip"></i> x86_64</span>
+                                <span class="ps-card__meta-item"><i class="fas fa-compact-disc"></i> 可启动 ISO</span>
+                            </div>
+                            <p class="ps-badge ps-badge--success">已开放下载</p>
+                            <p><a class="ps-btn ps-btn--primary" href="spaceos8/Uinxed-x64-slim.iso" download="Uinxed-x64-slim.iso">下载 Uinxed-x64-slim.iso</a></p>
                         </div>
                     </article>
                     <article class="ps-card">
@@ -111,23 +117,169 @@
                             <div class="ps-card__heading"><h3 class="ps-card__title">完整性校验</h3></div>
                         </div>
                         <div class="ps-card__body">
-                            <p>下载页会同时展示 SHA-256、构建编号和发布日志，方便验证文件来源。</p>
-                            <p class="ps-badge ps-badge--neutral">发布时更新</p>
+                            <p>文件大小：41,572,352 bytes</p>
+                            <p>SHA-256：<code>ad6ad432a41a6b63581386fd54d6dff65e347d6771d19fc159337221a1422ff2</code></p>
+                            <p class="ps-badge ps-badge--success">校验值已记录</p>
                         </div>
                     </article>
                     <article class="ps-card">
                         <div class="ps-card__head">
                             <div class="ps-card__icon"><i class="fas fa-book-open"></i></div>
-                            <div class="ps-card__heading"><h3 class="ps-card__title">现在可以做什么</h3></div>
+                            <div class="ps-card__heading"><h3 class="ps-card__title">成为第一批体验者</h3></div>
                         </div>
                         <div class="ps-card__body">
-                            <p>先了解 SpaceOS 8 的架构与运行状态，或查看硬件配置要求。</p>
+                            <p>从第一版公开测试镜像开始，和我们一起发现启动、兼容性与日常使用中的问题。</p>
                         </div>
                         <div class="ps-card__actions">
-                            <a class="ps-btn ps-btn--primary" href="spaceos8.html">查看详情</a>
-                            <a class="ps-btn ps-btn--secondary" href="requirements.html">配置要求</a>
+                            <a class="ps-btn ps-btn--primary" href="spaceos8.html">查看系统详情</a>
+                            <a class="ps-btn ps-btn--secondary" href="requirements.html">查看配置要求</a>
+                            <a class="ps-btn ps-btn--secondary" href="#test-notice">阅读测试须知</a>
                         </div>
                     </article>
+
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="test-notice">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">测试须知</span>
+                    <h2 class="ps-section__title">下载前，请先读完这份说明</h2>
+                    <p class="ps-section__lead">这是一份公开测试镜像，不是稳定发行版。启动之前先确认环境，准备好记录和反馈，再把它当成实验对象，而不是日常系统。</p>
+                </div>
+
+                <div class="ps-banner ps-banner--warning" role="note">
+                    <i class="fas fa-triangle-exclamation ps-banner__icon" aria-hidden="true"></i>
+                    <div class="ps-banner__content">
+                        <p class="ps-banner__title">重要：请勿在重要数据或主力设备上直接测试</p>
+                        <p>当前 NTFS 写入驱动尚未被认为可以信任，真实 GPU 驱动、虚拟化设备和 Linux ABI 也没有全部完成。请使用虚拟机、备用设备或可抛弃磁盘，并提前备份所有数据。每次测试请使用本页面的当前镜像，不要混用旧镜像或第三方重打包文件。</p>
+                    </div>
+                </div>
+
+                <div class="ps-rows">
+                    <div class="ps-row ps-row--warning">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">运行前确认</h4>
+                            <span class="ps-row__note">基础门槛</span>
+                        </div>
+                        <div class="ps-row__body">
+                            <ul class="ps-feature-list">
+                                <li class="ps-feature-list__item"><b>处理器：</b>x86_64；512 MB 内存可启动，运行图形桌面建议 1 GB 以上并配置 swap。</li>
+                                <li class="ps-feature-list__item"><b>固件：</b>通过 Limine 引导，UEFI 已验证，Legacy 模式也受支持。</li>
+                                <li class="ps-feature-list__item"><b>已验证环境：</b>QEMU/KVM Q35，以及 Dell PowerEdge R410 等实体服务器。</li>
+                                <li class="ps-feature-list__item"><b>网卡：</b>Intel e1000/e1000e 或 Realtek RTL8139/8169；其他网卡可能无法联网。</li>
+                                <li class="ps-feature-list__item"><b>存储：</b>支持 IDE/ATA、AHCI、NVMe 和 USB Mass Storage；默认根文件系统为 tmpfs。</li>
+                            </ul>
+                            <p><b>建议：</b>先从虚拟机开始，不要使用 NTFS 重要分区。</p>
+                        </div>
+                    </div>
+
+                    <div class="ps-row ps-row--info">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">推荐启动步骤</h4>
+                            <span class="ps-row__note">虚拟机优先</span>
+                        </div>
+                        <div class="ps-row__body">
+                            <ol class="ps-feature-list">
+                                <li class="ps-feature-list__item"><b>1. 校验文件：</b>Linux/macOS 使用 <code>sha256sum Uinxed-x64-slim.iso</code>；Windows PowerShell 使用 <code>Get-FileHash .\Uinxed-x64-slim.iso -Algorithm SHA256</code>。</li>
+                                <li class="ps-feature-list__item"><b>2. 准备虚拟机：</b>将 ISO 挂载为光盘或启动介质，优先选择 UEFI，建议分配至少 1 GB 内存。</li>
+                                <li class="ps-feature-list__item"><b>3. 准备实体机：</b>只接入备用磁盘或测试用 USB，先备份；不要对不确定的设备路径执行写盘命令。</li>
+                                <li class="ps-feature-list__item"><b>4. 记录过程：</b>从 Limine、内核、用户态到桌面的每一阶段都记下结果；若屏幕没有输出，可尝试串口 <code>ttyS0</code> 获取日志。</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="ps-row ps-row--warning">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">已知限制</h4>
+                            <span class="ps-row__note">体验版边界</span>
+                        </div>
+                        <div class="ps-row__body">
+                            <ul class="ps-feature-list">
+                                <li class="ps-feature-list__item">真实 GPU 驱动、虚拟化设备和音频支持仍未全部完成。</li>
+                                <li class="ps-feature-list__item">Linux ABI 仍有缺口；systemd 目前只是初步跑通，不是生产可用状态。</li>
+                                <li class="ps-feature-list__item">PS/2 输入、evdev 消费者、poll/epoll 唤醒与 EEVDF 调度器仍在验证。</li>
+                                <li class="ps-feature-list__item">本镜像为 slim 版，部分 Linux 应用已精简移除；缺少某个应用属于镜像预期范围。</li>
+                                <li class="ps-feature-list__item">NTFS 写入尤其谨慎，不要用它保存唯一副本或重要工作资料。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="ps-row ps-row--info">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">如何反馈</h4>
+                            <span class="ps-row__note">共同完善</span>
+                        </div>
+                        <div class="ps-row__body">
+                            <p>请尽量做到“一个问题一条反馈”，并注明它是始终发生、偶尔发生，还是只在某个环境触发。请附上：</p>
+                            <ul class="ps-feature-list">
+                                <li class="ps-feature-list__item">机器型号、CPU、内存、显卡与网卡，或虚拟机版本和固件模式。</li>
+                                <li class="ps-feature-list__item">启动阶段、最小复现步骤、预期结果与实际结果。</li>
+                                <li class="ps-feature-list__item">发生频率、临时绕过方法，以及串口/屏幕日志和截图。</li>
+                            </ul>
+                            <p>请将内容发送到 <a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>，或提交到 <a href="https://github.com/ViudiraTech/PySpOS" target="_blank" rel="noopener noreferrer">ViudiraTech/PySpOS</a>。发送前请移除个人数据。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ps-section__head" style="margin-top: 2rem;">
+                    <span class="ps-section__eyebrow">建议测试清单</span>
+                    <h2 class="ps-section__title">从启动到稳定性，逐项留下结果</h2>
+                    <p class="ps-section__lead">不需要一次做完所有项目；优先记录能复现、能描述清楚的启动、硬件和应用问题。</p>
+                </div>
+                <div class="ps-rows">
+                        <div class="ps-row ps-row--success">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">启动链路</h4>
+                                <span class="ps-row__note">Limine · UEFI / Legacy</span>
+                            </div>
+                            <div class="ps-row__body">确认能看到启动画面，并分别记录 UEFI 与 Legacy（如果你的设备支持）的结果；启动失败时优先保留串口日志。</div>
+                        </div>
+                        <div class="ps-row ps-row--success">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">桌面与输入</h4>
+                                <span class="ps-row__note">键盘 · 鼠标 · 显示</span>
+                            </div>
+                            <div class="ps-row__body">测试 PS/2、USB HID、窗口显示、鼠标移动与点击；虚拟机可额外观察 VirtIO-GPU 路径，实体机则记录显卡型号。</div>
+                        </div>
+                        <div class="ps-row ps-row--info">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">网络</h4>
+                                <span class="ps-row__note">DHCP · IPv4 / IPv6</span>
+                            </div>
+                            <div class="ps-row__body">确认网卡是否被识别、是否能通过 DHCP 获取地址，以及断开/重连后网络能否恢复。非 e1000/e1000e 或 RTL8139/8169 网卡请单独标注。</div>
+                        </div>
+                        <div class="ps-row ps-row--warning">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">存储与文件</h4>
+                                <span class="ps-row__note">只用测试盘</span>
+                            </div>
+                            <div class="ps-row__body">在临时卷上测试读写、重启后的数据保持和文件系统挂载；不要用重要 NTFS 分区验证写驱动。</div>
+                        </div>
+                        <div class="ps-row ps-row--info">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">应用兼容性</h4>
+                                <span class="ps-row__note">按镜像实际内容测试</span>
+                            </div>
+                            <div class="ps-row__body">如果镜像包含对应应用，可测试终端、OpenJDK、DOOM 或其他 Linux 软件；应用缺失、启动失败和运行崩溃请分别记录。</div>
+                        </div>
+                        <div class="ps-row ps-row--info">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">稳定性</h4>
+                                <span class="ps-row__note">重启 · 关机 · 异常退出</span>
+                            </div>
+                            <div class="ps-row__body">至少完成一次正常重启和关机；若发生卡死、崩溃或无法再次启动，请保留现场信息和复现步骤。</div>
+                        </div>
+                </div>
+
+                <div class="ps-card__actions" style="margin-top: 2rem;">
+                    <a class="ps-btn ps-btn--primary" href="spaceos8/Uinxed-x64-slim.iso" download="Uinxed-x64-slim.iso">
+                        <i class="fas fa-download"></i> 重新下载测试镜像
+                    </a>
+                    <a class="ps-btn ps-btn--secondary" href="requirements.html">
+                        <i class="fas fa-microchip"></i> 查看完整配置要求
+                    </a>
                 </div>
             </div>
         </section>
@@ -146,7 +298,7 @@
                         <ul>
                             <li><a href="pyspos.html">PySpOS</a></li>
                             <li><a href="spaceos8.html">SpaceOS 8</a></li>
-                            <li><a href="spaceos8-download.html">SpaceOS 8 下载（敬请期待）</a></li>
+                            <li><a href="spaceos8-download.html">SpaceOS 8 抢先体验版</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
