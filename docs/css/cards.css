@@ -481,6 +481,227 @@
 }
 
 /* -----------------------------------------------------------------------------
+   配图
+   -------------------------------------------------------------------------- */
+
+.ps-figure {
+    margin: var(--ps-ref-space-4) 0 0;
+}
+
+.ps-figure img {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    max-inline-size: 100%;
+    /* 截图边缘常带纯色边框，与卡片底色对齐后不显突兀 */
+    border: var(--ps-ref-border-width-sm) solid var(--ps-border-default);
+    border-radius: var(--ps-card-radius-sm);
+    background: var(--ps-bg-surface-inset);
+}
+
+.ps-figure__caption {
+    margin-block-start: var(--ps-ref-space-2);
+    font-size: var(--ps-ref-text-sm);
+    line-height: var(--ps-ref-leading-normal);
+    color: var(--ps-card-meta-color);
+}
+
+.ps-figure__caption code {
+    padding: 0.15em 0.4em;
+    border-radius: var(--ps-ref-radius-sm);
+    background: var(--ps-bg-surface-inset);
+    font-family: var(--ps-ref-font-mono);
+    font-size: 0.9em;
+    color: var(--ps-fg-default);
+}
+
+/* -----------------------------------------------------------------------------
+   行式条目（.ps-rows）—— 卡片的替代方案
+   -----------------------------------------------------------------------------
+   为什么要它：设计共识里「把所有东西都包进卡片」是明确的反面模式。
+   三个同权重的卡片并排，眼睛扫过第一张、确认后两张同形，就不再读了——
+   叫「卡片的横幅盲视」。而内核子系统这类「同权重、要逐条读完」的内容，
+   本来就不该是卡片。
+
+   做法：左侧一条竖线做视觉锚，标题与正文靠排版分层，不加容器边框与阴影。
+   竖线颜色可以承载语义（品牌色 / 状态色）。
+   -------------------------------------------------------------------------- */
+
+.ps-rows {
+    display: grid;
+    gap: var(--ps-ref-space-5);
+    margin: 0;
+    padding: 0;
+}
+
+.ps-row {
+    position: relative;
+    padding-inline-start: var(--ps-ref-space-5);
+}
+
+.ps-row::before {
+    content: '';
+    position: absolute;
+    inset-block: 0.15em 0.15em;
+    inset-inline-start: 0;
+    inline-size: var(--ps-ref-border-width-md);
+    border-radius: var(--ps-ref-border-width-md);
+    background: var(--ps-brand);
+    opacity: 0.75;
+}
+
+.ps-row--success::before { background: var(--ps-status-success-fg); }
+.ps-row--warning::before { background: var(--ps-status-warning-fg); }
+.ps-row--danger::before  { background: var(--ps-status-danger-fg); }
+.ps-row--info::before    { background: var(--ps-status-info-fg); }
+.ps-row--neutral::before { background: var(--ps-status-neutral-fg); }
+
+.ps-row__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--ps-ref-space-2) var(--ps-ref-space-3);
+    margin-block-end: var(--ps-ref-space-2);
+}
+
+.ps-row__title {
+    margin: 0;
+    font-size: var(--ps-ref-text-lg);
+    line-height: var(--ps-ref-leading-tight);
+    font-weight: 700;
+    color: var(--ps-fg-strong);
+}
+
+.ps-row__note {
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-fg-subtle);
+}
+
+.ps-row__body {
+    color: var(--ps-fg-muted);
+    line-height: var(--ps-ref-leading-relaxed);
+}
+
+.ps-row__body > :first-child { margin-block-start: 0; }
+.ps-row__body > :last-child { margin-block-end: 0; }
+
+/* 两列布局：条目多且内容短时用，省纵向空间 */
+.ps-rows--2col {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    column-gap: var(--ps-ref-space-6);
+    row-gap: var(--ps-ref-space-5);
+}
+
+/* -----------------------------------------------------------------------------
+   指标表（.ps-metrics）—— 结构化数据用表格，不用卡片
+   营销页上很少见到表格，正因如此它读起来像「刻意组织过的信息」而不是版式套路。
+   -------------------------------------------------------------------------- */
+
+.ps-metrics {
+    inline-size: 100%;
+    border-collapse: collapse;
+    text-align: start;
+}
+
+.ps-metrics caption {
+    text-align: start;
+    margin-block-end: var(--ps-ref-space-3);
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-fg-subtle);
+}
+
+.ps-metrics th,
+.ps-metrics td {
+    padding: var(--ps-ref-space-3) var(--ps-ref-space-4);
+    border-block-end: var(--ps-ref-border-width-sm) solid var(--ps-border-subtle);
+    vertical-align: baseline;
+}
+
+.ps-metrics thead th {
+    font-size: var(--ps-ref-text-sm);
+    font-weight: 600;
+    color: var(--ps-fg-strong);
+    border-block-end-color: var(--ps-border-default);
+    white-space: nowrap;
+}
+
+.ps-metrics tbody th {
+    font-weight: 600;
+    color: var(--ps-fg-strong);
+    white-space: nowrap;
+}
+
+.ps-metrics td {
+    color: var(--ps-fg-muted);
+}
+
+.ps-metrics td:last-child {
+    font-family: var(--ps-ref-font-mono);
+    font-size: var(--ps-ref-text-sm);
+    color: var(--ps-fg-default);
+    text-align: end;
+}
+
+.ps-metrics tbody tr:last-child th,
+.ps-metrics tbody tr:last-child td {
+    border-block-end: none;
+}
+
+/* -----------------------------------------------------------------------------
+   重点面板（.ps-breakout）—— 用版面而非卡片制造层级
+   给页面上最重要的一块真实视觉权重（跨列 + 更宽留白），
+   让「谁更重要」在读者读第一个字之前就交代清楚。
+   -------------------------------------------------------------------------- */
+
+.ps-breakout {
+    position: relative;
+    padding: var(--ps-ref-space-6);
+    border: var(--ps-ref-border-width-sm) solid var(--ps-border-brand);
+    border-radius: var(--ps-card-radius);
+    background:
+        linear-gradient(180deg,
+            var(--ps-brand-subtle-bg) 0%,
+            transparent 60%),
+        var(--ps-card-bg);
+    overflow: hidden;
+}
+
+.ps-breakout__head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ps-ref-space-3);
+    margin-block-end: var(--ps-ref-space-4);
+}
+
+.ps-breakout__title {
+    margin: 0;
+    font-size: var(--ps-ref-text-2xl);
+    line-height: var(--ps-ref-leading-tight);
+    font-weight: 800;
+    color: var(--ps-fg-strong);
+}
+
+.ps-breakout__lead {
+    max-inline-size: 52rem;
+    color: var(--ps-fg-muted);
+    line-height: var(--ps-ref-leading-relaxed);
+}
+
+.ps-breakout__lead > :first-child { margin-block-start: 0; }
+.ps-breakout__lead > :last-child { margin-block-end: 0; }
+
+/* 重点面板里的条目：两列排布，横向对比更省高度 */
+.ps-breakout .ps-rows {
+    gap: var(--ps-ref-space-4) var(--ps-ref-space-6);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
+.ps-breakout .ps-figure {
+    margin-block-start: var(--ps-ref-space-5);
+}
+
+/* -----------------------------------------------------------------------------
    响应式
    -------------------------------------------------------------------------- */
 

@@ -27,8 +27,9 @@ ALLOWED_BARE = {
 # 确实需要 opacity/filter 的选择器白名单。每条都要写明「为什么文字不受影响」。
 # 往这里加之前先跑 check_tokens_contrast.py 确认变体后的对比度仍达标。
 ALLOWED_FILTER_SELECTORS = {
-    # 纯装饰：顶部强调条，伪元素里只有背景色，没有任何文字
+    # 纯装饰伪元素：只有背景色，不含任何文字
     '.ps-card::before',
+    '.ps-row::before',
     # WCAG 1.4.3 明确豁免「禁用控件」的前后景对比度要求。
     # 状态另有承载：aria-disabled + 文案「敬请期待」+ pointer-events: none。
     # 两条选择器共用一条声明，组合选择器会按逗号拆开逐个判定，所以都要列。

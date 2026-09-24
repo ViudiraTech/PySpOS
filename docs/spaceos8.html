@@ -64,7 +64,7 @@
                     <p>
                         构建在自研内核 <a href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">Uinxed-Kernel</a>
                         之上，配一套自研用户态。内核部分已在实体服务器上跑通，
-                        桌面能启动、能跑 Linux 软件、能跑 DOOM。
+                        桌面能启动、能跑 Linux 软件，OpenJDK 与 DOOM 已经真的能跑起来。
                         当前仍是实验性系统，图形与部分 ABI 尚未补齐。
                     </p>
                 </div>
@@ -82,36 +82,49 @@
                     </p>
                 </div>
 
-                <div class="ps-grid ps-grid--narrow">
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">架构</h3>
-                            <div class="ps-card__body">x86_64 单体内核</div>
-                        </div>
-                    </article>
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-hashtag"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">内核规模</h3>
-                            <div class="ps-card__body">449 个 C/H 文件 · 约 18.1 万行</div>
-                        </div>
-                    </article>
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">用户态</h3>
-                            <div class="ps-card__body">约 29.2 万行 C / C++</div>
-                        </div>
-                    </article>
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-scroll"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">协议兼容</h3>
-                            <div class="ps-card__body">Linux 6.12 系统调用 ABI</div>
-                        </div>
-                    </article>
-                </div>
+                <table class="ps-metrics">
+                    <caption>一句话概括底座规模——这里用表格而非卡片：这是结构化数据，
+                        表格比四个方块读得快，也不占用版面层级。</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">项目</th>
+                            <th scope="col">说明</th>
+                            <th scope="col">数据</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">架构</th>
+                            <td>C 从零写的 UNIX-like 单体内核</td>
+                            <td>x86_64</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">内核规模</th>
+                            <td>449 个 C/H 文件</td>
+                            <td>约 18.1 万行</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">用户态规模</th>
+                            <td>自研桌面、合成器、浏览器与系统程序</td>
+                            <td>约 29.2 万行</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">协议兼容</th>
+                            <td>Linux 6.12 x86-64 系统调用编号</td>
+                            <td>0-462</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">版本串</th>
+                            <td>当前发布标识</td>
+                            <td>1.0.0-alpha.1</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">许可</th>
+                            <td>内核仓库许可</td>
+                            <td>Apache-2.0</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -119,116 +132,143 @@
             <div class="container">
                 <div class="ps-section__head">
                     <span class="ps-section__eyebrow">这次的重点</span>
-                    <h2 class="ps-section__title">四件我们自己想做的事</h2>
+                    <h2 class="ps-section__title">能扛住外面现成的软件</h2>
                     <p class="ps-section__lead">
-                        相比 SpaceOS 6 / 7，SpaceOS 8 的提升集中在下面四处。
-                        它们都不是「加了个功能」，而是把原来做不到的事变成了能做到。
+                        一个内核是否「真的能用」，不看它有多少功能，
+                        看它能不能扛住别人写好的软件。这是这一版最实在的进展。
                     </p>
                 </div>
 
-                <div class="ps-grid ps-grid--wide">
-                    <article class="ps-card ps-card--accent-success">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-gamepad"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">能跑 DOOM 了</h3>
-                                <span class="ps-card__subtitle">X11 兼容层落地</span>
-                            </div>
-                            <span class="ps-badge ps-badge--success">已实现</span>
-                        </div>
-                        <div class="ps-card__body">
-                            <p>
-                                这是这一版最实在的进展。我们从零写了一个 X11 服务器，
-                                目的不是造一个玩具 X，而是让<strong>原生 SPUI 桌面</strong>
-                                能直接跑 Linux 上的图形软件。
-                            </p>
-                            <p>
-                                DOOM 跑起来了——它要键盘输入、鼠标、连续动画帧、
-                                音频与稳定的显示通路，任何一环不行都跑不动。
-                                能跑起来，说明这套兼容层不是摆设。
-                            </p>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-code"></i> 120 个 X11 核心协议请求</span>
-                            <span class="ps-card__meta-item"><i class="fas fa-file-code"></i> 约 4,500 行</span>
-                        </div>
-                    </article>
+                <div class="ps-breakout">
+                    <div class="ps-breakout__head">
+                        <div class="ps-card__icon"><i class="fas fa-vial"></i></div>
+                        <h3 class="ps-breakout__title">四样试金石</h3>
+                        <span class="ps-badge ps-badge--success">已实现</span>
+                    </div>
 
-                    <article class="ps-card ps-card--accent-info">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">VortexGlass</h3>
-                                <span class="ps-card__subtitle">自研毛玻璃主题</span>
+                    <div class="ps-rows">
+                        <div class="ps-row ps-row--success">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">OpenJDK</h4>
+                                <span class="ps-row__note">已经真的能跑</span>
                             </div>
-                            <span class="ps-badge ps-badge--info">已实现</span>
+                            <div class="ps-row__body">
+                                为了它我们重写了信号处理、TSS/SMP/APIC 与中断路径，
+                                并修了 VFS 与页管理——一个真实 JVM 的 GC 线程、
+                                线程挂起与内存映射都依赖这些地方不出错。
+                            </div>
                         </div>
-                        <div class="ps-card__body">
-                            <p>
-                                Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素画出来：
-                                34 个素材覆盖四边边框、标题栏按钮的四种状态，
-                                以及标志性的 <b>Aero orb</b>。
-                            </p>
-                            <p>
-                                主题可切换 <code>tech</code> / <code>win98</code> /
-                                <code>vortexglass</code> 三种，由配置服务统一管理，
-                                所有应用共享同一套外观。
-                            </p>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-images"></i> 34 个 PNG 素材</span>
-                            <span class="ps-card__meta-item"><i class="fas fa-palette"></i> 3 种主题风格</span>
-                        </div>
-                    </article>
 
-                    <article class="ps-card ps-card--accent-info">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-globe"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">自研浏览器</h3>
-                                <span class="ps-card__subtitle">纯 C 的 UxHtml 引擎</span>
+                        <div class="ps-row ps-row--success">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">DOOM</h4>
+                                <span class="ps-row__note">经自研 X11 兼容层运行</span>
                             </div>
-                            <span class="ps-badge ps-badge--info">已实现</span>
+                            <div class="ps-row__body">
+                                它需要键盘、鼠标、连续动画帧、音频与稳定显示通路，
+                                任何一环不行都跑不动。跑得起来说明这套兼容层不是摆设。
+                            </div>
                         </div>
-                        <div class="ps-card__body">
-                            <p>
-                                没再用第三方渲染库（原先的 litehtml 已移除），
-                                换成自己写的 UxHtml：HTML 解析器、CSS、DOM、
-                                布局与渲染各成一层，另带一个完整的 JavaScript 引擎
-                                与原生绑定。
-                            </p>
-                            <p>
-                                网络层是自己写的 HTTP 客户端，TLS 走 OpenSSL。
-                                目标是「浏览器也是自研栈的一部分」，而不是套壳。
-                            </p>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-file-code"></i> 约 2.4 万行</span>
-                            <span class="ps-card__meta-item"><i class="fab fa-js"></i> 含 JS 引擎与 GC</span>
-                        </div>
-                    </article>
 
-                    <article class="ps-card ps-card--accent-neutral">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-cubes"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">图形栈</h3>
-                                <span class="ps-card__subtitle">合成器 + 图形库</span>
+                        <div class="ps-row ps-row--warning">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">systemd</h4>
+                                <span class="ps-row__note">初步跑通</span>
                             </div>
-                            <span class="ps-badge ps-badge--neutral">进行中</span>
+                            <div class="ps-row__body">
+                                systemd 对内核 ABI 的要求非常苛刻：一启动就探测大量可选
+                                sysctl、挂载点与命名空间接口，任何一处行为不符就起不来。
+                                为了它我们补了 Cgroup v2 与完整的 Linux 命名空间支持。
+                            </div>
                         </div>
-                        <div class="ps-card__body">
-                            <p>
-                                上面三件事都站在同一个底子上：约 1.2 万行的窗口合成器
-                                （DRM/KMS、损伤跟踪、Xcursor 解析、窗口装饰），
-                                加上约 2.2 万行的自研图形库 <code>libgfx</code>。
-                            </p>
-                            <p>
-                                桌面上还跑着终端、文件管理器、计算器、编辑器、
-                                设置、浏览器、系统监视器等一整套自研程序。
-                            </p>
+
+                        <div class="ps-row ps-row--info">
+                            <div class="ps-row__head">
+                                <h4 class="ps-row__title">Minecraft</h4>
+                                <span class="ps-row__note">团队实测</span>
+                            </div>
+                            <div class="ps-row__body">
+                                要跑起来就得扛住一个真实 JVM 的内存管理、GC 线程调度、
+                                mmap 与 futex 行为。运行环境见下方截图。
+                            </div>
                         </div>
-                    </article>
+                    </div>
+
+                    <figure class="ps-figure">
+                        <img src="spaceos8-minecraft.png"
+                             alt="Uinxed 内核下运行 Minecraft 的截图：世界完整渲染，
+                                  生命值与饥饿条、快捷栏、准星均正常"
+                             loading="lazy" width="1356" height="924">
+                        <figcaption class="ps-figure__caption">
+                            Minecraft 运行中。宿主为 QEMU/KVM Q35，内核
+                            <code>Uinxed 1.0.0-alpha.1</code>，用户态是
+                            Alpine Linux v3.24，桌面走 <strong>Weston（Wayland）</strong>，
+                            终端为 weston-terminal 14.0.2。窗口、输入与渲染均正常。
+                        </figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
+
+        <section class="ps-section" id="stack">
+            <div class="container">
+                <div class="ps-section__head">
+                    <span class="ps-section__eyebrow">自研部分</span>
+                    <h2 class="ps-section__title">上面那些事站在哪个底子上</h2>
+                </div>
+
+                <div class="ps-rows">
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">X11 兼容层</h4>
+                            <span class="ps-row__note">120 个核心协议请求 · 约 4,500 行</span>
+                        </div>
+                        <div class="ps-row__body">
+                            从零写的 X11 服务器。目的不是造一个玩具 X，
+                            而是让<strong>原生 SPUI 桌面</strong>能直接跑 Linux 上的图形软件。
+                        </div>
+                    </div>
+
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">VortexGlass</h4>
+                            <span class="ps-row__note">34 个素材 · 3 种主题风格</span>
+                        </div>
+                        <div class="ps-row__body">
+                            Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素画出来：
+                            34 个素材覆盖四边边框、标题栏按钮的四种状态，
+                            以及标志性的 <b>Aero orb</b>。主题可在
+                            <code>tech</code> / <code>win98</code> /
+                            <code>vortexglass</code> 之间切换，由配置服务统一管理，
+                            所有应用共享同一套外观。
+                        </div>
+                    </div>
+
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">自研浏览器</h4>
+                            <span class="ps-row__note">纯 C 的 UxHtml 引擎 · 约 2.4 万行</span>
+                        </div>
+                        <div class="ps-row__body">
+                            没再用第三方渲染库（原先的 litehtml 已移除），换成自己写的 UxHtml：
+                            HTML 解析器、CSS、DOM、布局与渲染各成一层，
+                            另带一个完整的 JavaScript 引擎与原生绑定。
+                            网络层是自己写的 HTTP 客户端，TLS 走 OpenSSL。
+                        </div>
+                    </div>
+
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">图形栈</h4>
+                            <span class="ps-row__note">合成器约 1.2 万行 · libgfx 约 2.2 万行</span>
+                        </div>
+                        <div class="ps-row__body">
+                            窗口合成器含 DRM/KMS、损伤跟踪、Xcursor 解析与窗口装饰；
+                            另有自研图形库 <code>libgfx</code>。
+                            桌面上跑着终端、文件管理器、计算器、编辑器、设置、
+                            浏览器、系统监视器等一整套自研程序。
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -244,83 +284,78 @@
                     </p>
                 </div>
 
-                <div class="ps-grid">
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-sliders-h"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">调度与进程</h3>
-                            <div class="ps-card__body">
-                                EEVDF 调度器，每 CPU 运行队列配红黑树时间线
-                                （vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、
-                                IPI 抢占；两阶段等待队列避免丢失唤醒；互斥量与 futex 支持优先级继承；
-                                cgroups、ptrace、可加载内核模块。
-                            </div>
+                <div class="ps-rows ps-rows--2col">
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">调度与进程</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            EEVDF 调度器，每 CPU 运行队列配红黑树时间线
+                            （vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、
+                            IPI 抢占；两阶段等待队列避免丢失唤醒；
+                            互斥量与 futex 支持优先级继承；cgroups、ptrace、可加载内核模块。
+                        </div>
+                    </div>
 
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-memory"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">内存管理</h3>
-                            <div class="ps-card__body">
-                                二元 buddy 物理页分配器，四级页表支持 4 KiB / 2 MiB / 1 GiB 页；
-                                高半区直接映射（HHDM）与 slab 分配器；
-                                统一页缓存带 LRU 回收、脏页回写与预读；完整的 swap 子系统。
-                            </div>
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">内存管理</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            二元 buddy 物理页分配器，四级页表支持 4 KiB / 2 MiB / 1 GiB 页；
+                            高半区直接映射（HHDM）与 slab 分配器；
+                            统一页缓存带 LRU 回收、脏页回写与预读；完整的 swap 子系统。
+                        </div>
+                    </div>
 
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-folder-open"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">文件系统</h3>
-                            <div class="ps-card__body">
-                                UNIX 风格 VFS，支持挂载点与 inode 式节点；
-                                tmpfs 作为默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；
-                                实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、
-                                NTFS（可写）与 ISO 9660。
-                            </div>
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">文件系统</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            UNIX 风格 VFS，支持挂载点与 inode 式节点；
+                            tmpfs 作为默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；
+                            实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、
+                            NTFS（可写）与 ISO 9660。
+                        </div>
+                    </div>
 
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-network-wired"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">网络</h3>
-                            <div class="ps-card__body">
-                                自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；
-                                Intel e1000/e1000e 与 Realtek RTL8139/8169 网卡驱动；
-                                Linux 套接字 ABI、DHCP 客户端，以及 /proc/net 与 /sys/class/net 视图。
-                            </div>
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">网络</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；
+                            Intel e1000/e1000e 与 Realtek RTL8139/8169 网卡驱动；
+                            Linux 套接字 ABI、DHCP 客户端，以及 /proc/net 与 /sys/class/net 视图。
+                        </div>
+                    </div>
 
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-plug"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">驱动</h3>
-                            <div class="ps-card__body">
-                                输入：PS/2 键鼠、evdev、USB HID；
-                                存储：IDE/ATA、AHCI、NVMe、USB Mass Storage；
-                                显示：DRM/KMS 与 VirtIO-GPU、GOP 帧缓冲；
-                                音频：Sound Blaster 16、Intel HD Audio；
-                                总线与平台：PCI/PCIe、USB 控制器、I2C、ACPI、HPET、TPM 1.2/2.0。
-                            </div>
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">驱动</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            输入：PS/2 键鼠、evdev、USB HID；
+                            存储：IDE/ATA、AHCI、NVMe、USB Mass Storage；
+                            显示：DRM/KMS 与 VirtIO-GPU、GOP 帧缓冲；
+                            音频：Sound Blaster 16、Intel HD Audio；
+                            总线与平台：PCI/PCIe、USB 控制器、I2C、ACPI、HPET、TPM 1.2/2.0。
+                        </div>
+                    </div>
 
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-shield-halved"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">安全与 IPC</h3>
-                            <div class="ps-card__body">
-                                seccomp 过滤与 no_new_privs、用户通知；
-                                AF_UNIX / AF_NETLINK / AF_INET / AF_INET6 套接字；
-                                pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、
-                                POSIX 消息队列与 System V IPC；futex2；inotify；Unix98 PTY 与多虚拟终端。
-                            </div>
+                    <div class="ps-row">
+                        <div class="ps-row__head">
+                            <h4 class="ps-row__title">安全与 IPC</h4>
                         </div>
-                    </article>
+                        <div class="ps-row__body">
+                            seccomp 过滤与 no_new_privs、用户通知；
+                            AF_UNIX / AF_NETLINK / AF_INET / AF_INET6 套接字；
+                            pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、
+                            POSIX 消息队列与 System V IPC；futex2；inotify；
+                            Unix98 PTY 与多虚拟终端。
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -337,19 +372,22 @@
                     <div class="ps-banner__content">
                         <p class="ps-banner__title">这是实验性系统，请不要拿重要数据冒险</p>
                         <p>
-                            已经跑通的部分：内核能在实体服务器上启动，
-                            能引导 Alpine Linux 3.23 并拉起 Xfce 桌面，终端可用；
-                            我们的 SPUI 桌面与自研用户态在同一套内核上运行；
-                            X11 兼容层已能运行 DOOM 这类真实图形程序。
+                            已经跑通的部分：内核能在实体服务器上启动；
+                            能引导 Alpine Linux 并拉起图形桌面（ Weston/Wayland 与
+                            Xfce 两条路径都验证过），终端可用；我们的 SPUI 桌面与
+                            自研用户态在同一套内核上运行；X11 兼容层已能运行 DOOM
+                            这类真实图形程序；真实 JVM（OpenJDK）已经能跑。
                         </p>
                         <p>
                             仍在补的部分：GPU 驱动、虚拟化设备、音频，
                             以及 Linux ABI 的相当一部分。
                             PS/2 输入路径、evdev 消费者、poll/epoll 唤醒与 EEVDF
-                            调度器都在验证阶段。NTFS 写入驱动尚未被认为可以信任，
+                            调度器都在验证阶段。systemd 只是初步跑通，离生产可用
+                            还有距离。NTFS 写入驱动尚未被认为可以信任，
                             请使用可抛弃的机器与测试盘。
                         </p>
                         <p>
+                            内核版本串为 <code>Uinxed 1.0.0-alpha.1</code>。
                             已在 <strong>Dell PowerEdge R410</strong> 等实体服务器上验证。
                         </p>
                     </div>
