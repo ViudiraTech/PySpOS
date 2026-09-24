@@ -230,9 +230,9 @@ Out-Of-Box Experience。检测不到 `etc/.oobe_done` 时在 `kernel.loop()` 里
 活跃来源。
 
 原仓库 [GoutouStdio-cn/PySpOS](https://github.com/GoutouStdio-cn/PySpOS)
-已**停止维护**，只作为历史存档保留，不要再往那里提 issue 或 PR。
+已被 owner **归档为只读**（issue 与 PR 均已关闭），仅作历史存档。
 想找 3.2.0 之前的老版本，去那边的 `beta_version` / `pre_version` 两个 tag；
-3.2.0 起的历史版本则看本仓库的 Releases。
+3.2.0 起的历史版本看本仓库的 Releases。
 
 **代码怎么写的？**
 
