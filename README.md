@@ -225,11 +225,9 @@ Out-Of-Box Experience。检测不到 `etc/.oobe_done` 时在 `kernel.loop()` 里
 
 **代码开源吗？**
 
-是。3.2.0 起的活跃版本就是本仓库
-[ViudiraTech/PySpOS](https://github.com/ViudiraTech/PySpOS)。
-3.1.0 及之前的原始版本保留在
-[GoutouStdio-cn/PySpOS](https://github.com/GoutouStdio-cn/PySpOS)
-（含 `beta_version` / `pre_version` 两个历史 tag）。
+是。全部代码现已迁移到
+[ViudiraTech/PySpOS](https://github.com/ViudiraTech/PySpOS)，本仓库即唯一
+活跃来源，历史版本可在 Releases 里翻。
 
 **代码怎么写的？**
 
@@ -246,7 +244,7 @@ Windows 7 及以上、Linux 各发行版、macOS。兼容性上更推荐 Windows
 
 ## 🙏 贡献者
 
-- GoutouStdio-cn / ViudiraTech
+- ViudiraTech
 - 王俊X
 - 陈X
 
