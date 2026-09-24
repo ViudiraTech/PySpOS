@@ -13,18 +13,21 @@ import printk
 import hashlib
 
 # 获取btcfg.py所在目录
+# 统一走 common.paths，失败时回退到历史逻辑。
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# 检查是否在src目录或槽位目录中
-if os.path.basename(script_dir) == 'src':
-    # 在src目录中，根目录是src的父目录
-    root_dir = os.path.dirname(script_dir)
-elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-    # 在槽位目录中，根目录是槽位的父目录
-    root_dir = os.path.dirname(script_dir)
-else:
-    # 其他情况，使用当前目录作为根目录
-    root_dir = script_dir
+try:
+    from common.paths import get_root_dir as _get_root_dir
+    root_dir = _get_root_dir(script_dir)
+except Exception:
+    if os.path.basename(script_dir) == 'src':
+        # 在src目录中，根目录是src的父目录
+        root_dir = os.path.dirname(script_dir)
+    elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
+        # 在槽位目录中，根目录是槽位的父目录
+        root_dir = os.path.dirname(script_dir)
+    else:
+        # 其他情况，使用当前目录作为根目录
+        root_dir = script_dir
 
 # bootcfg.json 的位置（使用根目录的etc文件夹）
 boot_config = os.path.join(root_dir, 'etc', 'bootcfg.json')
@@ -48,17 +51,26 @@ def _handle_bootcfg_error(error_msg: str, allow_repair: bool = True) -> None:
         input("按下任意键关闭系统...")
         sys.exit(0)
 
-# 创建/修复 bootcfg 文件（此代码也是弃用了但我还是不删）
+# 创建/修复 bootcfg 文件
+# 2026-09-24: 移除历史 raise（此前直接抛异常导致自动修复入口不可用），
+# 改为：先备份损坏的 etc/ 再写入默认配置。如需恢复旧行为，置环境变量 PYSPOS_BTCFG_NOREPAIR=1。
 def create_bootcfg():
-    raise RuntimeError("create_bootcfg函数已弃用，但我就不删，我念旧，你要是想用把这行raise注释掉就行")
     global bootcfg
+    if os.environ.get("PYSPOS_BTCFG_NOREPAIR") == "1":
+        raise RuntimeError("create_bootcfg 已被环境变量禁用（PYSPOS_BTCFG_NOREPAIR=1）")
     print("自动创建或修复 bootcfg 实用工具")
     print("本程序会自动写入：校验开启状态和root关闭状态")
     if printk.confirm("\n 是否修复 bootcfg？"):
         etc_dir = os.path.join(root_dir, 'etc')
         if os.path.isdir(etc_dir):
-            shutil.rmtree(etc_dir)
-            printk.ok("create_bootcfg: 损坏的引导文件已删除！")
+            import time as _time
+            backup = etc_dir + f".bak-{_time.strftime('%Y%m%d-%H%M%S')}"
+            try:
+                os.rename(etc_dir, backup)
+                printk.ok(f"create_bootcfg: 已备份损坏的引导文件到 {backup}")
+            except OSError:
+                shutil.rmtree(etc_dir, ignore_errors=True)
+                printk.ok("create_bootcfg: 损坏的引导文件已删除！")
         else:
             pass
     

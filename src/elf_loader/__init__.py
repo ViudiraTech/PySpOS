@@ -32,6 +32,19 @@ from .elf_runner import (
     ELFRunner, ELFDebugger, ExecutionResult, LoaderStats, run_elf
 )
 
+# Unicorn 引擎（可选依赖）：无 unicorn 库时降级为 None，上层自动用自研引擎兜底。
+try:
+    from .unicorn_runner import (
+        UnicornRunner, UnicornRunError, run_elf_unicorn, unicorn_available,
+    )
+except Exception:  # ImportError 等
+    UnicornRunner = None
+    UnicornRunError = type("UnicornRunError", (Exception,), {})
+    run_elf_unicorn = None
+
+    def unicorn_available() -> bool:
+        return False
+
 __all__ = [
     '__version__',
     '__develop_stage__',
@@ -74,4 +87,8 @@ __all__ = [
     'ExecutionResult',
     'LoaderStats',
     'run_elf',
+    'UnicornRunner',
+    'UnicornRunError',
+    'run_elf_unicorn',
+    'unicorn_available',
 ]

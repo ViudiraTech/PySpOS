@@ -23,18 +23,21 @@ import re
 boot_time = logk.get_boot_time()
 
 # 获取根目录（ota.py所在目录的父目录）
+# 统一走 common.paths，失败时回退到历史逻辑。
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# 检查是否在src目录或槽位目录中
-if os.path.basename(script_dir) == 'src':
-    # 在src目录中，根目录是src的父目录
-    root_dir = os.path.dirname(script_dir)
-elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-    # 在槽位目录中，根目录是槽位的父目录
-    root_dir = os.path.dirname(script_dir)
-else:
-    # 其他情况，使用当前目录作为根目录
-    root_dir = script_dir
+try:
+    from common.paths import get_root_dir as _get_root_dir
+    root_dir = _get_root_dir(script_dir)
+except Exception:
+    if os.path.basename(script_dir) == 'src':
+        # 在src目录中，根目录是src的父目录
+        root_dir = os.path.dirname(script_dir)
+    elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
+        # 在槽位目录中，根目录是槽位的父目录
+        root_dir = os.path.dirname(script_dir)
+    else:
+        # 其他情况，使用当前目录作为根目录
+        root_dir = script_dir
 
 # 槽位定义
 SLOT_A = "slot_a"                           # 槽位A
@@ -51,6 +54,26 @@ UPDATE_LOG = "update_log.json"              # 更新日志文件名
 OTA_SERVER_URL = "https://pyspos.us.ci/ota/" # 更新服务器域名
 REMOTE_VERSION_FILE = "version.json"        # 云端版本信息文件名
 REMOTE_UPDATE_FILE = "PySpOS.zip"           # 云端更新包文件名
+
+# OTA 总开关（服务器故障时临时禁用云端更新，本地安装/回滚不受影响）。
+# 开关定义在 pyspos.py，恢复服务时改回 True 即可。ota.py 文件本身保留。
+def _ota_enabled() -> bool:
+    try:
+        import pyspos as _pyspos
+        return bool(getattr(_pyspos, "OTA_ENABLED", True))
+    except Exception:
+        return True
+
+def _ota_disable_reason() -> str:
+    try:
+        import pyspos as _pyspos
+        return str(getattr(_pyspos, "OTA_DISABLE_REASON", "OTA 已临时禁用"))
+    except Exception:
+        return "OTA 已临时禁用"
+
+def is_ota_enabled() -> bool:
+    """对外查询：云端 OTA 是否可用（供 main/recovery 打印友好提示）。"""
+    return _ota_enabled()
 
 # 必要的文件
 REQUIRED_CORE_FILES = [
@@ -115,6 +138,9 @@ def compare_versions(v1: str, v2: str) -> int:
 
 # 从云端获取最新版本信息
 def fetch_remote_version() -> dict:
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}（未发起网络请求）", boot_time)
+        return None
     max_retries = 3
     retry_interval = 1
     
@@ -240,6 +266,9 @@ def _fetch_with_curl(url: str) -> dict:
 
 # 下载更新包
 def download_update_package(remote_url: str, local_path: str, expected_size: int = 0) -> bool:
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}（跳过下载 {remote_url}）", boot_time)
+        return False
     try:
         if os.path.exists(local_path):
             local_size = os.path.getsize(local_path)
@@ -368,6 +397,19 @@ def verify_update_compatibility() -> bool:
 
 # 从云端检查更新
 def check_cloud_update() -> dict:
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
+        try:
+            current_ver = get_current_version()
+        except Exception:
+            current_ver = "unknown"
+        return {
+            'has_update': False,
+            'disabled': True,
+            'reason': _ota_disable_reason(),
+            'current_version': current_ver,
+            'remote_version': current_ver,
+        }
     logk.printl("ota", "检查云端更新", boot_time)
     remote_info = fetch_remote_version()
     if not remote_info:
@@ -412,6 +454,10 @@ def check_cloud_update() -> dict:
 
 # 从云端下载并安装更新
 def download_and_install_update() -> bool:
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
+        printk.error(f"OTA 已临时禁用: {_ota_disable_reason()}\n本地安装/回滚不受影响。\n")
+        return False
     update_info = check_cloud_update()
     if not update_info or not update_info['has_update']:
         logk.printl("ota", "无可用更新", boot_time)
@@ -485,6 +531,60 @@ def restart_system() -> None:
         logk.printl("ota", f"重启失败: {str(e)}", boot_time)
         printk.error("重启失败，请手动重新启动系统\n")
 
+# 清空槽位目录（Windows 先 move 到临时目录再后台删除，避免文件占用；类 Unix 直接删除）。
+# 抽取自 install_update / rollback_update 的重复实现（2026-09-24 去重）。
+def _reset_slot_dir(slot_path: str, purpose: str) -> bool:
+    import tempfile
+    import uuid
+    if not os.path.exists(slot_path):
+        return True
+    try:
+        if platform.system() == 'Windows':
+            temp_dir = os.path.join(tempfile.gettempdir(), f"pyspos_{purpose}_{uuid.uuid4().hex[:8]}")
+            try:
+                logk.printl("ota", f"移动槽位到临时目录: {temp_dir}", boot_time)
+                shutil.move(slot_path, temp_dir)
+                os.makedirs(slot_path, exist_ok=True)
+
+                def _delete_temp_dir():
+                    try:
+                        time.sleep(2)  # 等待文件释放
+                        if os.path.exists(temp_dir):
+                            shutil.rmtree(temp_dir, ignore_errors=True)
+                    except Exception:
+                        pass
+
+                import threading
+                threading.Thread(target=_delete_temp_dir, daemon=True).start()
+            except Exception as e:
+                logk.printl("ota", f"移动槽位失败: {str(e)}", boot_time)
+                try:
+                    shutil.rmtree(slot_path, ignore_errors=True)
+                    os.makedirs(slot_path, exist_ok=True)
+                except Exception as e2:
+                    logk.printl("ota", f"删除槽位也失败: {str(e2)}", boot_time)
+                    return False
+        else:
+            shutil.rmtree(slot_path)
+            os.makedirs(slot_path, exist_ok=True)
+            logk.printl("ota", f"已清空槽位 {slot_path}", boot_time)
+        return True
+    except Exception as e:
+        logk.printl("ota", f"清空槽位失败: {str(e)}", boot_time)
+        return False
+
+
+def _slot_is_ready(slot_path: str) -> bool:
+    """槽位是否已包含运行所需的核心文件/目录（用于 ota_init 惰性同步）。"""
+    for file in REQUIRED_CORE_FILES:
+        if not os.path.exists(os.path.join(slot_path, file)):
+            return False
+    for directory in REQUIRED_DIRS:
+        if not os.path.exists(os.path.join(slot_path, directory)):
+            return False
+    return True
+
+
 # 回滚到上一个版本
 def rollback_update() -> bool:
     current = get_current_slot()
@@ -502,56 +602,8 @@ def rollback_update() -> bool:
     # 舍弃新版本的槽位：删除当前槽位的内容
     current_slot_path = os.path.join(root_dir, current)
     if os.path.exists(current_slot_path):
-        try:
-            # Windows系统特殊处理：先重命名再删除，避免文件占用问题
-            if platform.system() == 'Windows':
-                import tempfile
-                import uuid
-                
-                # 创建临时目录
-                temp_dir = os.path.join(tempfile.gettempdir(), f"pyspos_rollback_{uuid.uuid4().hex[:8]}")
-                
-                try:
-                    # 先移动到临时目录（Windows下move命令可以绕过文件占用）
-                    logk.printl("ota", f"移动当前槽位到临时目录: {temp_dir}", boot_time)
-                    shutil.move(current_slot_path, temp_dir)
-                    
-                    # 创建空槽位
-                    os.makedirs(current_slot_path, exist_ok=True)
-                    logk.printl("ota", f"已创建空槽位: {current}", boot_time)
-                    
-                    # 在后台删除临时目录
-                    logk.printl("ota", f"将在后台删除临时目录: {temp_dir}", boot_time)
-                    
-                    # 使用异步删除，避免阻塞
-                    def delete_temp_dir():
-                        try:
-                            time.sleep(2)  # 等待文件释放
-                            if os.path.exists(temp_dir):
-                                shutil.rmtree(temp_dir, ignore_errors=True)
-                        except:
-                            pass
-                    
-                    import threading
-                    threading.Thread(target=delete_temp_dir, daemon=True).start()
-                    
-                except Exception as e:
-                    logk.printl("ota", f"移动槽位失败: {str(e)}", boot_time)
-                    # 如果移动失败，尝试直接删除
-                    try:
-                        shutil.rmtree(current_slot_path, ignore_errors=True)
-                        os.makedirs(current_slot_path, exist_ok=True)
-                    except Exception as e2:
-                        logk.printl("ota", f"删除槽位也失败: {str(e2)}", boot_time)
-                        return False
-            else:
-                # 非Windows系统直接删除
-                shutil.rmtree(current_slot_path)
-                os.makedirs(current_slot_path, exist_ok=True)
-                logk.printl("ota", f"已删除新版本槽位: {current}", boot_time)
-                
-        except Exception as e:
-            logk.printl("ota", f"删除新版本槽位失败: {str(e)}", boot_time)
+        if not _reset_slot_dir(current_slot_path, "rollback"):
+            logk.printl("ota", "删除新版本槽位失败", boot_time)
             return False
     
     # 从旧版本槽位复制核心文件到新创建的空槽位
@@ -761,47 +813,9 @@ def install_update() -> bool:
     
     start_time = time.time()
     
-    # 清空目标槽位（Windows系统特殊处理）
+    # 清空目标槽位（Windows 先 move 再后台删除，见 _reset_slot_dir）
     if os.path.exists(target_slot):
-        try:
-            if platform.system() == 'Windows':
-                import tempfile
-                import uuid
-                
-                # 创建临时目录
-                temp_dir = os.path.join(tempfile.gettempdir(), f"pyspos_install_{uuid.uuid4().hex[:8]}")
-                
-                try:
-                    # 先移动到临时目录（move命令可以绕过文件占用，使用一下试试）
-                    logk.printl("ota", f"移动目标槽位到临时目录: {temp_dir}", boot_time)
-                    shutil.move(target_slot, temp_dir)
-                    
-                    # 在后台删除临时目录
-                    def delete_temp_dir():
-                        try:
-                            time.sleep(2)  # 等待文件释放
-                            if os.path.exists(temp_dir):
-                                shutil.rmtree(temp_dir, ignore_errors=True)
-                        except:
-                            pass
-                    
-                    import threading
-                    threading.Thread(target=delete_temp_dir, daemon=True).start()
-                    
-                except Exception as e:
-                    logk.printl("ota", f"移动槽位失败: {str(e)}", boot_time)
-                    # 如果移动失败，尝试直接删除
-                    try:
-                        shutil.rmtree(target_slot, ignore_errors=True)
-                    except Exception as e2:
-                        logk.printl("ota", f"删除槽位也失败: {str(e2)}", boot_time)
-                        return False
-            else:
-                # 非Windows系统直接丢了
-                shutil.rmtree(target_slot)
-                logk.printl("ota", f"清空槽位 {target_slot}", boot_time)
-        except Exception as e:
-            logk.printl("ota", f"清空槽位失败: {str(e)}", boot_time)
+        if not _reset_slot_dir(target_slot, "install"):
             return False
     
     os.makedirs(target_slot, exist_ok=True)
@@ -913,6 +927,8 @@ def switch_slot() -> bool:
 # 获取OTA更新状态
 def get_ota_status() -> dict:
     return {
+        "ota_enabled": _ota_enabled(),
+        "ota_disable_reason": (None if _ota_enabled() else _ota_disable_reason()),
         "current_slot": get_current_slot(),
         "current_version": get_current_version(),
         "other_slot": get_other_slot(),
@@ -976,10 +992,10 @@ def ota_init() -> bool:
     else:
         logk.printl("ota", "版本文件 version.txt 已存在", boot_time)
     
-    # 复制src目录文件到当前槽位
+    # 复制src目录文件到当前槽位（惰性同步：槽位已就绪则跳过，避免每次启动全量复制）
     current_slot = get_current_slot()
     current_slot_path = os.path.join(root_dir, current_slot)
-    
+
     # 确保槽位目录存在
     if not os.path.exists(current_slot_path):
         try:
@@ -988,7 +1004,12 @@ def ota_init() -> bool:
         except Exception as e:
             logk.printl("ota", f"创建槽位目录失败: {str(e)}", boot_time)
             return False
-    
+
+    if _slot_is_ready(current_slot_path) and os.environ.get("PYSPOS_FORCE_SLOT_SYNC") != "1":
+        logk.printl("ota", f"槽位 {current_slot} 已就绪，跳过全量复制（如需强制同步请置 PYSPOS_FORCE_SLOT_SYNC=1）", boot_time)
+        logk.printl("ota", "OTA槽位结构初始化完成", boot_time)
+        return True
+
     logk.printl("ota", f"正在将src目录文件复制到 {current_slot} 槽位...", boot_time)
     
     try:

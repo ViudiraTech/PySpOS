@@ -1,3 +1,6 @@
+# PySpOS 更新包构建工具（ canonical 构建入口，2026-09-24 起统一）。
+# 说明：历史上有两份构建脚本（根目录 build_update.py 与 src/calculate_zip_info.py），
+# 现统一以本文件为准；src/calculate_zip_info.py 已改为弃用垫片，自动转发到本模块的 main()。
 import os
 import zipfile
 import hashlib

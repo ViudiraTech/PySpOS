@@ -256,3 +256,15 @@ A: 所有文件都使用相对路径和自动检测，系统会自动适配不�
 
 **Q: 开发时如何测试？**
 A: 直接运行start.bat或start.sh，系统会自动从src目录加载文件。
+## 2026-09-24 重构补充
+
+- `src/main.py` 已由 1217 行单体拆分为 `src/shell/*` 包（`util/sys_cmds/elf_cmd/ota_cmds/proc_cmds/dispatch`），`main.py` 仅保留启动状态与 facade 重导出，历史 `import main` 调用方零改动。
+- 进程管理实现位于 `src/process.py`（PCB + EEVDF 调度器，对标 Linux 6.6+），`src/proc.py` 为兼容垫片。
+- ELF 默认执行引擎为 Unicorn（`src/elf_loader/unicorn_runner.py`，需 `pip install unicorn`），自研 CPU 模拟器保留为 `--engine native` 兜底。
+- OTA 云端更新由 `src/pyspos.py: OTA_ENABLED` 总控（服务器维护期间置 False，仅禁云端，本地安装/回滚不受影响）。
+- 测试：`pytest tests/`（25 项：EEVDF/SPC/OTA 降级/shell/双引擎/SPF/公共模块）。
+
+## SPC v2（2026-09-24）
+- 格式稳定承诺：已有 `.spc` 逐字兼容。新增：引号内转义、行尾注释（`#` 前须有空白）、`null/none/~/空值`、`[列表]`。
+- `spc.validate(data, schema, meta)`：缺失/类型/choices/越界记 error（带行号），未知项记 warning；`apply_defaults` 回填默认值；预置 `BOOTCFG_SCHEMA`。
+- Shell：`spc_validate/spc_get/spc_set/spc_migrate`（`spc_migrate` 支持 json↔spc 双向，spc→json 自动重算 checksum）。

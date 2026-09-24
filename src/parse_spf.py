@@ -17,7 +17,19 @@ else:
     run_log_enabled = 0
 
 # 运行指定路径的spf文件
-def run_spf(spf_path):
+# SPF 2.0（2026-09-24，向后兼容 0.1 的 putchar/exit）新增：
+#   print("...")        putchar 别名（支持 $变量插值）
+#   var(name, "val")    定义变量
+#   set(name, "val")    修改变量（不存在则创建）
+#   add(a, b, out)      数值加法存入 out（a/b 可为变量名或数字）
+#   input("prompt", out) 读一行存入 out
+#   sleep(seconds)      休眠
+#   include("other.spf") 引入执行另一个 spf（深度上限 8，防止循环）
+def run_spf(spf_path, _depth=0, _env=None):
+    if _env is None:
+        _env = {}
+    if _depth > 8:
+        raise RecursionError("spf include 嵌套过深（>8），疑似循环引用")
     if not spf_path:
         raise SyntaxError("path is null")
 
@@ -44,21 +56,118 @@ def run_spf(spf_path):
         for cmd in commands:
             try:
                 cmd_stripped = cmd.strip()
-                
+
                 if cmd_stripped.startswith("#") or cmd_stripped.startswith("//"):
                     continue
                 if not cmd_stripped:
                     continue
-                
+
+                def _unquote(s):
+                    s = s.strip()
+                    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+                        return s[1:-1]
+                    return s
+
+                def _subst(s):
+                    # $变量插值（$$ 转义为 $）
+                    out = []
+                    i = 0
+                    while i < len(s):
+                        if s[i] == '$' and i + 1 < len(s) and s[i + 1] == '$':
+                            out.append('$')
+                            i += 2
+                        elif s[i] == '$':
+                            j = i + 1
+                            while j < len(s) and (s[j].isalnum() or s[j] == '_'):
+                                j += 1
+                            name = s[i + 1:j]
+                            out.append(str(_env.get(name, '')))
+                            i = j
+                        else:
+                            out.append(s[i])
+                            i += 1
+                    return ''.join(out)
+
+                def _split_args(inner):
+                    # 简单逗号切分（支持引号包裹的逗号）
+                    args, cur, q = [], '', None
+                    for ch in inner:
+                        if q:
+                            cur += ch
+                            if ch == q:
+                                q = None
+                        elif ch in ('"', "'"):
+                            q = ch
+                            cur += ch
+                        elif ch == ',':
+                            args.append(cur.strip())
+                            cur = ''
+                        else:
+                            cur += ch
+                    if cur.strip() or args:
+                        args.append(cur.strip())
+                    return [a for a in args if a != '']
+
+                def _num(v):
+                    if isinstance(v, (int, float)):
+                        return v
+                    v = str(v).strip()
+                    if v in _env:
+                        v = _env[v]
+                    try:
+                        return int(v)
+                    except (ValueError, TypeError):
+                        return float(v)
+
                 if cmd_stripped.startswith("putchar(") and cmd_stripped.endswith(")"):
                     param = cmd_stripped[8:-1].strip()
-                    
+
                     if not (param.startswith('"') and param.endswith('"')):
                         raise SyntaxError(f"putchar parameter must be string, got {param}")
-                    
-                    output_str = param[1:-1]
+
+                    output_str = _subst(param[1:-1])
                     print(output_str)
-                
+
+                elif cmd_stripped.startswith("print(") and cmd_stripped.endswith(")"):
+                    param = _unquote(cmd_stripped[6:-1])
+                    print(_subst(param))
+
+                elif cmd_stripped.startswith("var(") and cmd_stripped.endswith(")"):
+                    args = _split_args(cmd_stripped[4:-1])
+                    if len(args) != 2:
+                        raise SyntaxError(f"var 需要 2 个参数，got {args}")
+                    _env[args[0].strip()] = _unquote(args[1])
+
+                elif cmd_stripped.startswith("set(") and cmd_stripped.endswith(")"):
+                    args = _split_args(cmd_stripped[4:-1])
+                    if len(args) != 2:
+                        raise SyntaxError(f"set 需要 2 个参数，got {args}")
+                    _env[args[0].strip()] = _unquote(args[1])
+
+                elif cmd_stripped.startswith("add(") and cmd_stripped.endswith(")"):
+                    args = _split_args(cmd_stripped[4:-1])
+                    if len(args) != 3:
+                        raise SyntaxError(f"add 需要 3 个参数，got {args}")
+                    _env[args[2].strip()] = _num(args[0]) + _num(args[1])
+
+                elif cmd_stripped.startswith("input(") and cmd_stripped.endswith(")"):
+                    args = _split_args(cmd_stripped[6:-1])
+                    if len(args) != 2:
+                        raise SyntaxError(f"input 需要 2 个参数，got {args}")
+                    prompt = _subst(_unquote(args[0]))
+                    _env[args[1].strip()] = input(prompt)
+
+                elif cmd_stripped.startswith("sleep(") and cmd_stripped.endswith(")"):
+                    import time as _time
+                    _time.sleep(float(_unquote(cmd_stripped[6:-1])))
+
+                elif cmd_stripped.startswith("include(") and cmd_stripped.endswith(")"):
+                    import os as _os
+                    inc = _unquote(cmd_stripped[8:-1])
+                    if not _os.path.isabs(inc):
+                        inc = _os.path.join(_os.path.dirname(_os.path.abspath(spf_path)), inc)
+                    run_spf(inc, _depth=_depth + 1, _env=_env)
+
                 elif cmd_stripped.startswith("exit(") and cmd_stripped.endswith(")"):
                     param = cmd_stripped[5:-1].strip()
                     if not param:
@@ -67,7 +176,7 @@ def run_spf(spf_path):
                         logk.printl("parser_spf", f"SPF file path: {spf_path} is exited, exitcode is {int(param)}", main.boot_time)
                     print()
                     return
-                
+
                 else:
                     raise SyntaxError(f"Unknown code {cmd_stripped}")
             except Exception as cmd_err:

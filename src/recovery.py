@@ -16,18 +16,21 @@ import sys
 import subprocess
 
 # 获取根目录
+# 统一走 common.paths，失败时回退到历史逻辑。
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# 检查是否在src目录或槽位目录中
-if os.path.basename(script_dir) == 'src':
-    # 在src目录中，根目录是src的父目录
-    root_dir = os.path.dirname(script_dir)
-elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-    # 在槽位目录中，根目录是槽位的父目录
-    root_dir = os.path.dirname(script_dir)
-else:
-    # 其他情况，使用当前目录作为根目录
-    root_dir = script_dir
+try:
+    from common.paths import get_root_dir as _get_root_dir
+    root_dir = _get_root_dir(script_dir)
+except Exception:
+    if os.path.basename(script_dir) == 'src':
+        # 在src目录中，根目录是src的父目录
+        root_dir = os.path.dirname(script_dir)
+    elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
+        # 在槽位目录中，根目录是槽位的父目录
+        root_dir = os.path.dirname(script_dir)
+    else:
+        # 其他情况，使用当前目录作为根目录
+        root_dir = script_dir
 
 # 确保在根目录下运行
 def ensure_root_directory():
@@ -153,12 +156,17 @@ def recovery_main(jumpinfo) -> str:
             logk.printl("recovery", "检查是否有可用的更新...", main.boot_time)
             update_info = ota.check_cloud_update()
             if update_info:
-                if update_info['has_update']:
+                if update_info.get('disabled'):
+                    print(f"OTA 已临时禁用: {update_info.get('reason', '')}")
+                    print(f"当前版本: {update_info.get('current_version', 'unknown')}")
+                elif update_info['has_update']:
                     print(f"发现新版本: {update_info['remote_version']}")
                     print(f"当前版本: {update_info['current_version']}")
                     print(f"更新内容: {update_info['release_notes']}")
                 else:
                     print(f"当前已是最新版本: {update_info['current_version']}")
+            else:
+                print("无法获取云端版本信息（网络失败或 OTA 被禁用）。")
             print()
         elif prompt == "ota_update":
             logk.printl("recovery", "下载并安装更新...", main.boot_time)
@@ -170,6 +178,8 @@ def recovery_main(jumpinfo) -> str:
         elif prompt == "ota_status":
             logk.printl("recovery", "查看OTA更新状态...", main.boot_time)
             status = ota.get_ota_status()
+            if not status.get('ota_enabled', True):
+                print(f"OTA 状态: 已临时禁用 ({status.get('ota_disable_reason', '')})")
             print(f"当前槽位: {status['current_slot']}")
             print(f"当前版本: {status['current_version']}")
             print(f"其他槽位: {status['other_slot']}")

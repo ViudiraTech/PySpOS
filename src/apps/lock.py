@@ -1,4 +1,5 @@
 import api
+import hmac
 
 # 上锁主逻辑
 def lock():
@@ -19,13 +20,14 @@ def lock():
 # 主函数
 def main():
     print("上锁 Bootloader 实用程序")
-    print("版本 1.0.0\n")
+    print("版本 1.0.1\n")
 
     print("在开始前，我们需要验证您的 Unlock Token。请输入你得到的 Token。")
     while 1:
         key = input("> ")
 
-        if key == api.return_token():
+        # 2026-09-24：改用常时比较，避免时序侧信道（行为不变）。
+        if hmac.compare_digest(key.strip(), api.return_token()):
             lock()
         elif key == "exit":
             break

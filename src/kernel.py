@@ -138,7 +138,9 @@ def loop():
 
     ota.ota_init()
 
-    logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心，Token = {token}", main.boot_time)
+    # 2026-09-24 安全加固：启动日志不再明文打印完整 Token（历史行为直接泄露），
+    # 仅显示前 6 位 + 获取方式；完整 Token 仍可通过官方 gettoken 答题流程获取。
+    logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心，Token = {token[:6]}****（完整 Token 请用 open gettoken 获取）", main.boot_time)
     print(f"欢迎使用 PySpOS 操作系统，{username}！")
     print()
     while 1:

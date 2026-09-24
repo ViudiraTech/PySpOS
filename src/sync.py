@@ -9,6 +9,10 @@ import os
 import shutil
 import printk
 
+# 2026-09-24 弃用说明：本模块引用的 fix/ 目录在仓库中不存在，
+# 且 OTA 槽位机制已替代其职责。文件予以保留以兼容旧 import，
+# 但 sync_fix_to_root() 将直接返回 False 并打印弃用提示，不再执行复制。
+
 # 定义必须同步的文件
 REQUIRED_FILES = [
     "kernel.py", "main.py", "fs.py", "printk.py", "sync.py", "btcfg.py"
@@ -75,40 +79,8 @@ def sync_dir_from_fix(src_dir: str, dest_dir: str) -> bool:
 
 # 将fix目录文件同步到根目录
 def sync_fix_to_root() -> bool:
-    root_dir = os.path.abspath(os.path.dirname(__file__))
-    fix_dir = os.path.join(root_dir, "fix")
-    
-    if not os.path.isdir(fix_dir):
-        printk.error(f"fix目录不存在！路径: {fix_dir}")
-        return False
-    
-    printk.info(f"开始同步fix目录到根目录")
-    printk.info(f"项目根目录: {root_dir}")
-    printk.info(f"源文件目录(fix): {fix_dir}")
-    print()
-    
-    total_success = True
-    
-    # 同步必须文件到根目录
-    for file_name in REQUIRED_FILES:
-        src_file = os.path.join(fix_dir, file_name)
-        dest_file = os.path.join(root_dir, file_name)
-        if not sync_file_from_fix(src_file, dest_file):
-            total_success = False
-    
-    # 同步目录到根目录
-    for dir_name in REQUIRED_DIRS:
-        src_dir = os.path.join(fix_dir, dir_name)
-        dest_dir = os.path.join(root_dir, dir_name)
-        if not sync_dir_from_fix(src_dir, dest_dir):
-            total_success = False
-    
-    if total_success:
-        printk.ok("根目录同步完成")
-    else:
-        printk.warn("部分文件同步失败，请检查日志")
-    
-    return total_success
+    printk.warn("sync.fix 已弃用：fix/ 目录不存在，OTA 槽位机制已替代其职责，本次调用不执行任何复制。")
+    return False
 
 if __name__ == "__main__":
     sync_fix_to_root()

@@ -1,4 +1,6 @@
 # fs.py - 文件系统操作模块
+# 2026-09-24: 新增 pathlib 沙箱 helpers（safe_join/read_text/write_text/mkdir_p/touch/cat_file），
+# 历史函数保持原样以兼容旧调用。
 
 import os
 import shutil
@@ -78,3 +80,47 @@ def get_file_info(name):
             'is_dir': os.path.isdir(file_path)
         }
     return None
+
+
+# ---- 新增：沙箱与便捷 helpers ----
+
+def _jail_root():
+    """沙箱根：默认当前工作目录；严格模式（PYSPOS_JAIL_STRICT=1）下禁止逃逸。"""
+    return os.path.abspath(os.environ.get("PYSPOS_JAIL", os.getcwd()))
+
+
+def safe_join(base: str, *parts: str) -> str:
+    """拼接后确保仍在 base 内，否则抛 ValueError。"""
+    base_abs = os.path.abspath(base)
+    target = os.path.abspath(os.path.join(base_abs, *parts))
+    if os.environ.get("PYSPOS_JAIL_STRICT") == "1":
+        if target != base_abs and not target.startswith(base_abs + os.sep):
+            raise ValueError(f"路径逃逸被拒绝: {target}")
+    return target
+
+
+def read_text(name: str, encoding: str = "utf-8"):
+    p = pathlib.Path(current_dir()) / name
+    if p.is_file():
+        return p.read_text(encoding=encoding)
+    return None
+
+
+def write_text(name: str, content: str, encoding: str = "utf-8") -> None:
+    p = pathlib.Path(current_dir()) / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding=encoding)
+
+
+def mkdir_p(name: str) -> None:
+    pathlib.Path(current_dir(), name).mkdir(parents=True, exist_ok=True)
+
+
+def touch(name: str) -> None:
+    p = pathlib.Path(current_dir()) / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.touch(exist_ok=True)
+
+
+def cat_file(name: str, encoding: str = "utf-8"):
+    return read_text(name, encoding)

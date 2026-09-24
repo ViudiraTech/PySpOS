@@ -27,7 +27,7 @@ OS_MAJOR_VER = 3
 OS_DEVELOP_STAGE = "RC 1"
 
 # OS Minor Version. (0~99)
-OS_MINOR_VER = 1
+OS_MINOR_VER = 2
 
 # OS Patch Version. (0~99)
 OS_PATCH_VER = 0
@@ -45,13 +45,13 @@ OS_COPYRIGHT = "@2022~2026 GoutouStdio. Open all rights."
 SPF_ENABLED = True
 
 # SPF parser version.
-SPF_VERSION = "0.1" # The spf parser is too simple, so we think the version should be 0.1.
+SPF_VERSION = "2.0" # 0.1: 仅 putchar/exit；2.0: 新增 var/set/add/print/input/include/sleep
 
 # Select whether to enable SpaceConfig.
-SPC_ENABLED = False # SpaceConfig is disabled for now, because it is not developed yet.
+SPC_ENABLED = True # SpaceConfig（.spc）v2 已可用：类型系统+Schema 校验+工具命令
 
 # SpaceConfig Version.
-SPC_VERSION = NULL # SpaceConfig is not developed yet, so we think its version is NULL
+SPC_VERSION = "2.0"
 
 # Select whether to enable Space User Interface.
 SPUI_ENABLED = False # SPUI2 is disabled for now, because it is not developed yet.
@@ -73,3 +73,15 @@ else:
 
 # Select whether to enable developer mode.
 DEVELOPER_MODE = False # Developer mode is disabled by default. You can enable it for development and testing purposes.
+
+# OTA master switch.
+#   2026-09-24: OTA 服务器故障，临时禁用云端更新。
+#   禁用后：check_cloud_update / download_and_install_update 直接返回降级提示，
+#   不发任何网络请求；本地安装 install_update / 回滚 rollback / 状态查询不受影响。
+#   恢复时只需把 False 改回 True（ota.py 会自动读取本开关）。
+OTA_ENABLED = False
+OTA_DISABLE_REASON = "OTA 服务器维护中，云端更新已临时禁用（本地安装/回滚不受影响）"
+
+# OTA update channel: "stable" / "beta" / "nightly".
+#   check_cloud_update 会优先匹配同 channel 的 changelog 条目。
+OTA_CHANNEL = "beta"

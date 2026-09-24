@@ -1,0 +1,49 @@
+# PySpOS .gitignore
+# 说明：OTA 文件本身保留在仓库（ota.py 等源码），但本地运行产物、更新包、槽位不入库
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# PySpOS 运行产物（A/B 槽为本地生成）
+slot_a/
+slot_b/
+current_slot
+.hotreset
+src/.hotreset
+
+# OTA 本地更新包（保留 docs/ota/version.json，zip 包不入库）
+ota/
+docs/ota/*.zip
+!docs/ota/version.json
+
+# 用户数据
+etc/
+*.log
+
+# 构建/测试
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# 系统
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# C 构建产物（splibc）
+splibc/obj/
+splibc/*.o
+splibc/*.a
+splibc/*.elf
+!splibc/test_*.elf

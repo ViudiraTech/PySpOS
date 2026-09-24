@@ -31,7 +31,8 @@ def exit_system():
     kernel.exit()
 
 def api_confirm(prompt: str) -> bool:
-    return kernel.confirm(prompt)
+    # NOTE: kernel 模块从未提供 confirm，统一走 printk.confirm（历史 bug 修复）。
+    return printk.confirm(prompt)
 
 # API: 打印信息
 def api_info(message: str) -> None:
@@ -55,18 +56,25 @@ def api_system(command: str) -> int:
     return os.system(command)
 
 # API: 调整 rootstate 状态
-def set_rootstate(state: bool) -> None:
+def set_rootstate(state: bool) -> bool:
     try:
         if main.bootcfg['locked']:
             printk.warn("系统已锁定，使用临时 ROOT 方法...（重启后失效）")
             main.rootstate = state
-            return True
         else:
             main.rootstate = state
             bootcfg = main.bootcfg
             bootcfg['rootstate'] = state
-            btcfg.save_bootcfg(bootcfg)
-            return True
+            # NOTE: btcfg 从未提供 save_bootcfg，正确入口是 save_bootcfg_data（历史 bug 修复）。
+            btcfg.save_bootcfg_data(bootcfg)
+        try:
+            from common.audit import audit as _audit
+            import main as _main_mod
+            _audit(getattr(_main_mod, 'root_dir', os.getcwd()),
+                   kernel.get_system_username(), 'set_rootstate', f"state={state}")
+        except Exception:
+            pass
+        return True
     except Exception as e:
         printk.error(f"设置 rootstate 状态时出错: {e}")
         return False
@@ -82,11 +90,19 @@ def get_rootstate() -> bool:
 def get_lockstate() -> bool:
     return main.bootcfg['locked']
 
-def set_lockstate(state: bool) -> None:
+def set_lockstate(state: bool) -> bool:
     try:
         bootcfg = main.bootcfg
         bootcfg['locked'] = state
-        btcfg.save_bootcfg(bootcfg)
+        # NOTE: 同上，save_bootcfg 不存在，修正为 save_bootcfg_data。
+        btcfg.save_bootcfg_data(bootcfg)
+        try:
+            from common.audit import audit as _audit
+            import main as _main_mod
+            _audit(getattr(_main_mod, 'root_dir', os.getcwd()),
+                   kernel.get_system_username(), 'set_lockstate', f"state={state}")
+        except Exception:
+            pass
         return True
     except Exception as e:
         printk.error(f"设置 locked 状态时出错: {e}")
