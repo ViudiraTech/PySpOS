@@ -6,6 +6,8 @@
 #     含 '/' 的路径 → 外部/脚本
 #     注册表 alias  → 注册表 builtin
 #     apps/ 外部命令 → forkexec 真子进程
+#     包命令         → pkg 入口
+#     宿主 PATH     → fork+exec 跑 Linux 原生程序（hostexec）
 #     其余          → 127 command not found
 #
 #   后台/并发：`cmd &` 立即返回并注册后台作业，$! 取最近后台 PID；
@@ -16,12 +18,14 @@ import contextlib
 import io
 import os
 import shlex
+import sys
+import threading
 
 import commands as cmd_registry
 import printk
 import main
 
-from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
+from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds, hostexec
 
 # 命令历史（history 命令 + readline 持久化）
 _cmd_history = []
@@ -62,8 +66,12 @@ def _complete(text, state):
 
     if completing_first:
         cmd_registry.register_discovered()
-        matches = [c for c in cmd_registry.names_for_completion()
-                   if c.startswith(text)]
+        seen = set()
+        matches = []
+        for cand in list(cmd_registry.names_for_completion()) + hostexec.path_commands():
+            if cand.startswith(text) and cand not in seen:
+                seen.add(cand)
+                matches.append(cand)
         matches.sort(key=lambda n: (0 if n.startswith(text) else 1, n))
     else:
         matches = _path_matches(text)
@@ -232,21 +240,50 @@ def _run_with_redirect(prompt: str) -> bool:
     if not main.is_safe_filename(target):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
         return True
+    # 文件只 open 一次：宿主子进程（fd 级直写）和内置命令
+    #（Python 级 StringIO）都往同一个 fd 落，避免二次 open 截断丢数据。
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if op == " >> " else os.O_TRUNC)
+    try:
+        fd = os.open(target, flags, 0o644)
+    except OSError as e:
+        printk.error(f"打开 {target} 失败: {e}\n")
+        return True
     buf = io.StringIO()
+    hostexec.set_override(fd)
     try:
         with contextlib.redirect_stdout(buf):
             handle_command(left)
     except Exception as e:
         printk.error(f"重定向执行失败: {e}\n")
         return True
-    mode = "a" if op == " >> " else "w"
+    finally:
+        hostexec.clear_override()
     try:
-        with open(target, mode, encoding="utf-8") as f:
-            f.write(buf.getvalue())
+        data = buf.getvalue()
+        if data:
+            os.write(fd, data.encode(sys.stdout.encoding or "utf-8", errors="replace"))
         printk.ok(f"已重定向输出到: {target}\n")
     except Exception as e:
         printk.error(f"写入 {target} 失败: {e}\n")
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
     return True
+
+
+def _drain_to_list(fd, chunks):
+    """管道读端抽水线程：左端输出超 64K 时，读端必须有人消费，
+    否则子进程写满管道就和等它的父进程互相卡死。"""
+    while True:
+        try:
+            chunk = os.read(fd, 65536)
+        except OSError:
+            break
+        if not chunk:
+            break
+        chunks.append(chunk)
 
 
 def _run_with_pipe(prompt: str) -> bool:
@@ -256,17 +293,38 @@ def _run_with_pipe(prompt: str) -> bool:
     left, right = left.strip(), right.strip()
     if not left or not right:
         return False
+    # 宿主子进程写的是真 fd（绕过 Python 级 redirect_stdout），
+    # 必须给它一条 fd 级通路，再和内置命令的 StringIO 合并。
+    read_fd, write_fd = os.pipe()
+    chunks = []
+    drainer = threading.Thread(target=_drain_to_list, args=(read_fd, chunks),
+                               daemon=True)
+    drainer.start()
     buf = io.StringIO()
+    hostexec.set_override(write_fd)
     try:
         with contextlib.redirect_stdout(buf):
             handle_command(left)
     except Exception as e:
         printk.error(f"管道左端执行失败: {e}\n")
         return True
+    finally:
+        hostexec.clear_override()
+        try:
+            os.close(write_fd)
+        except OSError:
+            pass
+    drainer.join(timeout=30)
+    try:
+        os.close(read_fd)
+    except OSError:
+        pass
+    text = buf.getvalue() + b"".join(chunks).decode(
+        sys.stdout.encoding or "utf-8", errors="replace")
     r_tokens = right.split()
     if r_tokens[0] == "grep" and len(r_tokens) >= 2:
         pattern = r_tokens[1]
-        for line in buf.getvalue().splitlines():
+        for line in text.splitlines():
             if pattern in line:
                 print(line)
         print()
@@ -359,4 +417,12 @@ def handle_command(prompt) -> str:
         _fork_package(package_target, args, background)
         return
 
-    print(f"{name}: 未找到命令（输入 help 查看可用命令）\n")
+    # 宿主 Linux 程序：fork+exec 直系回退（vt100/全屏程序可跑）
+    try:
+        if hostexec.run(tokens, background):
+            return
+    except Exception as e:
+        printk.error(f"运行 {name} 失败: {e}\n")
+        return
+
+    print(f"{name}: 未找到命令（help 查看内置命令；外部程序按 PATH 查找）\n")
