@@ -1,305 +1,240 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OTA 更新 - PySpOS | GoutouStdio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PySpOS OTA 系统更新下载：最新版本、更新日志、兼容性要求与回滚指南。">
+  <title>OTA 更新下载 — PySpOS | GoutouStdio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../css/tokens.css">
-    <link rel="stylesheet" href="../css/style.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2310b981' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="../js/theme-init.js"></script>
 </head>
-<body class="product-page pyspos-page">
-    <script src="../js/theme-init.js"></script>
-    <header>
-        <div class="container">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-cube"></i>
-                </div>
-                <div>
-                    <h1>GoutouStdio</h1>
-                    <span class="subtitle">科技创新工作室</span>
-                </div>
-            </div>
-            <div class="nav-toggle" id="nav-toggle">
-                <i class="fas fa-bars"></i>
-                <i class="fas fa-times"></i>
-            </div>
-            <div class="theme-toggle" id="theme-toggle" title="切换主题">
-                <i class="far fa-moon"></i>
-            </div>
-            <nav class="nav-menu" id="nav-menu">
-                <ul>
-                    <li><a href="../index.html" class="nav-link">首页</a></li>
-                    <li><a href="../pyspos.html" class="nav-link">PySpOS</a></li>
-                    <li><a href="../spaceos6.html" class="nav-link">SpaceOS 6</a></li>
-                    <li><a href="../spaceos7.html" class="nav-link">SpaceOS 7</a></li>
-                    <li><a href="../spaceos8.html" class="nav-link">SpaceOS 8</a></li>
-                    <li><a href="../requirements.html" class="nav-link">配置要求</a></li>
-                    <li><a href="../index.html#history" class="nav-link">发展历程</a></li>
-                    <li><a href="../index.html#about" class="nav-link">关于我们</a></li>
-                    <li><a href="../index.html#contact" class="nav-link">联系我们</a></li>
-                    <li class="github-link-desktop"><a href="https://github.com/GoutouStdio-cn" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                    <li class="github-link-mobile" style="display: none;"><a href="https://github.com/GoutouStdio-cn" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                </ul>
-                <div class="nav-indicator" id="nav-indicator"></div>
-            </nav>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="../index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="../index.html">首页</a></li>
+          <li><a href="../pyspos.html">PySpOS</a></li>
+          <li><a href="../spaceos8.html">SpaceOS 8</a></li>
+          <li><a href="../spaceos6.html">SpaceOS 6</a></li>
+          <li><a href="../spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="../requirements.html">配置要求</a></li>
+          <li><a href="index.html" aria-current="page">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head">
+      <span class="eyebrow">PySpOS · OTA 更新</span>
+      <h1>下载系统更新包。</h1>
+      <p class="lede">从云端获取最新的 PySpOS 更新，也可以用脚本抓取。本页数据来自 <code>version.json</code>，禁 JavaScript 时显示下方静态版本。</p>
+      <div class="actions">
+        <a class="btn btn-primary" id="dl-primary" href="PySpOS-3.2.0-20260924.zip">下载 v3.2.0 更新包</a>
+        <a class="btn btn-secondary" href="releases.html">版本历史</a>
+      </div>
+    </div>
+
+    <section class="section" aria-labelledby="version-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">版本信息</span>
+          <h2 class="section-title" id="version-title">最新版本 <span class="badge badge-warn" id="stage-badge">候选发布版</span></h2>
         </div>
-    </header>
+        <dl class="facts" aria-label="最新版本">
+          <div class="fact"><dt>版本</dt><dd class="mono" id="f-version">3.2.0</dd></div>
+          <div class="fact"><dt>发布日期</dt><dd class="mono" id="f-date">2026-09-24</dd></div>
+          <div class="fact"><dt>文件大小</dt><dd class="mono" id="f-size">245.1 KB</dd></div>
+          <div class="fact"><dt>SHA-256</dt><dd class="mono" id="f-sha">124ea876d602cb51d9212f9c9b73091d09690b29a17e55607b171605452a7b87</dd></div>
+        </dl>
+        <noscript>
+          <p class="section-lede">当前环境禁用了 JavaScript，版本信息无法自动读取。请直接查看 <a href="version.json">version.json</a> 或<a href="releases.html">版本历史</a>。</p>
+        </noscript>
+      </div>
+    </section>
 
-    <main>
-        <section class="product-hero" id="ota-hero" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);">
-            <div class="container">
-                <div class="product-hero-content">
-                    <div class="hero-badge" style="border-color: rgba(99, 102, 241, 0.4);">
-                        <i class="fas fa-wifi" style="color: #6366f1;"></i>
-                        <span>PySpOS OTA 更新</span>
-                    </div>
-                    <h1 class="product-hero-title" style="color: #6366f1;">OTA 系统更新下载</h1>
-                    <p class="product-hero-subtitle">从云端下载最新的 PySpOS 系统更新，你也可以使用Python抓取。</p>
-                    <div class="hero-buttons">
-                        <a href="#download" class="btn btn-primary btn-lg" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
-                            <i class="fas fa-download"></i>
-                            下载更新
-                        </a>
-                        <a href="releases.html" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-list"></i>
-                            版本历史
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="version-info" id="download">
-            <div class="container">
-                <h2 class="section-title">版本信息</h2>
-                <div id="version-info-container">
-                    <!-- 静态兜底：仅在 fetch('version.json') 失败时显示。
-                         2026-09-24 更新为 3.2.0——原来这里一直写死 3.0.1-pre，
-                         网络一抖就展示过期版本。文件大小与 SHA256 仍由 JS 覆盖，
-                         这里只保证「不至于显示错的版本号」。 -->
-                    <div class="version-cards">
-                        <div class="version-card latest">
-                            <h3>最新版本 <span class="badge badge-new">NEW</span> <span class="badge badge-beta">候选发布版</span></h3>
-                            <div class="version">3.2.0</div>
-                            <div class="meta-info">
-                                <div class="date">2026-09-24</div>
-                                <div class="file-size">加载中…</div>
-                            </div>
-                        </div>
-                    </div>
-                    <noscript>
-                        <p style="margin-top: 12px;">
-                            当前环境禁用了 JavaScript，版本信息无法自动读取。
-                            请直接查看
-                            <a href="version.json">version.json</a> 或
-                            <a href="releases.html">版本历史</a>。
-                        </p>
-                    </noscript>
-                </div>
-            </div>
-        </section>
-
-        <section class="download-section">
-            <div class="container">
-                <h2 class="section-title">下载更新包</h2>
-                <div id="download-container">
-                    <div class="download-buttons">
-                        <a href="PySpOS-3.2.0-20260924.zip" class="btn btn-primary">
-                            下载 v3.2.0 更新包 <i class="fas fa-download"></i>
-                        </a>
-                        <a href="releases.html" class="btn btn-secondary">
-                            查看所有版本 <i class="fas fa-list"></i>
-                        </a>
-                    </div>
-                    <p style="margin-top: 20px; color: #e5e5e5; font-size: 14px;">
-                        文件大小：245.1 KB<br>
-                        SHA256: <code>124ea876d602cb51d9212f9c9b73091d09690b29a17e55607b171605452a7b87</code>
-                    </p>
-                </div>
-            </div>
-        </section>
-
-        <section class="changelog">
-            <div class="container">
-                <h2 class="section-title">更新日志</h2>
-                <div id="changelog-content"></div>
-            </div>
-        </section>
-
-
-        <section class="compatibility">
-            <div class="container">
-                <h2 class="section-title">兼容性要求</h2>
-                <ul class="compatibility-list">
-                    <li>Python 3.7 或更高版本</li>
-                    <li>Windows 7 及以上 / Linux / macOS</li>
-                    <li>至少 50MB 可用磁盘空间</li>
-                    <li>request 库（用于抓取云端 ota 内容）</li>
-                </ul>
-            </div>
-        </section>
-
-        <section class="rollback">
-            <div class="container">
-                <h2 class="section-title">回滚指南</h2>
-                <p style="margin-bottom: 20px; color: #e5e5e5;">如果更新后遇到问题，可以回滚到之前的版本：</p>
-                <ul class="rollback-steps">
-                    <li data-step="1">在 PySpOS 中输入 <code>recovery</code> 命令进入恢复模式</li>
-                    <li data-step="2">在恢复模式中输入 <code>ota_rollback</code> 命令</li>
-                    <li data-step="3">确认回滚操作</li>
-                    <li data-step="4">重启 PySpOS 以应用更改</li>
-                </ul>
-                <p style="margin-top: 20px; color: #e5e5e5; font-size: 14px;">
-                    注意：回滚操作会切换到另一个槽位，请确保另一个槽位包含有效的系统版本。（如没有文件，系统可能会变砖。）
-                </p>
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-logo">
-                    <div class="logo-icon">
-                        <i class="fas fa-cube"></i>
-                    </div>
-                    <div>
-                        <h3>GoutouStdio</h3>
-                        <p>科技创新工作室</p>
-                    </div>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>产品</h4>
-                        <ul>
-                            <li><a href="../pyspos.html">PySpOS</a></li>
-                            <li><a href="../spaceos6.html">SpaceOS 6</a></li>
-                            <li><a href="../spaceos7.html">SpaceOS 7</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>资源</h4>
-                        <ul>
-                            <li><a href="../index.html">首页</a></li>
-                            <li><a href="../index.html#history">发展历程</a></li>
-                            <li><a href="../index.html#about">关于我们</a></li>
-                            <li><a href="../index.html#contact">联系我们</a></li>
-                            <li><a href="https://github.com/GoutouStdio-cn" target="_blank">GitHub</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>法律</h4>
-                        <ul>
-                            <li><a href="#">隐私政策</a></li>
-                            <li><a href="#">使用条款</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2022~2026 GoutouStdio. Open all rights.</p>
-            </div>
+    <section class="section" aria-labelledby="changelog-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">更新日志</span>
+          <h2 class="section-title" id="changelog-title">这次改了什么</h2>
         </div>
-    </footer>
+        <div class="prose" id="changelog-body">
+          <p>apps 升级为真子进程 fork/exec；11 步 OOBE 首次开机向导；EEVDF 调度器对标 Linux 6.6+；终端输入自愈；SpaceConfig v2 与命令注册表。完整条目见<a href="releases.html">版本历史</a>。</p>
+        </div>
+      </div>
+    </section>
 
-    <script>
-        async function loadVersionData() {
-            try {
-                console.log('开始加载版本数据...');
-                const response = await fetch('version.json');
-                console.log('响应状态:', response.status, response.statusText);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const versionData = await response.json();
-                console.log('版本数据加载成功:', versionData);
-                updatePageContent(versionData);
-            } catch (error) {
-                console.error('加载版本数据失败:', error);
-                console.error('错误详情:', error.message);
-            }
+    <section class="section" aria-labelledby="compat-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">兼容性要求</span>
+          <h2 class="section-title" id="compat-title">装之前确认</h2>
+        </div>
+        <ul class="rows rows-2col">
+          <li class="row"><div class="row-title">Python</div><div class="row-body"><p>3.10 或更高版本（云端抓取需要 requests 库）。</p></div></li>
+          <li class="row"><div class="row-title">系统</div><div class="row-body"><p>Windows 7 及以上 / Linux / macOS。</p></div></li>
+          <li class="row"><div class="row-title">磁盘</div><div class="row-body"><p>至少 50 MB 可用空间。</p></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="rollback-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">回滚指南</span>
+          <h2 class="section-title" id="rollback-title">更新出问题时回滚</h2>
+          <p class="section-lede">回滚会切换到另一个槽位，请确保另一个槽位有有效系统版本，否则可能无法启动。</p>
+        </div>
+        <ol class="steps">
+          <li>在 PySpOS 中输入 <code>recovery</code> 进入恢复模式</li>
+          <li>在恢复模式中输入 <code>ota_rollback</code></li>
+          <li>确认回滚操作</li>
+          <li>重启 PySpOS 以应用更改</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="get-title">
+      <div class="wrap">
+        <div class="band">
+          <span class="eyebrow">下载</span>
+          <h2 id="get-title">拿去装吧</h2>
+          <p class="band-lede">更新包与校验值以 <code>version.json</code> 为准，装完对不上 SHA-256 就别继续。</p>
+          <div class="actions">
+            <a class="btn btn-primary" id="dl-bottom" href="PySpOS-3.2.0-20260924.zip">下载 v3.2.0 更新包</a>
+            <a class="btn btn-secondary" href="releases.html">版本历史</a>
+          </div>
+        </div>
+      </div>
+    </section>
+      </div>
+    </section>
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <a href="../requirements.html"><span class="pager-dir">← 上一页</span><span class="pager-name">配置要求</span></a>
+        <a class="pager-next" href="releases.html"><span class="pager-dir">下一页 →</span><span class="pager-name">版本历史</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="../pyspos.html">PySpOS</a></li>
+            <li><a href="../spaceos6.html">SpaceOS 6</a></li>
+            <li><a href="../spaceos7.html">SpaceOS 7</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="../index.html">首页</a></li>
+            <li><a href="releases.html">版本历史</a></li>
+            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="../index.html#history-title">发展历程</a></li>
+            <li><a href="../index.html#contact-title">联系我们</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      function fmtSize(bytes) {
+        if (typeof bytes !== "number" || bytes < 0) return "未知";
+        if (bytes === 0) return "0 B";
+        var units = ["B", "KB", "MB", "GB"];
+        var i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+        return (bytes / Math.pow(1024, i)).toFixed(1) + " " + units[i];
+      }
+      function stageOf(s) { return (s || "").toLowerCase(); }
+      function badgeFor(stage) {
+        if (/(^|[^a-z])(rc|beta|pre|alpha|dev|nightly)([^a-z]|$)/.test(stage)) {
+          if (stage.indexOf("rc") !== -1) return ["候选发布版", "badge-warn"];
+          if (stage.indexOf("beta") !== -1) return ["测试版", "badge-warn"];
+          return ["预发布版", "badge-warn"];
         }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB']; //虽然不知道为什么要加GB，但是为了以后，先加上
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        return ["正式版", "badge-ok"];
+      }
+      function set(id, text) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = text;
+      }
+      async function load() {
+        var res;
+        try {
+          res = await fetch("version.json", { cache: "no-store" });
+        } catch (e) { return; }
+        if (!res.ok) return;
+        var d;
+        try { d = await res.json(); } catch (e) { return; }
+        if (d.version) set("f-version", d.version);
+        if (d.release_date) set("f-date", d.release_date);
+        var sizeNum = Number(d.file_size);
+        if (d.file_size != null && isFinite(sizeNum)) set("f-size", fmtSize(sizeNum));
+        if (d.sha256) set("f-sha", d.sha256);
+        var badge = document.getElementById("stage-badge");
+        if (badge) {
+          var t = badgeFor(stageOf(d.develop_stage));
+          badge.textContent = t[0];
+          badge.className = "badge " + t[1];
         }
-
-        function updatePageContent(versionData) {
-            const latestVersion = versionData.version;
-            const releaseDate = versionData.release_date;
-            const fileSize = formatFileSize(versionData.file_size);
-            const sha256 = versionData.sha256;
-            const releaseNotes = versionData.release_notes;
-            // 预发布判定：beta / rc / pre / alpha 都算预发布。
-            // 2026-09-24 修正：原先只判 === 'beta'，于是 3.2.0 的 develop_stage
-            // 一旦标成 rc，就会被显示成「正式版」——RC 被当成 GA 卖。
-            const stage = (versionData.develop_stage || '').toLowerCase();
-            const isPrerelease = ['beta', 'rc', 'pre', 'alpha', 'dev', 'nightly']
-                .some(s => stage.includes(s));
-            const STAGE_TEXT = { rc: '候选发布版', beta: '测试版', pre: '预发布版' };
-            const badgeClass = isPrerelease ? 'badge-beta' : 'badge-stable';
-            const badgeText = isPrerelease
-                ? (STAGE_TEXT[stage] || '预发布版')
-                : '正式版';
-
-            // 确定下载链接
-            let downloadUrl;
-            if (versionData.download_url) {
-                // 判断是否是重构建版本（文件名格式为 PySpOS-版本 - 日期.zip）
-                const isRebuild = versionData.download_url.match(/PySpOS-[\d.]+-[\d]+\.zip/);
-                
-                if (isRebuild) {
-                    // 如果是重构建版本，使用新的文件名
-                    downloadUrl = versionData.download_url;
-                } else if (versionData.download_url === 'PySpOS.zip') {
-                    // 如果是 PySpOS.zip，从服务器下载
-                    downloadUrl = 'PySpOS.zip';
-                } else {
-                    // 否则使用 download_url
-                    downloadUrl = versionData.download_url;
-                }
-            } else {
-                // 如果没有 download_url，使用默认的 PySpOS.zip
-                downloadUrl = 'PySpOS.zip';
-            }
-
-            // 更新页面内容
-            document.querySelector('.version-card.latest .version').textContent = latestVersion;
-            document.querySelector('.version-card.latest .date').textContent = releaseDate;
-            document.querySelector('.version-card.latest .file-size').textContent = fileSize;
-            
-            const downloadBtn = document.querySelector('.download-buttons .btn-primary');
-            if (downloadBtn) {
-                downloadBtn.href = downloadUrl;
-                downloadBtn.innerHTML = `下载 v${latestVersion} 源代码 <i class="fas fa-download"></i>`;
-            }
-            
-            const sha256Element = document.querySelector('#download-container p code');
-            if (sha256Element) {
-                sha256Element.textContent = sha256;
-            }
-            
-            const changelogElement = document.getElementById('changelog-content');
-            if (changelogElement && releaseNotes) {
-                changelogElement.innerHTML = `<div class="changelog-content"><p>${releaseNotes.replace(/\n/g, '<br>')}</p></div>`;
-            }
+        ["dl-primary", "dl-bottom"].forEach(function (id) {
+          var dl = document.getElementById(id);
+          if (!dl) return;
+          if (d.download_url) dl.setAttribute("href", d.download_url);
+          if (d.version) dl.textContent = "下载 v" + d.version + " 更新包";
+        });
+        var log = document.getElementById("changelog-body");
+        if (log && typeof d.release_notes === "string" && d.release_notes.trim()) {
+          log.textContent = "";
+          var p = document.createElement("p");
+          p.textContent = d.release_notes;
+          log.appendChild(p);
         }
-
-        // 页面加载完成后加载版本数据
-        document.addEventListener('DOMContentLoaded', loadVersionData);
-    </script>
-    <script src="../js/main.js"></script>
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", load);
+      } else {
+        load();
+      }
+    })();
+  </script>
+  <script src="../js/main.js"></script>
 </body>
 </html>

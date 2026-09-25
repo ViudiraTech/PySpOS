@@ -1,277 +1,198 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpaceOS 8 抢先体验版下载 | GoutouStdio</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SpaceOS 8 抢先体验版下载：第二版公开测试镜像（39.7 MiB），修复 xHCI USB HID。下载前请先读使用声明，并核对 SHA-256。">
+  <title>下载 SpaceOS 8 抢先体验版 | GoutouStdio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/tokens.css">
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/cards.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%234f46e5' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
-    <style>
-        body.spaceos8-download {
-            --bg-image: none;
-            background-attachment: scroll, scroll;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
-        }
-        .spaceos8-download .logo h1,
-        .spaceos8-download .section-title,
-        .spaceos8-download .product-hero-title {
-            font-family: inherit;
-        }
-        .spaceos8-download code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-        }
-        .spaceos8-download main {
-            padding-top: 48px;
-        }
-        .spaceos8-download .ps-banner {
-            flex-direction: column;
-        }
-        .spaceos8-download .hero-buttons .btn,
-        .spaceos8-download .download-buttons .btn {
-            width: 100%;
-            justify-content: center;
-            text-align: center;
-        }
-        .spaceos8-download .ps-row__body a {
-            overflow-wrap: anywhere;
-        }
-        @media (max-width: 480px) {
-            .spaceos8-download header .container {
-                gap: 8px;
-            }
-            .spaceos8-download .logo h1 {
-                font-size: 18px;
-            }
-            .spaceos8-download .logo .subtitle {
-                font-size: 10px;
-            }
-            .spaceos8-download .theme-toggle,
-            .spaceos8-download .nav-toggle {
-                width: 44px;
-                height: 44px;
-                padding: 0;
-                margin-left: 8px;
-            }
-        }
-    </style>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-init.js"></script>
 </head>
-<body class="product-page spaceos8-page spaceos8-download">
-    <script src="js/theme-init.js"></script>
-    <header>
-        <div class="container">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-cube"></i>
-                </div>
-                <div>
-                    <h1>GoutouStdio</h1>
-                    <span class="subtitle">科技创新工作室</span>
-                </div>
-            </div>
-            <button class="nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="nav-menu">
-                <i class="fas fa-bars"></i>
-                <i class="fas fa-times"></i>
-            </button>
-            <button class="theme-toggle" id="theme-toggle" type="button" title="切换主题" aria-label="切换主题">
-                <i class="far fa-moon"></i>
-            </button>
-            <nav class="nav-menu" id="nav-menu">
-                <ul>
-                    <li><a href="index.html" class="nav-link">首页</a></li>
-                    <li><a href="pyspos.html" class="nav-link">PySpOS</a></li>
-                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6（停更）</a></li>
-                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7（停更）</a></li>
-                    <li><a href="spaceos8.html" class="nav-link">SpaceOS 8</a></li>
-                    <li><a href="spaceos8-download.html" class="nav-link active">下载</a></li>
-                    <li><a href="requirements.html" class="nav-link">配置要求</a></li>
-                    <li><a href="index.html#history" class="nav-link">发展历程</a></li>
-                    <li><a href="index.html#about" class="nav-link">关于我们</a></li>
-                    <li><a href="index.html#contact" class="nav-link">联系我们</a></li>
-                    <li class="github-link-desktop"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                    <li class="github-link-mobile" style="display: none;"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                </ul>
-                <div class="nav-indicator" id="nav-indicator"></div>
-            </nav>
-        </div>
-    </header>
-    <main>
-        <section class="product-hero" id="spaceos8-download-hero">
-            <div class="container">
-                <div class="product-hero-content">
-                    <div class="hero-badge">
-                        <i class="fas fa-rocket"></i>
-                        <span>PUBLIC PREVIEW · 第二版</span>
-                    </div>
-                    <h1 class="product-hero-title">SpaceOS 8 抢先体验版</h1>
-                    <p class="product-hero-subtitle">第二版公开测试镜像：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可以使用。</p>
-                    <div class="hero-buttons">
-                        <a href="spaceos8.html" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-arrow-left"></i>
-                            返回介绍
-                        </a>
-                        <a href="Uinxed-x64-slim.iso" class="btn btn-primary btn-lg" download="Uinxed-x64-slim-preview2.iso">
-                            <i class="fas fa-download"></i>
-                            下载第二版 · 39.7 MiB
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
 
-        <div class="container">
-            <div class="ps-banner ps-banner--warning ps-banner--page-top" role="note">
-                <div class="ps-banner__content">
-                    <p class="ps-banner__title">使用声明：实验版本，不作任何担保</p>
-                    <p>SpaceOS 8 第二版按“现状”提供，不作明示或暗示担保。下载即表示你接受自行承担全部风险，并只在虚拟机、测试机或可抛弃磁盘上使用。</p>
-                </div>
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="index.html">首页</a></li>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos8.html" aria-current="page">SpaceOS 8</a></li>
+          <li><a href="spaceos6.html">SpaceOS 6</a></li>
+          <li><a href="spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="ota/index.html">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head">
+      <span class="eyebrow">SpaceOS 8 · 公开测试 · 第二版</span>
+      <h1>下载抢先体验版。</h1>
+      <p class="lede">第二版公开测试镜像，修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可以使用。下载前必须先读使用声明，下载后必须核对校验值。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版 · 39.7 MiB</a>
+        <a class="btn btn-secondary" href="#usage">先读使用声明</a>
+        <a class="btn btn-secondary" href="spaceos8.html">返回介绍</a>
+      </div>
+    </div>
+
+    <section class="section" aria-labelledby="current-title">
+      <div class="wrap">
+        <div class="notice notice-warn" role="note">
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <p class="notice-title">实验版本，不作任何担保</p>
+            <div class="notice-body">
+              <p>按“现状”提供。下载即表示你接受自行承担全部风险，并只在虚拟机、测试机或可抛弃磁盘上使用。</p>
             </div>
+          </div>
         </div>
 
-        <section class="ps-section" id="download-status">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">当前版本</span>
-                    <h2 class="ps-section__title">当前推荐版本</h2>
-                    <p class="ps-section__lead">默认下载第二版。第一版镜像继续保留，仅用于对照和历史存档。</p>
-                </div>
-                <h3 class="ps-section__title" id="current-release">第二版公开测试镜像</h3>
-                <p>可启动的 ISO 镜像，大小 39.7 MiB，精简掉了一部分 Linux 应用。主要更新：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可以使用。</p>
-                <div class="ps-rows">
-                    <div class="ps-row ps-row--info">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">版本与平台</h4>
-                            <span class="ps-row__note">先核对再下载</span>
-                        </div>
-                        <div class="ps-row__body">第二版（Preview 2），内核 Uinxed 1.0.0-alpha.1，架构 x86_64，发布日期 2026-09-25。</div>
-                    </div>
-                    <div class="ps-row ps-row--info">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">文件与校验值</h4>
-                            <span class="ps-row__note">下载后必须核对</span>
-                        </div>
-                        <div class="ps-row__body">文件大小：41,625,600 bytes；SHA-256：<code>95c7b80eb61a970ebb766199d4ca632093d28211bbc44e24ed5df99666723513</code></div>
-                    </div>
-                    <div class="ps-row ps-row--info">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">校验命令</h4>
-                            <span class="ps-row__note">按系统选择其一</span>
-                        </div>
-                        <div class="ps-row__body"><code>sha256sum Uinxed-x64-slim.iso</code><br><code>Get-FileHash .\Uinxed-x64-slim.iso -Algorithm SHA256</code></div>
-                    </div>
-                </div>
-                <div class="download-buttons" style="margin-top: 1.5rem;">
-                    <a class="btn btn-primary btn-lg" href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版</a>
-                    <a class="btn btn-secondary btn-lg" href="#usage">阅读使用声明</a>
-                </div>
-                <h3 class="ps-section__title" id="release-history" style="margin-top: 2.5rem;">版本记录</h3>
-                <div class="ps-rows">
-                    <div class="ps-row ps-row--success">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">第二版 · 2026-09-25</h4>
-                            <span class="ps-row__note">当前推荐</span>
-                        </div>
-                        <div class="ps-row__body">修复 xHCI USB HID，USB 键盘与鼠标可以使用。<a href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版</a></div>
-                    </div>
-                    <div class="ps-row ps-row--neutral">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">第一版 · 2026-09-24</h4>
-                            <span class="ps-row__note">历史保留</span>
-                        </div>
-                        <div class="ps-row__body">首个公开测试镜像，已保留，不再作为默认下载。<a href="spaceos8/Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview1.iso">下载第一版</a><br>文件大小：41,572,352 bytes；SHA-256：<code>ad6ad432a41a6b63581386fd54d6dff65e347d6771d19fc159337221a1422ff2</code></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="ps-section" id="usage">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">使用声明</span>
-                    <h2 class="ps-section__title">下载前必须接受的使用声明</h2>
-                    <p class="ps-section__lead">本页的说明不是功能宣传，而是使用边界。下载即表示你已阅读并接受以下全部条款。</p>
-                </div>
-                <div class="ps-rows">
-                    <div class="ps-row ps-row--warning">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">按现状提供，不作任何担保</h4>
-                            <span class="ps-row__note">核心条款</span>
-                        </div>
-                        <div class="ps-row__body">SpaceOS 8 第二版是实验性测试镜像，按“现状”和“可用状态”提供，不作任何明示或暗示担保，包括但不限于适销性、特定用途适用性、准确性、完整性、安全性、稳定性和不侵权。</div>
-                    </div>
-                    <div class="ps-row ps-row--warning">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">只能用于可抛弃环境</h4>
-                            <span class="ps-row__note">使用范围</span>
-                        </div>
-                        <div class="ps-row__body">只能在虚拟机、测试机或可抛弃磁盘上使用。不得在主力设备、生产环境、重要数据分区或唯一数据副本上运行、安装、写入或测试本镜像。</div>
-                    </div>
-                    <div class="ps-row ps-row--warning">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">数据丢失与设备损坏风险自担</h4>
-                            <span class="ps-row__note">责任限制</span>
-                        </div>
-                        <div class="ps-row__body">使用本镜像可能造成数据丢失、系统无法启动、硬件异常或外设不可用。在法律允许的最大范围内，作者和贡献者不对任何直接或间接损失负责。使用前必须自行完整备份。</div>
-                    </div>
-                    <div class="ps-row ps-row--info">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">兼容性与支持范围</h4>
-                            <span class="ps-row__note">第二版边界</span>
-                        </div>
-                        <div class="ps-row__body">第二版修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可以使用；但真实 GPU 驱动、虚拟化设备、音频、Linux ABI、NTFS 写入等仍属实验范围，不承诺可用、不承诺修复时间。</div>
-                    </div>
-                    <div class="ps-row ps-row--info">
-                        <div class="ps-row__head">
-                            <h4 class="ps-row__title">版本识别与反馈方式</h4>
-                            <span class="ps-row__note">校验优先</span>
-                        </div>
-                        <div class="ps-row__body">必须用本页公布的 SHA-256 确认镜像后再使用。反馈属于自愿行为，请勿提交个人数据；是否采纳、是否回复、是否修复，均不作承诺。</div>
-                    </div>
-                </div>
-                <div class="download-buttons" style="margin-top: 2rem;">
-                    <a class="btn btn-primary btn-lg" href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版</a>
-                    <a class="btn btn-secondary btn-lg" href="requirements.html">查看完整配置要求</a>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-logo">
-                    <div class="logo-icon"><i class="fas fa-cube"></i></div>
-                    <div><h3>GoutouStdio</h3><p>科技创新工作室</p></div>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>产品</h4>
-                        <ul>
-                            <li><a href="pyspos.html">PySpOS</a></li>
-                            <li><a href="spaceos8.html">SpaceOS 8</a></li>
-                            <li><a href="spaceos8-download.html">SpaceOS 8 抢先体验版</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>资源</h4>
-                        <ul>
-                            <li><a href="requirements.html">配置要求</a></li>
-                            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">Uinxed-Kernel</a></li>
-                            <li><a href="https://github.com/ViudiraTech" target="_blank">GitHub</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2022~2026 GoutouStdio. Open all rights.</p>
-                <p>GoutouStdio 不是真实的公司。这是由学生自发组织的项目，不涉及任何商业活动。</p>
-            </div>
+        <div class="section-head">
+          <span class="eyebrow">当前版本</span>
+          <h2 class="section-title" id="current-title">第二版公开测试镜像</h2>
+          <p class="section-lede">默认下载第二版。第一版镜像继续保留，仅用于对照和历史存档。可启动的 ISO 镜像，精简掉了一部分 Linux 应用。</p>
         </div>
-    </footer>
-    <script src="js/main.js"></script>
+        <dl class="facts" aria-label="第二版文件信息">
+          <div class="fact"><dt>版本</dt><dd>第二版（Preview 2）· 2026-09-25</dd></div>
+          <div class="fact"><dt>内核 / 架构</dt><dd class="mono">Uinxed 1.0.0-alpha.1 / x86_64</dd></div>
+          <div class="fact"><dt>文件大小</dt><dd class="mono">41,625,600 bytes（39.7 MiB）</dd></div>
+          <div class="fact"><dt>SHA-256</dt><dd class="mono">95c7b80eb61a970ebb766199d4ca632093d28211bbc44e24ed5df99666723513</dd></div>
+        </dl>
+        <div class="prose">
+          <p>校验命令（二选一）：</p>
+          <pre class="code">sha256sum Uinxed-x64-slim.iso</pre>
+          <pre class="code">Get-FileHash .\Uinxed-x64-slim.iso -Algorithm SHA256</pre>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版</a>
+          <a class="btn btn-secondary" href="#release-history">版本记录</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="release-history">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">版本记录</span>
+          <h2 class="section-title" id="release-history">两个公开版本</h2>
+        </div>
+        <ul class="rows">
+          <li class="row row-ok">
+            <div class="row-title">第二版 · 2026-09-25 <span class="row-note">当前推荐</span></div>
+            <div class="row-body"><p>修复 xHCI USB HID，USB 键盘与鼠标可以使用。<a href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版</a></p></div>
+          </li>
+          <li class="row">
+            <div class="row-title">第一版 · 2026-09-24 <span class="row-note">历史保留</span></div>
+            <div class="row-body"><p>首个公开测试镜像，已保留，不再作为默认下载。<a href="spaceos8/Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview1.iso">下载第一版</a></p><p>文件大小 41,572,352 bytes；SHA-256：<code>ad6ad432a41a6b63581386fd54d6dff65e347d6771d19fc159337221a1422ff2</code></p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="usage">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">使用声明</span>
+          <h2 class="section-title" id="usage">下载前必须接受的条款</h2>
+          <p class="section-lede">这里不是功能宣传，而是使用边界。下载即表示你已阅读并接受以下全部条款。</p>
+        </div>
+        <ul class="rows">
+          <li class="row row-warn">
+            <div class="row-title">按现状提供，不作任何担保 <span class="row-note">核心条款</span></div>
+            <div class="row-body"><p>SpaceOS 8 第二版是实验性测试镜像，按“现状”和“可用状态”提供，不作任何明示或暗示担保，包括但不限于适销性、特定用途适用性、准确性、完整性、安全性、稳定性和不侵权。</p></div>
+          </li>
+          <li class="row row-warn">
+            <div class="row-title">只能用于可抛弃环境 <span class="row-note">使用范围</span></div>
+            <div class="row-body"><p>只能在虚拟机、测试机或可抛弃磁盘上使用。不得在主力设备、生产环境、重要数据分区或唯一数据副本上运行、安装、写入或测试本镜像。</p></div>
+          </li>
+          <li class="row row-warn">
+            <div class="row-title">数据丢失与设备损坏风险自担 <span class="row-note">责任限制</span></div>
+            <div class="row-body"><p>使用本镜像可能造成数据丢失、系统无法启动、硬件异常或外设不可用。在法律允许的最大范围内，作者和贡献者不对任何直接或间接损失负责。使用前必须自行完整备份。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">兼容性与支持范围 <span class="row-note">第二版边界</span></div>
+            <div class="row-body"><p>第二版修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可以使用；但真实 GPU 驱动、虚拟化设备、音频、Linux ABI、NTFS 写入等仍属实验范围，不承诺可用、不承诺修复时间。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">版本识别与反馈方式 <span class="row-note">校验优先</span></div>
+            <div class="row-body"><p>必须用本页公布的 SHA-256 确认镜像后再使用。反馈属于自愿行为，请勿提交个人数据；是否采纳、是否回复、是否修复，均不作承诺。</p></div>
+          </li>
+        </ul>
+        <div class="band">
+          <span class="eyebrow">下载</span>
+          <h2>接受条款的话，镜像在这里</h2>
+          <p class="band-lede">下载后先核对 SHA-256，确认无误再写入测试盘或挂给虚拟机。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="Uinxed-x64-slim.iso" download="Uinxed-x64-slim-preview2.iso">下载第二版 · 39.7 MiB</a>
+            <a class="btn btn-secondary" href="requirements.html">查看完整配置要求</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <a href="spaceos8.html"><span class="pager-dir">← 上一页</span><span class="pager-name">SpaceOS 8</span></a>
+        <a class="pager-next" href="requirements.html"><span class="pager-dir">下一页 →</span><span class="pager-name">配置要求</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+            <li><a href="spaceos8-download.html">抢先体验版下载</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="requirements.html">配置要求</a></li>
+            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">Uinxed-Kernel</a></li>
+            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="index.html#history-title">发展历程</a></li>
+            <li><a href="index.html#contact-title">联系我们</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
 </body>
 </html>

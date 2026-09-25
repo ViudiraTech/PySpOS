@@ -1,380 +1,170 @@
-/* =============================================================================
-   PySpOS 设计 Token —— 全站唯一真源（single source of truth）
-   -----------------------------------------------------------------------------
-   三层结构，缺一不可：
-     1. 原始层  --ps-ref-*    纯粹的色板/尺度值，不表达用途
-     2. 语义层  --ps-bg-* / --ps-fg-* / --ps-border-* / --ps-status-*
-                  按「用在哪」命名，不按「是什么颜色」命名。
-                  换主题时值会变，名字不变——这是关键。
-     3. 组件层  --ps-card-* / --ps-banner-*
-                  卡片与横幅这类复用组件自己的旋钮，默认指回语义层。
-
-   为什么按用途命名而不是按颜色：写 --ps-color-gray-600 的话，换到亮色主题
-   它得改成深灰，名字就骗人了；写 --ps-fg-muted 的话，无论它当前是 #94a3b8
-   还是 #64748b，含义都稳定。
-
-   暗色模式：只在语义层与组件层换值，原始层永不变。品牌色也不变——
-   变的是表面与文字，这样品牌识别度在两个主题里都保留。
-
-   与存量 style.css 的桥接：本文件末尾把旧变量名指回语义 token。
-   style.css 里那 2600 行因此自动吃到统一值，不需要逐条改写——
-   改一个 token，全站跟着变。
-   ========================================================================== */
-
-/* =============================================================================
-   第 1 层：原始 Token（primitive）—— 不表达用途，只表达值
-   ========================================================================== */
+/* ============================================================
+   GoutouStdio 站点 token（唯一事实来源）
+   只放值与语义映射，不放组件样式。组件只准引用 --pg-*。
+   三层：原始值（:root）→ 语义（按用途命名）→ 主题覆写。
+   ============================================================ */
 
 :root {
-    /* 色板：中性 */
-    --ps-ref-white: #ffffff;
-    --ps-ref-black: #000000;
+  /* ---- 原始色板（主题无关） ---- */
+  --pg-ref-indigo-700: #4338ca;
+  --pg-ref-indigo-600: #4f46e5;
+  --pg-ref-indigo-200: #c7d2fe;
 
-    /* 靛蓝（品牌主色） */
-    --ps-ref-indigo-300: #a5b4fc;
-    --ps-ref-indigo-400: #818cf8;
-    --ps-ref-indigo-500: #6366f1;
-    --ps-ref-indigo-600: #4f46e5;
-    --ps-ref-indigo-700: #4338ca;
+  --pg-ref-ink-950: #131316;
+  --pg-ref-ink-900: #1b1b20;
 
-    /* 翠绿（次要 / 成功） */
-    --ps-ref-emerald-400: #34d399;
-    --ps-ref-emerald-500: #10b981;
-    --ps-ref-emerald-600: #059669;
-    --ps-ref-emerald-700: #047857;
+  --pg-ref-paper: #ffffff;
+  --pg-ref-paper-dim: #f4f4f1;
+  --pg-ref-line-light: #e3e3de;
+  --pg-ref-line-dark: #2c2c33;
 
-    /* 紫（强调） */
-    --ps-ref-violet-500: #8b5cf6;
+  /* ---- 字体（展示 / 正文 / 等宽，三族封顶） ---- */
+  --pg-font-display: "Fraunces", georgia, "Noto Serif CJK SC",
+    "Songti SC", "STSong", serif;
+  --pg-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", arial, sans-serif;
+  --pg-font-mono: ui-monospace, sfmono-regular, menlo, consolas,
+    "Liberation Mono", monospace;
 
-    /* 状态色 */
-    --ps-ref-amber-400: #fbbf24;
-    --ps-ref-amber-500: #f59e0b;
-    --ps-ref-amber-600: #d97706;
-    --ps-ref-amber-700: #b45309;
-    --ps-ref-amber-800: #92400e;
-    --ps-ref-red-400: #f87171;
-    --ps-ref-red-500: #ef4444;
-    --ps-ref-red-600: #dc2626;
-    --ps-ref-red-700: #b91c1c;
+  /* ---- 字阶与行高 ---- */
+  --pg-text-xs: 0.75rem;
+  --pg-text-sm: 0.875rem;
+  --pg-text-md: 1rem;
+  --pg-text-lg: 1.125rem;
+  --pg-text-xl: 1.375rem;
+  --pg-text-2xl: 1.75rem;
+  --pg-text-hero: clamp(2.5rem, 5vw + 1rem, 3.5rem);
 
-    /* 暗色主题中性阶（slate） */
-    --ps-ref-slate-700: #334155;
-    --ps-ref-slate-800: #1e293b;
-    --ps-ref-slate-900: #0f172a;
-    --ps-ref-slate-950: #020617;
-    --ps-ref-slate-300: #cbd5e1;
-    --ps-ref-slate-200: #e2e8f0;
-    --ps-ref-slate-100: #f1f5f9;
-    --ps-ref-slate-50: #f8fafc;
-    --ps-ref-slate-500: #64748b;
+  --pg-leading-display: 1.12;
+  --pg-leading-tight: 1.3;
+  --pg-leading-body: 1.75;
 
-    /* 尺度：间距（4 的倍数） */
-    --ps-ref-space-1: 4px;
-    --ps-ref-space-2: 8px;
-    --ps-ref-space-3: 12px;
-    --ps-ref-space-4: 16px;
-    --ps-ref-space-5: 24px;
-    --ps-ref-space-6: 32px;
-    --ps-ref-space-7: 48px;
-    --ps-ref-space-8: 64px;
+  /* ---- 尺度 ---- */
+  --pg-space-1: 4px;
+  --pg-space-2: 8px;
+  --pg-space-3: 12px;
+  --pg-space-4: 16px;
+  --pg-space-5: 24px;
+  --pg-space-6: 32px;
+  --pg-space-7: 48px;
+  --pg-space-8: 72px;
 
-    /* 尺度：圆角 */
-    --ps-ref-radius-sm: 6px;
-    --ps-ref-radius-md: 10px;
-    --ps-ref-radius-lg: 16px;
-    --ps-ref-radius-xl: 24px;
-    --ps-ref-radius-pill: 999px;
+  --pg-radius-sm: 6px;
+  --pg-radius-md: 10px;
+  --pg-radius-lg: 14px;
 
-    /* 尺度：描边宽度 */
-    --ps-ref-border-width-sm: 1px;
-    --ps-ref-border-width-md: 2px;
+  --pg-width: 72rem;
 
-    /* 尺度：毛玻璃模糊半径（卡片/横幅统一用这一个，改一处全站同步） */
-    --ps-ref-blur-card: 14px;
-    --ps-ref-blur-raised: 22px;
+  --pg-duration: 160ms;
+  --pg-ease: cubic-bezier(0.2, 0, 0.2, 1);
 
-    /* 字号与行高：成对定义，同一 ramp 层级配对 */
-    --ps-ref-text-xs: 0.75rem;
-    --ps-ref-text-sm: 0.875rem;
-    --ps-ref-text-md: 1rem;
-    --ps-ref-text-lg: 1.125rem;
-    --ps-ref-text-xl: 1.375rem;
-    --ps-ref-text-2xl: 1.75rem;
-    --ps-ref-text-3xl: 2.25rem;
-
-    --ps-ref-leading-tight: 1.25;
-    --ps-ref-leading-normal: 1.6;
-    --ps-ref-leading-relaxed: 1.8;
-
-    /* 动效 */
-    --ps-ref-duration-fast: 120ms;
-    --ps-ref-duration-base: 220ms;
-    --ps-ref-duration-slow: 420ms;
-    --ps-ref-ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
-    --ps-ref-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-
-    /* 字体 */
-    --ps-ref-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-        'Roboto', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-    --ps-ref-font-mono: 'Fira Code', 'SFMono-Regular', Consolas,
-        'Liberation Mono', monospace;
-    --ps-ref-font-display: 'Orbitron', 'Inter', sans-serif;
+  /* ---- 终端窗：双主题下固定同一套深色 ---- */
+  --pg-term-bg: #0d1117;
+  --pg-term-bar: #010409;
+  --pg-term-line: #21262d;
+  --pg-term-fg: #e6edf3;
+  --pg-term-dim: #8b949e;
+  --pg-term-green: #7ee787;
+  --pg-term-blue: #79c0ff;
+  --pg-term-btn-line: #30363d;
 }
 
-/* =============================================================================
-   第 2 层：语义 Token —— 暗色主题（默认）
-   命名按用途：background-web-page / foreground-text / stroke-divider ...
-   ========================================================================== */
-
+/* ---- 语义层：亮色（默认） ---- */
 :root,
-body:not(.light-theme) {
-    color-scheme: dark;
+body:not(.theme-dark) {
+  color-scheme: light;
 
-    /* 背景 */
-    --ps-bg-page: var(--ps-ref-slate-900);
-    --ps-bg-surface: var(--ps-ref-slate-800);
-    --ps-bg-surface-raised: var(--ps-ref-slate-700);
-    --ps-bg-surface-inset: rgb(2 6 23 / 0.55);
-    --ps-bg-overlay: rgb(2 6 23 / 0.78);
-    --ps-bg-code: rgb(2 6 23 / 0.72);
+  --pg-bg-page: var(--pg-ref-paper);
+  --pg-bg-raised: var(--pg-ref-paper);
+  --pg-bg-sunken: var(--pg-ref-paper-dim);
+  --pg-bg-code: var(--pg-ref-ink-900);
+  --pg-fg-code-dim: #a2a2ad;
 
-    /* 文字 */
-    --ps-fg-default: var(--ps-ref-slate-200);
-    --ps-fg-strong: var(--ps-ref-white);
-    --ps-fg-muted: var(--ps-ref-slate-300);
-    --ps-fg-subtle: #94a3b8;
-    --ps-fg-on-brand: var(--ps-ref-white);
+  --pg-fg-1: #1b1b1f;
+  --pg-fg-2: #4b4b53;
+  --pg-fg-3: #707078;
+  --pg-fg-on-ink: #ffffff;
+  --pg-fg-on-code: #e8e8ea;
 
-    /* 描边与分隔 */
-    --ps-border-subtle: rgb(148 163 184 / 0.18);
-    --ps-border-default: rgb(148 163 184 / 0.32);
-    --ps-border-strong: rgb(148 163 184 / 0.5);
-    --ps-border-brand: rgb(99 102 241 / 0.55);
+  --pg-line-1: var(--pg-ref-line-light);
+  --pg-line-2: #d2d2cc;
 
-    /* 品牌：暗底上必须提亮才够 4.5:1（indigo-500 在 #0f172a 上只有 4.00:1） */
-    --ps-brand: var(--ps-ref-indigo-400);
-    --ps-brand-hover: var(--ps-ref-indigo-300);
-    --ps-brand-active: var(--ps-ref-indigo-500);
-    --ps-brand-subtle-bg: rgb(99 102 241 / 0.16);
+  --pg-ink: var(--pg-ref-ink-950);
+  --pg-ink-hover: #2b2b32;
 
-    /* 状态：前景 / 背景 / 描边，三件套齐全以便横幅与徽标复用 */
-    --ps-status-success-fg: var(--ps-ref-emerald-400);
-    --ps-status-success-bg: rgb(16 185 129 / 0.14);
-    --ps-status-success-border: rgb(16 185 129 / 0.42);
+  --pg-accent: var(--pg-ref-indigo-700);
+  --pg-accent-hover: var(--pg-ref-indigo-600);
+  --pg-accent-soft: #eef0fe;
 
-    --ps-status-warning-fg: var(--ps-ref-amber-400);
-    --ps-status-warning-bg: rgb(245 158 11 / 0.14);
-    --ps-status-warning-border: rgb(245 158 11 / 0.42);
+  --pg-ok-fg: #065f46;
+  --pg-ok-bg: #e9f5ef;
+  --pg-ok-line: #bfe3d2;
+  --pg-warn-fg: #92400e;
+  --pg-warn-bg: #fbf3e4;
+  --pg-warn-line: #ecd3a8;
+  --pg-bad-fg: #991b1b;
+  --pg-bad-bg: #fbecec;
+  --pg-bad-line: #f0c4c4;
+  --pg-mute-fg: #4b4b53;
+  --pg-mute-bg: var(--pg-ref-paper-dim);
+  --pg-mute-line: var(--pg-ref-line-light);
 
-    --ps-status-danger-fg: var(--ps-ref-red-400);
-    --ps-status-danger-bg: rgb(239 68 68 / 0.14);
-    --ps-status-danger-border: rgb(239 68 68 / 0.42);
+  --pg-focus: var(--pg-ref-indigo-600);
+  --pg-shadow: 0 1px 2px rgb(20 20 25 / 0.07), 0 8px 24px rgb(20 20 25 / 0.08);
 
-    --ps-status-info-fg: var(--ps-ref-indigo-300);
-    --ps-status-info-bg: rgb(99 102 241 / 0.14);
-    --ps-status-info-border: rgb(99 102 241 / 0.42);
-
-    --ps-status-neutral-fg: var(--ps-ref-slate-300);
-    --ps-status-neutral-bg: rgb(148 163 184 / 0.12);
-    --ps-status-neutral-border: rgb(148 163 184 / 0.3);
-
-    /* 焦点环：暗色下要比亮色更亮才看得见 */
-    --ps-focus-ring: var(--ps-ref-indigo-300);
-    --ps-focus-ring-width: var(--ps-ref-border-width-md);
-    --ps-focus-ring-offset: 2px;
-
-    /* 阴影：暗色下用更深的黑 + 更低的不透明度 */
-    --ps-shadow-card: 0 1px 2px rgb(2 6 23 / 0.4), 0 8px 24px rgb(2 6 23 / 0.36);
-    --ps-shadow-card-hover: 0 2px 4px rgb(2 6 23 / 0.5), 0 16px 40px rgb(2 6 23 / 0.48);
-    --ps-shadow-raised: 0 12px 48px rgb(2 6 23 / 0.55);
-
-    /* 页面背景图（沿用现有素材）
-       背景图本身不换，只在上面叠一层蒙版 —— 照片类背景明暗不可控，
-       不压一层的话文字对比度随时会塌。蒙版是渐变而非纯色，
-       保留景深，同时把正文对比度拉到 token 层的达标线。 */
-    --ps-bg-image: url('https://picsum.photos/id/1039/1920/1080');
-    --ps-bg-scrim:
-        linear-gradient(180deg,
-            rgb(2 6 23 / 0.82) 0%,
-            rgb(2 6 23 / 0.7) 45%,
-            rgb(2 6 23 / 0.86) 100%);
+  /* 反白带：极性翻转，全站只此一处用反色 */
+  --pg-band-bg: var(--pg-ref-ink-950);
+  --pg-band-fg: #f4f4f2;
+  --pg-band-mute: #a9a9b3;
+  --pg-band-line: #33333c;
 }
 
-/* =============================================================================
-   第 2 层：语义 Token —— 亮色主题
-   只覆盖表面、文字、描边、阴影与状态底色；品牌色刻意保持不变。
-   ========================================================================== */
+/* ---- 语义层：暗色 ---- */
+body.theme-dark {
+  color-scheme: dark;
 
-body.light-theme {
-    color-scheme: light;
+  --pg-bg-page: var(--pg-ref-ink-950);
+  --pg-bg-raised: var(--pg-ref-ink-900);
+  --pg-bg-sunken: #101014;
+  --pg-bg-code: #0c0c0f;
+  --pg-fg-code-dim: #8d8d98;
 
-    /* 亮色主题的蒙版必须**偏亮**，不能沿用暗色那套深色蒙版。
-       2026-09-24 踩过：亮色主题前景是深色（#0f172a），若蒙版仍是深蓝黑，
-       深色文字就压在深色照片上，整段标题几乎读不出来。
-       蒙版方向要跟着主题反转：暗色主题压暗、亮色主题提亮。 */
-    --ps-bg-scrim:
-        linear-gradient(180deg,
-            rgb(248 250 252 / 0.88) 0%,
-            rgb(248 250 252 / 0.78) 45%,
-            rgb(241 245 249 / 0.9) 100%);
+  --pg-fg-1: #ececf0;
+  --pg-fg-2: #b9b9c2;
+  --pg-fg-3: #8d8d98;
+  --pg-fg-on-ink: #131316;
+  --pg-fg-on-code: #e8e8ea;
 
-    --ps-bg-page: var(--ps-ref-slate-50);
-    --ps-bg-surface: var(--ps-ref-white);
-    --ps-bg-surface-raised: var(--ps-ref-white);
-    --ps-bg-surface-inset: rgb(241 245 249 / 0.9);
-    --ps-bg-overlay: rgb(15 23 42 / 0.45);
-    --ps-bg-code: rgb(15 23 42 / 0.92);
+  --pg-line-1: var(--pg-ref-line-dark);
+  --pg-line-2: #3d3d47;
 
-    --ps-fg-default: #1e293b;
-    --ps-fg-strong: var(--ps-ref-slate-900);
-    --ps-fg-muted: #475569;
-    --ps-fg-subtle: var(--ps-ref-slate-500);
-    --ps-fg-on-brand: var(--ps-ref-white);
+  --pg-ink: #f2f2f5;
+  --pg-ink-hover: #ffffff;
 
-    --ps-border-subtle: rgb(15 23 42 / 0.08);
-    --ps-border-default: rgb(15 23 42 / 0.14);
-    --ps-border-strong: rgb(15 23 42 / 0.28);
-    --ps-border-brand: rgb(79 70 229 / 0.4);
+  --pg-accent: var(--pg-ref-indigo-200);
+  --pg-accent-hover: #dde4ff;
+  --pg-accent-soft: #23233a;
 
-    --ps-brand: var(--ps-ref-indigo-600);
-    --ps-brand-hover: var(--ps-ref-indigo-500);
-    --ps-brand-active: var(--ps-ref-indigo-700);
-    --ps-brand-subtle-bg: rgb(99 102 241 / 0.1);
+  --pg-ok-fg: #7dd3ae;
+  --pg-ok-bg: #10251d;
+  --pg-ok-line: #1f4a3a;
+  --pg-warn-fg: #f0c57c;
+  --pg-warn-bg: #2a2113;
+  --pg-warn-line: #57431f;
+  --pg-bad-fg: #f1a3a3;
+  --pg-bad-bg: #2b1517;
+  --pg-bad-line: #5c2629;
+  --pg-mute-fg: #b9b9c2;
+  --pg-mute-bg: #232329;
+  --pg-mute-line: var(--pg-ref-line-dark);
 
-    /* 亮色下状态前景要压深一档，否则在白底浅色 tint 上达不到 4.5:1。
-       这几个值是对比度实测调出来的，不是随手挑的色板中段。 */
-    --ps-status-success-fg: var(--ps-ref-emerald-700);
-    --ps-status-success-bg: rgb(4 120 87 / 0.1);
-    --ps-status-success-border: rgb(4 120 87 / 0.35);
+  --pg-focus: var(--pg-ref-indigo-200);
+  --pg-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
 
-    --ps-status-warning-fg: var(--ps-ref-amber-800);
-    --ps-status-warning-bg: rgb(180 83 9 / 0.1);
-    --ps-status-warning-border: rgb(180 83 9 / 0.35);
-
-    --ps-status-danger-fg: var(--ps-ref-red-700);
-    --ps-status-danger-bg: rgb(185 28 28 / 0.09);
-    --ps-status-danger-border: rgb(185 28 28 / 0.32);
-
-    --ps-status-info-fg: var(--ps-ref-indigo-700);
-    --ps-status-info-bg: rgb(99 102 241 / 0.1);
-    --ps-status-info-border: rgb(99 102 241 / 0.32);
-
-    --ps-status-neutral-fg: #475569;
-    --ps-status-neutral-bg: rgb(15 23 42 / 0.05);
-    --ps-status-neutral-border: rgb(15 23 42 / 0.16);
-
-    --ps-focus-ring: var(--ps-ref-indigo-600);
-
-    --ps-shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.08);
-    --ps-shadow-card-hover: 0 2px 4px rgb(15 23 42 / 0.08), 0 16px 40px rgb(15 23 42 / 0.14);
-    --ps-shadow-raised: 0 12px 48px rgb(15 23 42 / 0.18);
-}
-
-/* =============================================================================
-   第 3 层：组件 Token —— 卡片
-   -----------------------------------------------------------------------------
-   ⚠ 必须声明在 **body** 上，不能放 :root。
-
-   原因是一个很容易踩、且症状极难定位的 CSS 陷阱：
-   自定义属性里的 var() 是在**声明它所在的那个元素**上完成替换的，
-   替换后继承下去的是**算好的字面值**，不是那串 var()。
-
-   所以若写成：
-       :root { --ps-card-title-color: var(--ps-fg-strong); }
-   那么在 :root 上 --ps-fg-strong 解析成暗色值 #ffffff，
-   --ps-card-title-color 就永久等于 #ffffff；之后 body.light-theme
-   再怎么改 --ps-fg-strong 都影响不到它——卡片会永远用暗色文字。
-
-   声明到 body 上则没问题：body 的 --ps-fg-strong 先由级联定出亮色值，
-   同一元素上的 --ps-card-title-color 再据此替换，顺序正确。
-   ========================================================================== */
-
-body {
-    --ps-card-bg: color-mix(in srgb, var(--ps-bg-surface) 88%, transparent);
-    --ps-card-bg-elevated: color-mix(in srgb, var(--ps-bg-surface) 96%, transparent);
-    --ps-card-border: var(--ps-border-subtle);
-    --ps-card-border-hover: var(--ps-border-brand);
-    --ps-card-radius: var(--ps-ref-radius-lg);
-    --ps-card-radius-sm: var(--ps-ref-radius-md);
-    --ps-card-padding: var(--ps-ref-space-5);
-    --ps-card-gap: var(--ps-ref-space-4);
-    --ps-card-shadow: var(--ps-shadow-card);
-    --ps-card-shadow-hover: var(--ps-shadow-card-hover);
-    --ps-card-title-color: var(--ps-fg-strong);
-    --ps-card-body-color: var(--ps-fg-muted);
-    --ps-card-meta-color: var(--ps-fg-subtle);
-    --ps-card-accent: var(--ps-brand);
-    --ps-card-accent-bar-height: 3px;
-    --ps-card-transition: var(--ps-ref-duration-base) var(--ps-ref-ease-standard);
-
-    /* 停更态：只弱化非文字元素（强调条/图标/底色）。
-       刻意不给「整卡 opacity」——那会把正文一起冲淡，对比度跌破 WCAG AA。
-       停用状态由中性强调色 + .ps-badge 文字承载，不依赖透明度。 */
-    --ps-card-disabled-accent: var(--ps-status-neutral-fg);
-    --ps-card-disabled-surface: color-mix(
-        in srgb, var(--ps-bg-surface) 78%, var(--ps-bg-page));
-}
-
-/* =============================================================================
-   与存量 style.css 的桥接
-   -----------------------------------------------------------------------------
-   style.css 用的是 --primary-color / --card-bg 这类旧名。全部指回语义 token，
-   于是那 2600 行无需改动就能吃到统一值——改一个 token，全站跟着变。
-   以后把 style.css 逐步迁到新名，这层桥接就可以删掉。
-   ========================================================================== */
-
-body:not(.light-theme) {
-    --primary-color: var(--ps-brand);
-    --primary-dark: var(--ps-brand-active);
-    --secondary-color: var(--ps-ref-emerald-500);
-    --accent-color: var(--ps-ref-violet-500);
-    --light-color: var(--ps-ref-slate-50);
-    --dark-color: var(--ps-ref-slate-900);
-    --gray-color: var(--ps-fg-subtle);
-    --light-gray: var(--ps-ref-slate-100);
-    --success-color: var(--ps-status-success-fg);
-    --warning-color: var(--ps-status-warning-fg);
-    --danger-color: var(--ps-status-danger-fg);
-    --border-radius: var(--ps-ref-radius-sm);
-    --shadow: var(--ps-shadow-card);
-    --shadow-lg: var(--ps-shadow-raised);
-    --bg-image: var(--ps-bg-image);
-    --bg-color: var(--ps-bg-page);
-    --text-color: var(--ps-fg-default);
-    --header-bg: color-mix(in srgb, var(--ps-bg-surface) 92%, transparent);
-    --header-border: var(--ps-border-brand);
-    --card-bg: var(--ps-card-bg);
-    --nav-hover: var(--ps-brand-subtle-bg);
-    --logo-color: var(--ps-fg-strong);
-    --logo-subtitle: var(--ps-fg-subtle);
-    --text-muted: var(--ps-fg-subtle);
-    --text-light: var(--ps-fg-muted);
-}
-
-body.light-theme {
-    --primary-color: var(--ps-brand);
-    --primary-dark: var(--ps-brand-active);
-    --secondary-color: var(--ps-ref-emerald-600);
-    --accent-color: var(--ps-ref-violet-500);
-    --light-color: var(--ps-ref-slate-50);
-    --dark-color: var(--ps-ref-slate-900);
-    --gray-color: var(--ps-fg-subtle);
-    --light-gray: var(--ps-ref-slate-100);
-    --success-color: var(--ps-status-success-fg);
-    --warning-color: var(--ps-status-warning-fg);
-    --danger-color: var(--ps-status-danger-fg);
-    --border-radius: var(--ps-ref-radius-sm);
-    --shadow: var(--ps-shadow-card);
-    --shadow-lg: var(--ps-shadow-raised);
-    --bg-image: var(--ps-bg-image);
-    --bg-color: var(--ps-bg-page);
-    --text-color: var(--ps-fg-default);
-    --header-bg: color-mix(in srgb, var(--ps-bg-surface) 92%, transparent);
-    --header-border: var(--ps-border-brand);
-    --card-bg: var(--ps-card-bg);
-    --nav-hover: var(--ps-brand-subtle-bg);
-    --logo-color: var(--ps-fg-strong);
-    --logo-subtitle: var(--ps-fg-subtle);
-    --text-muted: var(--ps-fg-subtle);
-    --text-light: var(--ps-fg-muted);
+  /* 暗色下反白带翻向纸色 */
+  --pg-band-bg: #f2f2f5;
+  --pg-band-fg: #131316;
+  --pg-band-mute: #55555e;
+  --pg-band-line: #d5d5d2;
 }

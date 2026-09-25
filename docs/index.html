@@ -1,476 +1,321 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoutouStdio - 科技创新工作室</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- 设计 token 必须在 style.css 之前：它把旧变量桥接到语义 token，
-         存量样式因此自动吃到统一值 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 8（自研内核系统）；SpaceOS 6 / 7 已停止开发，仅作存档。">
+  <title>GoutouStdio — PySpOS 与 SpaceOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/tokens.css">
-    <link rel="stylesheet" href="css/style.css">
-    <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
-    <link rel="stylesheet" href="css/cards.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%234f46e5' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-init.js"></script>
 </head>
-<body class="home-page">
-    <script src="js/theme-init.js"></script>
-    <header>
-        <div class="container">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-cube"></i>
-                </div>
-                <div>
-                    <h1>GoutouStdio</h1>
-                    <span class="subtitle">科技创新工作室</span>
-                </div>
-            </div>
-            <div class="nav-toggle" id="nav-toggle">
-                <i class="fas fa-bars"></i>
-                <i class="fas fa-times"></i>
-            </div>
-            <div class="theme-toggle" id="theme-toggle" title="切换主题">
-                <i class="far fa-moon"></i>
-            </div>
-            <nav class="nav-menu" id="nav-menu">
-                <ul>
-                    <li><a href="#home" class="nav-link active">首页</a></li>
-                    <li><a href="#products" class="nav-link">产品</a></li>
-                    <li><a href="pyspos.html" class="nav-link">PySpOS</a></li>
-                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
-                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
-                    <li><a href="spaceos8.html" class="nav-link">SpaceOS 8</a></li>
-                    <li><a href="requirements.html" class="nav-link">配置要求</a></li>
-                    <li><a href="#history" class="nav-link">发展历程</a></li>
-                    <li><a href="#about" class="nav-link">关于我们</a></li>
-                    <li><a href="#contact" class="nav-link">联系我们</a></li>
-                    <li class="github-link-desktop"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                    <li class="github-link-mobile" style="display: none;"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                </ul>
-                <div class="nav-indicator" id="nav-indicator"></div>
-            </nav>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="index.html" aria-current="page">首页</a></li>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          <li><a href="spaceos6.html">SpaceOS 6</a></li>
+          <li><a href="spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="ota/index.html">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head">
+      <div class="page-head-grid">
+        <div>
+          <span class="eyebrow">独立学生技术工作室 · est. 2022</span>
+          <h1>把操作系统的每一层都写一遍，写到能跑为止。</h1>
+          <p class="lede">2022 年，几个学生因为一个跑在 MP4 方案上的狗头 OS 聚在一起，从此开始一层一层往下写——Python 里的模拟系统、UEFI 上的真内核。现在维护 PySpOS 与 SpaceOS 8，SpaceOS 6 / 7 已经归档，过程全部公开。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="pyspos.html">了解 PySpOS 3.2.0</a>
+            <a class="btn btn-secondary" href="spaceos8.html">查看 SpaceOS 8</a>
+            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">源码</a>
+          </div>
+          <div class="meta-row" aria-label="维护状态">
+            <span>PySpOS v3.2.0 RC1 · 持续维护</span>
+            <span>SpaceOS 6 / 7 · 已停更</span>
+            <span>协议 · MIT / Apache-2.0</span>
+          </div>
         </div>
-    </header>
+        <div class="term">
+          <div class="winbar">
+            <span class="winbar-title">pyspos — python launcher.py</span>
+            <button class="copy-btn" type="button" data-copy="term-index">复制命令</button>
+          </div>
+          <div class="term-body" id="term-index" aria-label="PySpOS 真实会话：开机问候、查看版本、运行 hello 应用">
+            <div class="t-line t-out">欢迎使用 PySpOS 操作系统，you！</div>
+            <div class="t-line">┌──(you@PySPOS)-[09:41:07]-(/PySpOS)</div>
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">osver</span></div>
+            <div class="t-line t-out">PySpOS 版本: 3.2.0, 开发阶段: RC 1</div>
+            <div class="t-line t-out">Python 版本: 3.12</div>
+            <div class="t-line">┌──(you@PySPOS)-[09:41:09]-(/PySpOS)</div>
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">open hello</span></div>
+            <div class="t-line t-out">your username is: you</div>
+            <div class="t-line t-out">Hello from apps/hello.py!(hello count: 0)</div>
+            <div class="t-line t-out">Hello from apps/hello.py!(hello count: 1)</div>
+            <div class="t-line t-out">  …</div>
+            <div class="t-line">┌──(you@PySPOS)-[09:41:11]-(/PySpOS)</div>
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cursor" aria-hidden="true"></span></div>
+          </div>
+        </div>
+        <p class="term-note">格式与 <code>src/kernel.py</code>、<code>src/shell/sys_cmds.py</code>、<code>src/apps/hello.py</code> 的实际输出一致；时间、Python 版本、用户名随环境而变化。</p>
+      </div>
+    </div>
 
-    <main>
-        <section class="hero" id="home">
-            <div class="container">
-                <div class="hero-content">
-                    <h1 class="hero-title">构建未来操作系统</h1>
-                    <p class="hero-subtitle">从零开始写操作系统。MP4 架构、混合内核，都是我们亲手折腾出来的。</p>
-                    <div class="hero-buttons">
-                        <a href="pyspos.html" class="btn btn-primary btn-lg">
-                            <i class="fab fa-python"></i>
-                            PySpOS 3.2.0
-                        </a>
-                        <a href="ota/index.html" class="btn btn-success btn-lg">
-                            <i class="fas fa-download"></i>
-                            下载更新
-                        </a>
-                        <a href="https://github.com/ViudiraTech/PySpOS" target="_blank" class="btn btn-secondary btn-lg">
-                            <i class="fab fa-github"></i>
-                            源码
-                        </a>
-                    </div>
-                    <p class="ps-badge ps-badge--neutral" style="margin-top: 1.25rem;">
-                        <i class="fas fa-circle-info"></i>
-                        SpaceOS 6 / 7 已停止开发，仅作存档
-                    </p>
-                </div>
+    <section class="section" aria-labelledby="products-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">作品</span>
+          <h2 class="section-title" id="products-title">进行中的，和已归档的</h2>
+          <p class="section-lede">四个都跑起来过，两个还在往前走。先看状态，再决定点进哪个。</p>
+        </div>
+        <ol class="index-list">
+          <li>
+            <span class="index-num" aria-hidden="true">01</span>
+            <div>
+              <div class="index-head">
+                <span class="index-kicker">Python · 用户态模拟 · 2022 — 进行中</span>
+                <h3>PySpOS</h3>
+                <span class="badge badge-ok">维护中</span>
+              </div>
+              <p class="index-desc">在用户态把进程调度、内存映射、文件系统和引导流程实现一遍。3.2.0 起应用是真子进程，调度器对标 Linux 6.6+ 的 EEVDF，ELF 由 Unicorn 执行真 x86 指令。</p>
+              <p class="index-meta">v3.2.0 RC1 · master · MIT</p>
+              <p class="index-links"><a href="pyspos.html">详情 →</a><a href="ota/index.html">下载</a></p>
             </div>
-        </section>
-
-        <section class="ps-section" id="products">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">产品</span>
-                    <h2 class="ps-section__title">三条技术路线</h2>
-                    <p class="ps-section__lead">
-                        从纯 Python 模拟，到混合内核，再到自研内核——我们把每一步都留在了代码里。
-                        目前只有 PySpOS 仍在维护。
-                    </p>
-                </div>
-
-                <div class="ps-grid ps-grid--wide">
-
-                    <!-- 活跃产品 -->
-                    <article class="ps-card ps-card--accent-success">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fab fa-python"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">PySpOS</h3>
-                                <span class="ps-card__subtitle">Python 模拟操作系统</span>
-                            </div>
-                            <span class="ps-badge ps-badge--success">持续维护</span>
-                        </div>
-                        <div class="ps-card__body">
-                            <p>
-                                在用户态把进程调度、内存映射、文件系统和引导流程实现一遍。
-                                3.2.0 起 apps 是<b>真子进程</b>，调度器对标 Linux 6.6+ 的 EEVDF，
-                                ELF 由 Unicorn 执行真 x86 指令。
-                            </p>
-                            <ul class="ps-feature-list">
-                                <li>EEVDF 调度器 + PID 0/1/2 引导与孤儿收养</li>
-                                <li>11 步 curses 首次开机向导（OOBE），真实时区与语言</li>
-                                <li>Unicorn ELF 引擎，Windows 也能跑</li>
-                            </ul>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-tag"></i> v3.2.0 RC1</span>
-                            <span class="ps-card__meta-item"><i class="fas fa-code-branch"></i> <code>master</code></span>
-                            <span class="ps-card__meta-item"><i class="fas fa-shield-halved"></i> MIT</span>
-                        </div>
-                        <div class="ps-card__actions">
-                            <a class="ps-btn ps-btn--primary" href="pyspos.html">
-                                <i class="fas fa-arrow-right"></i> 查看详情
-                            </a>
-                            <a class="ps-btn ps-btn--secondary" href="ota/index.html">
-                                <i class="fas fa-download"></i> 下载
-                            </a>
-                            <a class="ps-btn ps-btn--ghost" href="https://github.com/ViudiraTech/PySpOS" target="_blank">
-                                <i class="fab fa-github"></i> 源码
-                            </a>
-                        </div>
-                    </article>
-
-                    <!-- 已停止开发 -->
-                    <article class="ps-card ps-card--accent-neutral ps-card--retired">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-shuttle-van"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">SpaceOS 6</h3>
-                                <span class="ps-card__subtitle">UEFI 混合内核</span>
-                            </div>
-                            <span class="ps-badge ps-badge--neutral">已停止开发</span>
-                        </div>
-                        <div class="ps-card__body">
-                            <p>
-                                基于 Uinxed-Kernel 的正式尝试，我们第一次真正碰了 UEFI。
-                                该路线已停止开发，页面仅作历史存档。
-                            </p>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-circle-xmark"></i> 不再接受反馈与移植</span>
-                        </div>
-                        <div class="ps-card__actions">
-                            <a class="ps-btn ps-btn--secondary" href="spaceos6.html">
-                                <i class="fas fa-book-open"></i> 查看存档
-                            </a>
-                        </div>
-                    </article>
-
-                    <!-- 已停止开发 -->
-                    <article class="ps-card ps-card--accent-neutral ps-card--retired">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-rocket"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">SpaceOS 7</h3>
-                                <span class="ps-card__subtitle">全栈自研内核</span>
-                            </div>
-                            <span class="ps-badge ps-badge--neutral">已停止开发</span>
-                        </div>
-                        <div class="ps-card__body">
-                            <p>
-                                目标是完全自研内核，不再依赖现成内核项目。
-                                该路线已停止开发，页面仅作历史存档。
-                            </p>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item"><i class="fas fa-circle-xmark"></i> 不再接受反馈与移植</span>
-                        </div>
-                        <div class="ps-card__actions">
-                            <a class="ps-btn ps-btn--secondary" href="spaceos7.html">
-                                <i class="fas fa-book-open"></i> 查看存档
-                            </a>
-                        </div>
-                    </article>
-
-                    <!-- 内部开发中：刻意不给链接——独立页面还没建，指向不存在的
-                         路径就是死链。状态用 info 语义，与「已停止」的 neutral 区分开。 -->
-                    <article class="ps-card ps-card--accent-info">
-                        <div class="ps-card__head">
-                            <div class="ps-card__icon"><i class="fas fa-atom"></i></div>
-                            <div class="ps-card__heading">
-                                <h3 class="ps-card__title">SpaceOS 8</h3>
-                                <span class="ps-card__subtitle">下一代内核</span>
-                            </div>
-                            <span class="ps-badge ps-badge--success">已发布</span>
-                        </div>
-                        <div class="ps-card__body">
-                            <p>
-                                下一代内核，基于 <b>Uinxed</b> 继续往前推。
-                                我们给 Uinxed 做过一些贡献，这次的改进幅度比较大——
-                                之前受限于上游支持进度而搁置的能力，
-                                这次一并放了出来。
-                            </p>
-                            <ul class="ps-feature-list">
-                                <li>基于 Uinxed 内核，承接我们此前对上游的贡献</li>
-                                <li>第二版修复 xHCI USB HID，USB 键鼠可以使用</li>
-                                <li>继承 PySpOS 沉淀的调度与进程模型思路</li>
-                            </ul>
-                        </div>
-                        <div class="ps-card__meta">
-                            <span class="ps-card__meta-item">
-                                <i class="fas fa-code-branch"></i> 基于 Uinxed
-                            </span>
-                            <span class="ps-card__meta-item">
-                                <i class="fas fa-code-pull-request"></i> Uinxed 贡献者
-                            </span>
-                            <span class="ps-card__meta-item">
-                                <i class="fas fa-gamepad"></i> 已能运行 DOOM
-                            </span>
-                        </div>
-                        <div class="ps-card__actions">
-                            <a class="ps-btn ps-btn--primary" href="spaceos8.html">
-                                <i class="fas fa-arrow-right"></i> 查看详情
-                            </a>
-                            <a class="ps-btn ps-btn--secondary"
-                               href="https://github.com/ViudiraTech/Uinxed-Kernel" target="_blank">
-                                <i class="fab fa-github"></i> 内核源码
-                            </a>
-                            <a class="ps-btn ps-btn--secondary" href="spaceos8-download.html">
-                                <i class="fas fa-download"></i> 第二版抢先体验
-                            </a>
-                        </div>
-                    </article>
-
-                </div>
+          </li>
+          <li>
+            <span class="index-num" aria-hidden="true">02</span>
+            <div>
+              <div class="index-head">
+                <span class="index-kicker">C · 真实内核 · 2026 — 进行中</span>
+                <h3>SpaceOS 8</h3>
+                <span class="badge badge-info">体验版</span>
+              </div>
+              <p class="index-desc">基于 Uinxed 的自研 UNIX-like 内核，配一整套自研用户态。内核已在实体服务器上跑通，能进桌面、跑 Linux 软件，OpenJDK 与 DOOM 已经能跑。第二版镜像修复了 xHCI USB HID。</p>
+              <p class="index-meta">1.0.0-alpha.1 · x86_64 · Apache-2.0</p>
+              <p class="index-links"><a href="spaceos8.html">详情 →</a><a href="spaceos8-download.html">下载镜像</a></p>
             </div>
-        </section>
-
-        <section class="history" id="history">
-            <div class="container">
-                <h2 class="section-title">发展历程</h2>
-                <div class="timeline">
-                    <div class="timeline-item">
-                        <div class="timeline-year">2022</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">
-                                <i class="fas fa-microchip"></i> "MP4"操作系统：狗头OS
-                            </div>
-                            <p>（以下我指JiTianYu）GoutouStdio 工作室正式创立，我看到网上的狗头os项目，正式开始了"研发"，最后得到5000粉丝</p>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-year">2023</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">
-                                <i class="fas fa-code"></i> 抄袭与合作
-                            </div>
-                            <p>开始抄袭别人的代码，不过我抄的代码的那个创作者不知道咋的就认识了，然后我俩就开始互相学习（</p>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-year">2024</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">
-                                <i class="fas fa-rocket"></i> VimdropOS诞生，成功被激励
-                            </div>
-                            <p>VimdropOS（由 ViudiraTech 打造）正式发布，我们基于它制作了第一版 SpaceOS，开启了新的篇章。</p>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-year">2025</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">
-                                <i class="fas fa-memory"></i> UEFI 研究与 SpaceOS 6
-                            </div>
-                            <p>开始深入研究 UEFI，同时利用 ViudiraTech 的 Uinxed-Kernel 项目，正式开始研发正式的 SpaceOS。</p>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-year">2026</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">
-                                <i class="fas fa-crown"></i> 全栈自研操作系统 SpaceOS 7
-                            </div>
-                            <p>UEFI 终于完全理解，开始完全自研操作系统。目前项目已完成约二分之一，正在稳步推进中。（用户态OK，但是有Heisenbug）</p>
-                        </div>
-                    </div>
-                </div>
+          </li>
+          <li class="index-retired">
+            <span class="index-num" aria-hidden="true">03</span>
+            <div>
+              <div class="index-head">
+                <span class="index-kicker">存档 · 2024</span>
+                <h3>SpaceOS 6</h3>
+                <span class="badge">已停更</span>
+              </div>
+              <p class="index-desc">基于 Uinxed-Kernel 的正式尝试，第一次真正碰 UEFI 的路线。不再维护，不再接受反馈与移植。</p>
+              <p class="index-links"><a href="spaceos6.html">查看存档 →</a></p>
             </div>
-        </section>
-
-        <section class="ps-section" id="about">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">我们怎么做事</span>
-                    <h2 class="ps-section__title">技术取向</h2>
-                    <p class="ps-section__lead">
-                        这些原则贯穿 PySpOS 与 SpaceOS 系列：先做对，再做快。
-                    </p>
-                </div>
-
-                <div class="ps-grid">
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-bolt"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">对标真实内核</h3>
-                            <div class="ps-card__body">
-                                调度器照着 Linux 6.6+ 的 EEVDF 实现，nice 权重表、虚拟运行时间与
-                                虚拟截止期一个不省。我们想让人读源码时看到的和读 Linux 一样。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-shield-alt"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">权限分层</h3>
-                            <div class="ps-card__body">
-                                Ring 0-3 分层权限管理，配合自研文件系统与安全引导；
-                                特权操作一律走 syscall RPC，不让子进程直接碰父进程内存。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-cubes"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">模块化</h3>
-                            <div class="ps-card__body">
-                                清晰的文件与接口边界，命令走元数据注册表，
-                                3.2.0 把 1217 行的 <code>main.py</code> 拆成了 <code>src/shell/*</code>。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-code"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">开源</h3>
-                            <div class="ps-card__body">
-                                核心代码全部在 GitHub 公开，MIT 协议。
-                                包括那些写砸了又重写的部分。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-book"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">自己写底层</h3>
-                            <div class="ps-card__body">
-                                SPF 脚本格式、SPFS 文件系统、curses 布局引擎，
-                                都是为了让「原理看得见」而自己写的。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-users"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">社区驱动</h3>
-                            <div class="ps-card__body">
-                                GoutouStdio 工作室主导，社区开发者共同维护。
-                                这是学生自发组织的项目，不涉及任何商业活动。
-                            </div>
-                        </div>
-                    </article>
-                </div>
+          </li>
+          <li class="index-retired">
+            <span class="index-num" aria-hidden="true">04</span>
+            <div>
+              <div class="index-head">
+                <span class="index-kicker">存档 · 2026</span>
+                <h3>SpaceOS 7</h3>
+                <span class="badge">已停更</span>
+              </div>
+              <p class="index-desc">目标是完全自研内核、不依赖现成内核项目的路线。不再维护，不再接受反馈与移植。</p>
+              <p class="index-links"><a href="spaceos7.html">查看存档 →</a></p>
             </div>
-        </section>
+          </li>
+        </ol>
+      </div>
+    </section>
 
-        <section class="ps-section" id="contact">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">联系</span>
-                    <h2 class="ps-section__title">找到我们</h2>
-                </div>
-
-                <div class="ps-grid">
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-envelope"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">邮箱</h3>
-                            <div class="ps-card__body">
-                                <p><a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a></p>
-                                <p><a href="mailto:goutougroup8888@outlook.com">goutougroup8888@outlook.com</a></p>
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fab fa-github"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">GitHub</h3>
-                            <div class="ps-card__body">
-                                <p>
-                                    <a href="https://github.com/ViudiraTech" target="_blank">github.com/ViudiraTech</a><br>
-                                    <a href="https://github.com/ViudiraTech/PySpOS" target="_blank">ViudiraTech/PySpOS</a>
-                                </p>
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-globe"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">官网</h3>
-                            <div class="ps-card__body">
-                                <p>
-                                    <a href="https://pyspos.us.ci" target="_blank">pyspos.us.ci</a><br>
-                                    <a href="https://viudiratech.rainyland.top" target="_blank">viudiratech.rainyland.top</a>
-                                </p>
-                            </div>
-                        </div>
-                    </article>
-                </div>
+    <section class="section" aria-labelledby="featured-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">代表作</span>
+          <h2 class="section-title" id="featured-title">在真机器上跑起来的桌面</h2>
+          <p class="section-lede">SpaceOS 8 的 X11 兼容层上跑 DOOM，Minecraft 则是团队实测的试金石——下面这张截的是一次普通的启动。</p>
+        </div>
+        <figure class="shot-frame">
+          <div class="frame">
+            <div class="winbar">
+              <span class="winbar-title">weston-terminal — Minecraft · QEMU/KVM Q35</span>
             </div>
-        </section>
+            <img src="spaceos8-minecraft.png"
+                 alt="Uinxed 内核下运行 Minecraft：世界完整渲染，生命值与饥饿条、快捷栏、准星均正常"
+                 loading="lazy" width="1356" height="924">
+          </div>
+          <figcaption>Uinxed 1.0.0-alpha.1 + Alpine Linux v3.24 + Weston。窗口、输入与渲染均正常。<a href="spaceos8.html">去 SpaceOS 8 细看 →</a></figcaption>
+        </figure>
+      </div>
+    </section>
 
-        <footer>
-            <div class="container">
-                <div class="footer-content">
-                    <div class="footer-logo">
-                        <div class="logo-icon">
-                            <i class="fas fa-cube"></i>
-                        </div>
-                        <div>
-                            <h3>GoutouStdio</h3>
-                            <p>科技创新工作室</p>
-                        </div>
-                    </div>
-                    <div class="footer-links">
-                        <div class="footer-column">
-                            <h4>产品</h4>
-                            <ul>
-                                <li><a href="pyspos.html">PySpOS</a></li>
-                                <li><a href="spaceos6.html">SpaceOS 6</a></li>
-                                <li><a href="spaceos7.html">SpaceOS 7</a></li>
-                            </ul>
-                        </div>
-                        <div class="footer-column">
-                            <h4>资源</h4>
-                            <ul>
-                                <li><a href="#history">发展历程</a></li>
-                                <li><a href="#about">关于我们</a></li>
-                                <li><a href="#contact">联系我们</a></li>
-                                <li><a href="https://github.com/ViudiraTech" target="_blank">GitHub</a></li>
-                            </ul>
-                        </div>
-                        <div class="footer-column">
-                            <h4>法律</h4>
-                            <ul>
-                                <li><a href="#">隐私政策</a></li>
-                                <li><a href="#">使用条款</a></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <div class="footer-bottom">
-                    <p>&copy; 2022~2026 GoutouStdio. Open all rights.</p>
-                    <p>GoutouStdio 不是真实的公司。这是由学生自发组织的项目，不涉及任何商业活动。</p>
-                </div>
-            </div>
-        </footer>
-    </main>
+    <section class="section" aria-labelledby="numbers-title">
+      <div class="wrap">
+        <div class="band stat-band">
+          <span class="eyebrow">体量</span>
+          <h2 id="numbers-title">先看几个数字，再决定读多深</h2>
+          <ul>
+            <li><div class="stat-num">113</div><div class="stat-label">PySpOS 自动化测试</div></li>
+            <li><div class="stat-num">29.2 万</div><div class="stat-label">SpaceOS 8 用户态代码行</div></li>
+            <li><div class="stat-num">18.1 万</div><div class="stat-label">Uinxed 内核代码行</div></li>
+            <li><div class="stat-num">0–462</div><div class="stat-label">Linux 6.12 syscall 编号</div></li>
+          </ul>
+        </div>
+      </div>
+    </section>
 
-    <script src="js/main.js"></script>
+    <section class="section" aria-labelledby="how-title">
+      <div class="wrap">
+        <blockquote class="pullquote">
+          先做对，再做快。读源码的人，应该看到和真实内核一样的东西。
+          <cite>— GoutouStdio</cite>
+        </blockquote>
+        <div class="section-head">
+          <span class="eyebrow">做法</span>
+          <h2 class="section-title" id="how-title">六条工作习惯</h2>
+          <p class="section-lede">这几条原则贯穿 PySpOS 与 SpaceOS：读源码的人应该看到和真实内核一样的东西。</p>
+        </div>
+        <ul class="rows rows-2col">
+          <li class="row row-info">
+            <div class="row-title">对标真实内核</div>
+            <div class="row-body"><p>调度器照着 Linux 6.6+ 的 EEVDF 实现：nice 权重表、vruntime 推进、虚拟截止期，一个不省。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">权限分层</div>
+            <div class="row-body"><p>Ring 0–3 分层，特权操作一律走 syscall 转发，不让子进程直接碰父进程内存。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">模块化</div>
+            <div class="row-body"><p>命令走元数据注册表。3.2.0 把 1217 行的 <code>main.py</code> 拆成了 <code>src/shell/*</code>。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">开源</div>
+            <div class="row-body"><p>核心代码全部在 GitHub 公开，MIT 协议，包括那些写砸了又重写的部分。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">自己写底层</div>
+            <div class="row-body"><p>SPF 脚本格式、SPFS 文件系统、curses 布局，都是为了让原理看得见而自己写的。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">社区驱动</div>
+            <div class="row-body"><p>GoutouStdio 工作室主导，社区开发者共同维护。学生自发组织的项目，不涉及商业活动。</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="history-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">发展历程</span>
+          <h2 class="section-title" id="history-title">从 MP4 方案到自研内核</h2>
+        </div>
+        <ol class="timeline">
+          <li>
+            <span class="timeline-year">2022</span>
+            <div><div class="timeline-title">狗头 OS</div><p>工作室创立，从网上狗头 OS 项目起步的“MP4 架构”折腾，攒下第一批关注者。</p></div>
+          </li>
+          <li>
+            <span class="timeline-year">2023</span>
+            <div><div class="timeline-title">互相学习</div><p>开始读别人的代码，过程中和原作者认识，互相学习。</p></div>
+          </li>
+          <li>
+            <span class="timeline-year">2024</span>
+            <div><div class="timeline-title">VimdropOS 与第一版 SpaceOS</div><p>基于 ViudiraTech 的 VimdropOS 做出第一版 SpaceOS，开启新篇章。</p></div>
+          </li>
+          <li>
+            <span class="timeline-year">2025</span>
+            <div><div class="timeline-title">UEFI 与 SpaceOS 6</div><p>深入研究 UEFI，基于 Uinxed-Kernel 研发正式的 SpaceOS。</p></div>
+          </li>
+          <li>
+            <span class="timeline-year">2026</span>
+            <div><div class="timeline-title">SpaceOS 7 自研与 SpaceOS 8</div><p>UEFI 完全搞懂之后走全栈自研；随后把方向收回内核与桌面可用的 SpaceOS 8。</p></div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="contact-title">
+      <div class="wrap">
+        <div class="band">
+          <span class="eyebrow">联系</span>
+          <h2 id="contact-title">有想法，直接写信</h2>
+          <p class="band-lede">合作、报错、投简历式的自我介绍都可以。我们是学生，回得慢，但每封都读。</p>
+          <a class="mail-big" href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>
+          <div class="actions">
+            <a class="btn btn-secondary" href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a>
+            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">PySpOS 源码</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <span></span>
+        <a class="pager-next" href="pyspos.html"><span class="pager-dir">下一页 →</span><span class="pager-name">PySpOS 详情</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">科技创新工作室。学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
+            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="requirements.html">配置要求</a></li>
+            <li><a href="ota/index.html">OTA 下载</a></li>
+            <li><a href="ota/releases.html">版本历史</a></li>
+            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="index.html#history-title">发展历程</a></li>
+            <li><a href="index.html#contact-title">联系我们</a></li>
+            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">Uinxed-Kernel</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
 </body>
 </html>

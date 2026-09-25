@@ -1,205 +1,129 @@
-document.addEventListener('DOMContentLoaded', function() {
-    const themeToggle = document.getElementById('theme-toggle');
-    const body = document.body;
-    const storageKey = 'theme';
+/* 站点交互：主题切换 + 移动端导航。无其他 JS 依赖。 */
+(function () {
+  "use strict";
 
-    const readTheme = () => {
-        try {
-            return localStorage.getItem(storageKey);
-        } catch (error) {
-            return null;
-        }
-    };
+  var KEY = "pg-theme";
+  var ICON_MOON =
+    '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+    '<path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a.5.5 0 0 0-.6-.6A6.5 6.5 0 1 0 14 10a.5.5 0 0 0-.5-.5Z" fill="currentColor"/></svg>';
+  var ICON_SUN =
+    '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+    '<circle cx="8" cy="8" r="3" fill="currentColor"/>' +
+    '<path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M13 3l-1 1M4 12l-1 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 
-    const saveTheme = (theme) => {
-        try {
-            localStorage.setItem(storageKey, theme);
-        } catch (error) {
-            return;
-        }
-    };
-
-    const preferredTheme = () => {
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-            return 'light';
-        }
-        return 'dark';
-    };
-
-    const applyTheme = (theme, persist = false) => {
-        const normalized = theme === 'light' ? 'light' : 'dark';
-        const isLight = normalized === 'light';
-        body.classList.toggle('light-theme', isLight);
-        document.documentElement.dataset.theme = normalized;
-        if (themeToggle) {
-            themeToggle.setAttribute('aria-pressed', String(isLight));
-            themeToggle.setAttribute('aria-label', isLight ? '切换到暗色主题' : '切换到亮色主题');
-            const icon = themeToggle.querySelector('i');
-            if (icon) {
-                icon.className = isLight ? 'far fa-sun' : 'far fa-moon';
-            }
-        }
-        if (persist) {
-            saveTheme(normalized);
-        }
-    };
-
-    const savedTheme = readTheme();
-    applyTheme(savedTheme || preferredTheme(), !savedTheme);
-
-    if (themeToggle) {
-        themeToggle.setAttribute('role', 'button');
-        themeToggle.setAttribute('tabindex', '0');
-        const toggleTheme = () => {
-            const icon = themeToggle.querySelector('i');
-            const nextTheme = body.classList.contains('light-theme') ? 'dark' : 'light';
-            if (icon) {
-                icon.classList.add('icon-transition');
-                window.setTimeout(() => {
-                    applyTheme(nextTheme, true);
-                    icon.classList.remove('icon-transition');
-                }, 150);
-            } else {
-                applyTheme(nextTheme, true);
-            }
-        };
-        themeToggle.addEventListener('click', toggleTheme);
-        themeToggle.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                toggleTheme();
-            }
-        });
+  function readTheme() {
+    try {
+      return localStorage.getItem(KEY);
+    } catch (e) {
+      return null;
     }
+  }
 
-    window.addEventListener('storage', (event) => {
-        if (event.key === storageKey || event.key === null) {
-            applyTheme(event.newValue || preferredTheme());
-        }
+  function saveTheme(theme) {
+    try {
+      localStorage.setItem(KEY, theme);
+    } catch (e) {
+      /* 隐私模式下直接忽略 */
+    }
+  }
+
+  function preferredTheme() {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
+  }
+
+  function paintToggle(btn, theme) {
+    var dark = theme !== "light";
+    btn.innerHTML = dark ? ICON_MOON : ICON_SUN;
+    btn.setAttribute("aria-pressed", String(dark));
+    btn.setAttribute("aria-label", dark ? "切换到亮色主题" : "切换到暗色主题");
+  }
+
+  function applyTheme(theme, persist) {
+    var normalized = theme === "light" ? "light" : "dark";
+    document.body.classList.toggle("theme-dark", normalized === "dark");
+    document.documentElement.dataset.theme = normalized;
+    var btn = document.getElementById("theme-toggle");
+    if (btn) paintToggle(btn, normalized);
+    if (persist) saveTheme(normalized);
+  }
+
+  function initTheme() {
+    applyTheme(readTheme() || preferredTheme(), !readTheme());
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      applyTheme(document.body.classList.contains("theme-dark") ? "light" : "dark", true);
     });
-    
-    // Mobile Navigation Toggle
-    const navToggle = document.getElementById('nav-toggle');
-    const navMenu = document.getElementById('nav-menu');
-    const navLinks = document.querySelectorAll('.nav-link');
-    const navIndicator = document.getElementById('nav-indicator');
-
-    if (navToggle && navMenu) {
-        navToggle.addEventListener('click', function() {
-            const isActive = navMenu.classList.toggle('active');
-            if (isActive) {
-                navToggle.classList.add('active');
-                body.style.overflow = 'hidden';
-            } else {
-                navToggle.classList.remove('active');
-                body.style.overflow = '';
-            }
-        });
-    }
-
-    // Navigation Link Active State
-    if (navLinks.length > 0) {
-        navLinks.forEach(link => {
-            link.addEventListener('click', function() {
-                navLinks.forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
-                
-                // 在移动端点击链接后关闭菜单
-                if (navMenu.classList.contains('active')) {
-                    navMenu.classList.remove('active');
-                    navToggle.classList.remove('active');
-                    body.style.overflow = '';
-                }
-            });
-        });
-    }
-
-    // Navigation Indicator (Desktop only)
-    if (navIndicator && window.innerWidth > 768) {
-        const updateIndicator = (element) => {
-            if (!element) return;
-            const rect = element.getBoundingClientRect();
-            const parentRect = element.parentElement.getBoundingClientRect();
-            navIndicator.style.transform = `translateX(${rect.left - parentRect.left}px)`;
-            navIndicator.style.width = `${rect.width}px`;
-        };
-
-        navLinks.forEach(link => {
-            link.addEventListener('mouseenter', () => updateIndicator(link));
-        });
-
-        // Initialize with active link
-        const activeLink = document.querySelector('.nav-link.active');
-        if (activeLink) {
-            updateIndicator(activeLink);
-        }
-
-        // Update on window resize
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(() => {
-                if (window.innerWidth <= 768) {
-                    navIndicator.style.display = 'none';
-                } else {
-                    navIndicator.style.display = 'block';
-                    updateIndicator(activeLink);
-                }
-            }, 250);
-        });
-    }
-
-    // Smooth Scroll for Buttons
-    const heroButtons = document.querySelectorAll('.btn');
-    heroButtons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            const href = this.getAttribute('href');
-            if (href && href.startsWith('#')) {
-                e.preventDefault();
-                const target = document.querySelector(href);
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }
-        });
+    window.addEventListener("storage", function (e) {
+      if (e.key === KEY || e.key === null) applyTheme(e.newValue || preferredTheme(), false);
     });
+  }
 
-    // Scroll-based Header Shadow
-    let ticking = false;
-    window.addEventListener('scroll', function() {
-        if (!ticking) {
-            window.requestAnimationFrame(() => {
-                const header = document.querySelector('header');
-                if (header) {
-                    const scrollPosition = window.scrollY;
-                    header.style.boxShadow = scrollPosition > 100 
-                        ? '0 4px 30px rgba(0, 0, 0, 0.5)' 
-                        : '0 4px 30px rgba(0, 0, 0, 0.3)';
-                }
-                ticking = false;
-            });
-            ticking = true;
-        }
+  function initCopy() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest(".copy-btn");
+      if (!btn) return;
+      var box = btn.dataset.copy && document.getElementById(btn.dataset.copy);
+      if (!box) return;
+      var cmds = Array.prototype.map.call(
+        box.querySelectorAll(".t-cmd"),
+        function (el) { return el.textContent; }
+      ).join("\n");
+      var done = function (ok) {
+        btn.textContent = ok ? "已复制" : "复制失败";
+        window.setTimeout(function () { btn.textContent = "复制命令"; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmds).then(function () { done(true); }, function () { done(false); });
+      } else {
+        done(false);
+      }
     });
+  }
 
-    // Footer Logo Click to Top
-    const footerLogo = document.querySelector('.footer-logo');
-    if (footerLogo) {
-        footerLogo.addEventListener('click', function() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
+  function initNav() {
+    var toggle = document.getElementById("nav-toggle");
+    var menu = document.getElementById("site-nav");
+    if (!toggle || !menu) return;
+
+    function setOpen(open) {
+      menu.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "✕" : "☰";
     }
 
-    // Close mobile menu when clicking outside
-    document.addEventListener('click', function(e) {
-        if (navMenu && navMenu.classList.contains('active')) {
-            if (!navMenu.contains(e.target) && !navToggle.contains(e.target)) {
-                navMenu.classList.remove('active');
-                navToggle.classList.remove('active');
-                body.style.overflow = '';
-            }
-        }
+    toggle.addEventListener("click", function () {
+      setOpen(!menu.classList.contains("open"));
     });
+    menu.addEventListener("click", function (e) {
+      if (e.target.closest("a")) setOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setOpen(false);
+    });
+    document.addEventListener("click", function (e) {
+      if (
+        menu.classList.contains("open") &&
+        !menu.contains(e.target) &&
+        !toggle.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    });
+  }
 
-    // 毛玻璃效果通过 CSS 的 backdrop-filter 实现，无需额外 JavaScript
-});
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      initTheme();
+      initNav();
+      initCopy();
+    });
+  } else {
+    initTheme();
+    initNav();
+    initCopy();
+  }
+})();

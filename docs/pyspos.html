@@ -1,457 +1,274 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PySpOS - Python 模拟操作系统 | GoutouStdio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- 设计 token 必须在 style.css 之前：它把旧变量桥接到语义 token，
-         存量样式因此自动吃到统一值 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PySpOS：用 Python 写的模拟操作系统。真子进程、EEVDF 调度器、Unicorn ELF 引擎、curses 首次开机向导。当前版本 3.2.0，MIT 开源。">
+  <title>PySpOS — Python 模拟操作系统 | GoutouStdio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/tokens.css">
-    <link rel="stylesheet" href="css/style.css">
-    <!-- 统一组件层必须在 style.css 之后：卡片/徽标/横幅的外观以这里为准 -->
-    <link rel="stylesheet" href="css/cards.css">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233776ab' rx='20'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'>G</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-init.js"></script>
 </head>
-<body class="product-page pyspos-page">
-    <script src="js/theme-init.js"></script>
-    <header>
-        <div class="container">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-cube"></i>
-                </div>
-                <div>
-                    <h1>GoutouStdio</h1>
-                    <span class="subtitle">科技创新工作室</span>
-                </div>
-            </div>
-            <div class="nav-toggle" id="nav-toggle">
-                <i class="fas fa-bars"></i>
-                <i class="fas fa-times"></i>
-            </div>
-            <div class="theme-toggle" id="theme-toggle" title="切换主题">
-                <i class="far fa-moon"></i>
-            </div>
-            <nav class="nav-menu" id="nav-menu">
-                <ul>
-                    <li><a href="index.html" class="nav-link">首页</a></li>
-                    <li><a href="pyspos.html" class="nav-link active">PySpOS</a></li>
-                    <li><a href="spaceos6.html" class="nav-link">SpaceOS 6 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
-                    <li><a href="spaceos7.html" class="nav-link">SpaceOS 7 <span class="ps-badge ps-badge--neutral">停更</span></a></li>
-                    <li><a href="spaceos8.html" class="nav-link">SpaceOS 8</a></li>
-                    <li><a href="requirements.html" class="nav-link">配置要求</a></li>
-                    <li><a href="index.html#history" class="nav-link">发展历程</a></li>
-                    <li><a href="index.html#about" class="nav-link">关于我们</a></li>
-                    <li><a href="index.html#contact" class="nav-link">联系我们</a></li>
-                    <li class="github-link-desktop"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                    <li class="github-link-mobile" style="display: none;"><a href="https://github.com/ViudiraTech" target="_blank" class="nav-link"><i class="fab fa-github"></i> GitHub</a></li>
-                </ul>
-                <div class="nav-indicator" id="nav-indicator"></div>
-            </nav>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="index.html">首页</a></li>
+          <li><a href="pyspos.html" aria-current="page">PySpOS</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          <li><a href="spaceos6.html">SpaceOS 6</a></li>
+          <li><a href="spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="ota/index.html">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head">
+      <div class="page-head-grid">
+        <div>
+          <span class="eyebrow">PySpOS · Python 模拟操作系统</span>
+          <h1>在用户态把一个操作系统实现一遍。</h1>
+          <p class="lede">不是跑在裸机上的系统，而是在 Python 里模拟操作系统行为：能跑命令、管文件、执行 ELF 程序。目标是让人直接读源码、改源码，看清内核的每个决定是怎么做的。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="ota/index.html">下载 3.2.0</a>
+            <a class="btn btn-secondary" href="#features">核心特性</a>
+            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">源码</a>
+          </div>
+          <div class="meta-row" aria-label="版本信息">
+            <span>v3.2.0 RC1</span>
+            <span>Python 3.10+</span>
+            <span>MIT</span>
+          </div>
         </div>
-    </header>
-
-    <main>
-        <section class="product-hero" id="pyspos-hero">
-            <div class="container">
-                <div class="product-hero-content">
-                    <div class="hero-badge">
-                        <i class="fas fa-python"></i>
-                        <span>Python 模拟操作系统</span>
-                    </div>
-                    <h1 class="product-hero-title">PySpOS</h1>
-                    <p class="product-hero-subtitle">用 Python 写的操作系统模拟器。OTA 更新、SPF 可执行文件、A/B 槽位升级都有。</p>
-                    <div class="hero-buttons">
-                        <a href="#intro" class="btn btn-primary btn-lg">
-                            <i class="fas fa-info-circle"></i>
-                            了解 PySpOS
-                        </a>
-                        <a href="#features" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-list"></i>
-                            核心特性
-                        </a>
-                        <a href="ota/index.html" class="btn btn-primary btn-lg">
-                            <i class="fas fa-download"></i>
-                            下载更新
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="product-intro" id="intro">
-            <div class="container">
-                <h2 class="section-title">项目介绍</h2>
-                <div class="intro-content">
-                    <div class="intro-text">
-                        <h3><i class="fas fa-question-circle"></i> 什么是 PySpOS？</h3>
-                        <p>PySpOS 是用 Python 写的操作系统模拟器。不是真的操作系统，是在 Python 环境里模拟操作系统行为。目标是让人能直接读源码、改源码，看清一个内核的每个决定是怎么做出来的。</p>
-                        <p>从 2022 年的「MP4 架构狗头 OS」一路迭代到现在的 v3.2.0：能跑命令、管文件、执行 ELF 程序，apps 是独立进程，调度器对标 Linux。</p>
-
-                        <h3><i class="fas fa-code-branch"></i> 架构设计</h3>
-                        <p>3.2.0 起 1217 行的 <code>main.py</code> 拆成 <code>src/shell/*</code> 包（sys / elf / ota / proc / dispatch），原文件保留兼容 facade。调度在 <code>process.py</code>，进程引擎在 <code>forkexec.py</code>。</p>
-                        <p>A/B 双槽位升级：更新装到非活动槽位，校验通过后切换，失败可回滚到上一个版本。</p>
-
-                        <h3><i class="fas fa-terminal"></i> 命令行界面</h3>
-                        <p>命令走元数据注册表，提供分组 help、<code>help &lt;cmd&gt;</code>、Tab 补全，支持管道与重定向；<code>PATH=apps/</code> 下的外部程序可直接执行。支持 <code>cmd &amp;</code> 后台作业与 <code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>。</p>
-
-                        <h3><i class="fas fa-play-circle"></i> ELF 程序执行</h3>
-                        <p>默认由 Unicorn Engine 执行真实 x86_64 指令，syscall 转发到内置模拟层；缺少 unicorn 时降级到自研的 <code>SpaceCPU 1 Pro</code> 模拟器。支持 <code>--stats</code> / <code>--map</code> / <code>--disasm</code> / <code>--strace</code> 观测。动态链接（INTERP）与 TLS 尚在路线图上。</p>
-                    </div>
-                    <div class="intro-stats">
-                        <div class="stat-item">
-                            <div class="stat-number">v3.0</div>
-                            <div class="stat-label">当前版本</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">2022</div>
-                            <div class="stat-label">项目启动</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">Python</div>
-                            <div class="stat-label">核心语言</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">100%</div>
-                            <div class="stat-label">开源免费</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">A/B</div>
-                            <div class="stat-label">槽位升级</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">OTA</div>
-                            <div class="stat-label">在线更新</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">ELF</div>
-                            <div class="stat-label">程序运行</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number">x86_64</div>
-                            <div class="stat-label">CPU 模拟</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="ps-section" id="features">
-            <div class="container">
-                <div class="ps-section__head">
-                    <span class="ps-section__eyebrow">v3.2.0</span>
-                    <h2 class="ps-section__title">核心特性</h2>
-                    <p class="ps-section__lead">
-                        3.2.0 是一次内核级重构：apps 从协作式模拟变成真子进程，
-                        调度器对标 Linux 6.6+，并首次带上了完整的首次开机向导。
-                    </p>
-                </div>
-
-                <div class="ps-grid">
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-people-arrows"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">真子进程</h3>
-                            <div class="ps-card__body">
-                                apps 不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell
-                                三级引导，孤儿被 init 收养、退出后回收为僵尸再清理。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-sliders-h"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">EEVDF 调度</h3>
-                            <div class="ps-card__body">
-                                Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：
-                                nice 权重表、vruntime 推进、虚拟截止期与信号状态机。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-microchip"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">Unicorn ELF</h3>
-                            <div class="ps-card__body">
-                                默认由 Unicorn Engine 执行真实 x86_64 指令，syscall 转发到模拟层；
-                                没装 unicorn 就降级到自研 <code>SpaceCPU 1 Pro</code>。Windows 也能跑。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-user-check"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">OOBE 首次开机</h3>
-                            <div class="ps-card__body">
-                                11 步 curses 向导，语言与时区真实生效（<code>zoneinfo</code> + <code>TZ</code>），
-                                完成标记写入 <code>etc/.oobe_done</code>，可随时用 <code>oobe</code> 重跑。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-terminal"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">终端可靠性</h3>
-                            <div class="ps-card__body">
-                                TUI 按显示宽度排版（CJK 双宽），剥离完整 ANSI 转义序列。
-                                <code>stty sane</code> 自愈 + 输入归一化 + 重试上限——
-                                按 Enter 疯狂刷 <code>^M</code> 的问题不会再出现。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-layer-group"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">后台作业</h3>
-                            <div class="ps-card__body">
-                                <code>cmd &amp;</code>、<code>jobs</code> / <code>fg</code> / <code>bg</code> /
-                                <code>wait</code>、<code>$!</code>、进程组与会话。前台交互经裸管道中继，
-                                后台作业 stdin 接 <code>/dev/null</code>。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-file-code"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">SpaceConfig v2</h3>
-                            <div class="ps-card__body">
-                                <code>.spc</code> 格式：转义、行尾注释、<code>null</code>、列表类型，
-                                外加 Schema 校验与 <code>spc_get/set/migrate</code> 工具链。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-list-ol"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">命令注册表</h3>
-                            <div class="ps-card__body">
-                                元数据驱动的分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，
-                                以及 <code>PATH=apps/</code> 外部命令解析。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-undo"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">A/B 槽位与回滚</h3>
-                            <div class="ps-card__body">
-                                更新装到非活动槽位，校验通过后切换，失败可回滚。
-                                OTA 云端维护中（<code>src/pyspos.py: OTA_ENABLED</code>），
-                                本地安装与回滚不受影响。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-broom"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">真出厂重置</h3>
-                            <div class="ps-card__body">
-                                <code>recovery.erase</code> 清理 8 类数据，含题库历史、shell 历史
-                                与全树 <code>__pycache__</code>。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fab fa-python"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">SPF 脚本</h3>
-                            <div class="ps-card__body">
-                                SPF（Space Portable Format）自研脚本格式，支持变量、算术、
-                                输入与引入。
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="ps-card ps-card--flat ps-card--compact">
-                        <div class="ps-card__icon"><i class="fas fa-shield-halved"></i></div>
-                        <div class="ps-card__heading">
-                            <h3 class="ps-card__title">MIT 开源</h3>
-                            <div class="ps-card__body">
-                                3.2.0 起采用 MIT 协议。代码在
-                                <a href="https://github.com/ViudiraTech/PySpOS" target="_blank">ViudiraTech/PySpOS</a>，
-                                113 项测试由 GitHub Actions 把关。
-                            </div>
-                        </div>
-                    </article>
-                </div>
-            </div>
-        </section>
-
-        <section class="technical-section" id="technical">
-            <div class="container">
-                <h2 class="section-title">技术细节</h2>
-                <div class="technical-grid">
-                    <div class="tech-card">
-                        <h4><i class="fas fa-microchip"></i> 内核模块</h4>
-                        <p>kernel.py 是 PySpOS 的主内核，负责处理用户输入、执行命令、管理应用运行。内核启动时显示 ASCII 艺术 Logo，初始化各子系统。</p>
-                        <pre><code class="language-python"><span class="code-function">kernel</span>.<span class="code-method">loop</span>()  <span class="code-comment"># 主循环，处理用户输入</span></code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-file-alt"></i> SPF 解析器</h4>
-                        <p>parse_spf.py 实现 SPF 文件格式的解析和执行。支持 putchar() 和 exit() 系统调用，适合编写简单的演示程序。</p>
-                        <pre><code class="language-c"><span class="code-function">putchar</span>(<span class="code-string">"Hello"</span>);  <span class="code-function">exit</span>(<span class="code-number">0</span>);</code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-cloud-download-alt"></i> OTA 更新</h4>
-                        <p>ota.py 处理 OTA 更新逻辑，包括版本检查、下载、验证、安装。支持从 https://pyspos.us.ci/ota/ 获取更新。</p>
-                        <pre><code class="language-python"><span class="code-function">compare_versions</span>(v1, v2)  <span class="code-comment"># 版本比较</span></code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-folder"></i> 文件系统</h4>
-                        <p>fs.py 提供文件系统操作 API，包括 list_dir、create_file、read_file、delete_file 等。基于 Python 的 os 和 shutil 模块实现。</p>
-                        <pre><code class="language-python">fs.<span class="code-method">create_file</span>(<span class="code-string">"test.txt"</span>, <span class="code-string">"content"</span>)</code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-cog"></i> 配置管理</h4>
-                        <p>btcfg.py 管理启动配置，包括 ROOT 权限、启动器锁定状态等。配置文件存储在 etc/bootcfg.json。</p>
-                        <pre><code class="language-python">btcfg.<span class="code-method">load_bootcfg</span>()  <span class="code-comment"># 加载配置</span></code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-rocket"></i> 应用系统</h4>
-                        <p>apps 目录包含系统应用，如 calc.py（计算器）、hello.py（示例程序）等。通过 open 命令运行应用。</p>
-                        <pre><code class="language-bash"><span class="code-command">open</span> hello  <span class="code-comment"># 运行 hello.py</span></code></pre>
-                    </div>
-                    <div class="tech-card">
-                        <h4><i class="fas fa-microchip"></i> ELF 运行器</h4>
-                        <p>elf_runner.py 整合 ELF 加载器、CPU 模拟器和系统调用模拟器，提供完整的 ELF 程序执行功能。支持 x86/x86_64 架构，模拟 Linux 系统调用。</p>
-                        <pre><code class="language-python"><span class="code-function">run_elf</span>(<span class="code-string">"program.elf"</span>)  <span class="code-comment"># 运行 ELF 程序</span></code></pre>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="compatibility-section" id="compatibility">
-            <div class="container">
-                <h2 class="section-title">兼容性要求</h2>
-                <div class="compatibility-grid">
-                    <div class="compat-item">
-                        <i class="fab fa-windows"></i>
-                        <h4>Windows</h4>
-                        <p>Windows 7 及以上版本，推荐使用 Windows 以获得最佳兼容性</p>
-                    </div>
-                    <div class="compat-item">
-                        <i class="fab fa-linux"></i>
-                        <h4>Linux</h4>
-                        <p>主流发行版，如 Ubuntu、Debian、Fedora 等</p>
-                    </div>
-                    <div class="compat-item">
-                        <i class="fab fa-apple"></i>
-                        <h4>macOS</h4>
-                        <p>macOS 10.14 及以上版本</p>
-                    </div>
-                    <div class="compat-item">
-                        <i class="fab fa-python"></i>
-                        <h4>Python</h4>
-                        <p>Python 3.7 或更高版本，需要安装 requests 库</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="contact" id="contact">
-            <div class="container">
-                <h2 class="section-title">开始使用</h2>
-                <div class="contact-info">
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="fas fa-download"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>下载 PySpOS</h4>
-                            <p>从 OTA 页面下载最新版本</p>
-                            <a href="ota/index.html" class="btn btn-primary" style="margin-top: 12px;">
-                                <i class="fas fa-download"></i> 前往下载
-                            </a>
-                        </div>
-                    </div>
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="fas fa-book"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>查看文档</h4>
-                            <p>阅读 GitHub 上的文档</p>
-                            <a href="https://github.com/ViudiraTech/PySpOS" target="_blank" class="btn btn-secondary" style="margin-top: 12px;">
-                                <i class="fab fa-github"></i> GitHub
-                            </a>
-                        </div>
-                    </div>
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="fas fa-globe"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>官方网站</h4>
-                            <p><a href="https://pyspos.us.ci" target="_blank">pyspos.us.ci</a></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-logo">
-                    <div class="logo-icon">
-                        <i class="fas fa-cube"></i>
-                    </div>
-                    <div>
-                        <h3>GoutouStdio</h3>
-                        <p>科技创新工作室</p>
-                    </div>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>产品</h4>
-                        <ul>
-                            <li><a href="pyspos.html">PySpOS</a></li>
-                            <li><a href="spaceos6.html">SpaceOS 6</a></li>
-                            <li><a href="spaceos7.html">SpaceOS 7</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>资源</h4>
-                        <ul>
-                            <li><a href="ota/index.html">OTA 更新</a></li>
-                            <li><a href="ota/releases.html">版本历史</a></li>
-                            <li><a href="https://github.com/ViudiraTech/PySpOS" target="_blank">GitHub</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>关于</h4>
-                        <ul>
-                            <li><a href="index.html#history">发展历程</a></li>
-                            <li><a href="index.html#about">关于我们</a></li>
-                            <li><a href="index.html#contact">联系我们</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2022~2026 GoutouStdio. 保留所有权利。</p>
-                <p>PySpOS 是 GoutouStdio 开发的 Python 模拟操作系统。</p>
-                <p>GoutouStdio 不是真实的公司。这是由学生自发组织的项目，不涉及任何商业活动。</p>
-            </div>
+        <div class="term">
+          <div class="winbar">
+            <span class="winbar-title">pyspos — help 与 ps</span>
+            <button class="copy-btn" type="button" data-copy="term-pyspos">复制命令</button>
+          </div>
+          <div class="term-body" id="term-pyspos" aria-label="PySpOS 真实会话：分组帮助与进程列表">
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">help</span></div>
+            <div class="t-line t-out">PySpOS shell 命令（按分组；help &lt;命令&gt; 查看详情）</div>
+            <div class="t-line t-out"></div>
+            <div class="t-line t-out">[系统]</div>
+            <div class="t-line t-out">  clear            清屏</div>
+            <div class="t-line t-out">  echo             打印字符串（支持 &gt; 与 &gt;&gt;）</div>
+            <div class="t-line t-out">  help             显示帮助（help &lt;命令&gt; 看详情）</div>
+            <div class="t-line t-out">  …（共 9 组：系统 / 文件 / 进程与作业 / 程序与执行 / 配置与空间 / 更新与恢复 / 首次开机 / 内置应用 / 用户包）</div>
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">ps</span></div>
+            <div class="t-line t-out">  PID   PPID  STATE     KIND    CMD</div>
+            <div class="t-line t-out">    0      0  Sleeping  idle    swapper/0</div>
+            <div class="t-line t-out">    1      0  Sleeping  init    init</div>
+            <div class="t-line t-out">    2      1  Running   shell   pyspos-sh</div>
+            <div class="t-line"><span class="t-p">└─$</span><span class="t-cursor" aria-hidden="true"></span></div>
+          </div>
         </div>
-    </footer>
+        <p class="term-note">格式与 <code>src/commands.py</code>、<code>src/shell/proc_cmds.py</code>、<code>src/process.py</code> 的实际输出一致；PID 0/1/2 为保留进程。</p>
+      </div>
+    </div>
 
-    <script src="js/main.js"></script>
+    <section class="section" aria-labelledby="intro-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">介绍</span>
+          <h2 class="section-title" id="intro-title">从 2022 年的折腾到 v3.2.0</h2>
+        </div>
+        <div class="prose">
+          <p>PySpOS 从 2022 年的“MP4 架构狗头 OS”一路迭代到现在：能跑命令、管文件、执行 ELF 程序，应用是独立进程，调度器对标 Linux。3.2.0 是一次内核级重构——1217 行的 <code>main.py</code> 拆成 <code>src/shell/*</code> 包（sys / elf / ota / proc / dispatch），原文件保留兼容 facade；调度在 <code>process.py</code>，进程引擎在 <code>forkexec.py</code>。</p>
+          <p>A/B 双槽位升级：更新装到非活动槽位，校验通过后切换，失败可回滚到上一个版本。命令走元数据注册表，提供分组 help、<code>help &lt;cmd&gt;</code>、Tab 补全，支持管道与重定向；<code>PATH=apps/</code> 下的外部程序可直接执行，<code>cmd &amp;</code> 后台作业配 <code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>。</p>
+          <p>ELF 执行默认由 Unicorn Engine 跑真实 x86_64 指令，syscall 转发到内置模拟层；缺 unicorn 时降级到自研 <code>SpaceCPU 1 Pro</code> 模拟器，Windows 也能跑。动态链接（INTERP）与 TLS 还在路线图上。</p>
+        </div>
+        <dl class="facts" aria-label="关键数据">
+          <div class="fact"><dt>当前版本</dt><dd class="mono">v3.2.0 RC1</dd></div>
+          <div class="fact"><dt>项目启动</dt><dd class="mono">2022</dd></div>
+          <div class="fact"><dt>核心语言</dt><dd>Python（另有部分 C 测试程序）</dd></div>
+          <div class="fact"><dt>升级</dt><dd>A/B 槽位 + 本地回滚</dd></div>
+          <div class="fact"><dt>程序格式</dt><dd>ELF（x86_64）/ SPF 脚本</dd></div>
+          <div class="fact"><dt>测试</dt><dd class="mono">113 项 · GitHub Actions</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">v3.2.0</span>
+          <h2 class="section-title" id="features-title">核心特性</h2>
+          <p class="section-lede">应用从协作式模拟变成真子进程，调度器对标 Linux 6.6+，并第一次带上完整的首次开机向导。</p>
+        </div>
+        <ul class="rows rows-2col">
+          <li class="row row-info">
+            <div class="row-title">真子进程</div>
+            <div class="row-body"><p>应用不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell 三级引导，孤儿被 init 收养，退出后回收为僵尸再清理。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">EEVDF 调度</div>
+            <div class="row-body"><p>Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：nice 权重表、vruntime 推进、虚拟截止期与信号状态机。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">Unicorn ELF 引擎</div>
+            <div class="row-body"><p>默认执行真实 x86_64 指令，syscall 转发到模拟层；没装 unicorn 就降级到自研 <code>SpaceCPU 1 Pro</code>。支持 <code>--stats</code> / <code>--map</code> / <code>--disasm</code> / <code>--strace</code> 观测。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">OOBE 首次开机向导</div>
+            <div class="row-body"><p>11 步 curses 向导，语言与时区真实生效（<code>zoneinfo</code> + <code>TZ</code>），完成标记写入 <code>etc/.oobe_done</code>，可随时用 <code>oobe</code> 重跑。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">终端可靠性</div>
+            <div class="row-body"><p>TUI 按显示宽度排版（CJK 双宽），剥离完整 ANSI 转义序列。<code>stty sane</code> 自愈 + 输入归一化 + 重试上限，按 Enter 刷 <code>^M</code> 的问题不再出现。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">后台作业</div>
+            <div class="row-body"><p><code>cmd &amp;</code>、<code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>、<code>$!</code>、进程组与会话。前台交互经管道中继，后台作业 stdin 接 <code>/dev/null</code>。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">SpaceConfig v2</div>
+            <div class="row-body"><p><code>.spc</code> 格式：转义、行尾注释、<code>null</code>、列表类型，外加 Schema 校验与 <code>spc_get / set / migrate</code> 工具链。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">命令注册表</div>
+            <div class="row-body"><p>元数据驱动的分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，以及 <code>PATH=apps/</code> 外部命令解析。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">A/B 槽位与回滚</div>
+            <div class="row-body"><p>更新装到非活动槽位，校验通过后切换，失败可回滚。OTA 云端维护中，本地安装与回滚不受影响。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">真出厂重置</div>
+            <div class="row-body"><p><code>recovery.erase</code> 清理 8 类数据，含题库历史、shell 历史与全树 <code>__pycache__</code>。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">SPF 脚本</div>
+            <div class="row-body"><p>SPF（Space Portable Format）自研脚本格式，支持变量、算术、输入与引入。</p></div>
+          </li>
+          <li class="row row-info">
+            <div class="row-title">MIT 开源</div>
+            <div class="row-body"><p>3.2.0 起采用 MIT 协议。代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>，113 项测试由 GitHub Actions 把关。</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="tech-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">技术细节</span>
+          <h2 class="section-title" id="tech-title">模块速览</h2>
+          <p class="section-lede">每个模块一句话加一个入口，完整说明在仓库 README 与源码注释里。</p>
+        </div>
+        <ul class="rows rows-2col">
+          <li class="row">
+            <div class="row-title">主循环 <span class="row-note">src/kernel.py</span></div>
+            <div class="row-body"><p>处理用户输入、执行命令、管理应用运行，启动时初始化各子系统。</p><pre class="code">kernel.loop()  <span class="c"># 主循环</span></pre></div>
+          </li>
+          <li class="row">
+            <div class="row-title">SPF 解析 <span class="row-note">src/parse_spf.py</span></div>
+            <div class="row-body"><p>SPF 文件格式的解析与执行，支持 <code>putchar()</code> 与 <code>exit()</code> 系统调用。</p><pre class="code">putchar("Hello");  exit(0);</pre></div>
+          </li>
+          <li class="row">
+            <div class="row-title">OTA 更新 <span class="row-note">src/ota.py</span></div>
+            <div class="row-body"><p>版本检查、下载、验证、安装。云端维护中，默认关闭。</p><pre class="code">compare_versions(v1, v2)  <span class="c"># 版本比较</span></pre></div>
+          </li>
+          <li class="row">
+            <div class="row-title">文件系统 <span class="row-note">src/fs.py</span></div>
+            <div class="row-body"><p>list / create / read / delete 等文件操作 API，基于 os 与 shutil 实现。</p><pre class="code">fs.create_file("test.txt", "content")</pre></div>
+          </li>
+          <li class="row">
+            <div class="row-title">配置管理 <span class="row-note">src/btcfg.py</span></div>
+            <div class="row-body"><p>管理启动配置（ROOT 权限、启动器锁定状态），存放在 etc/bootcfg.json。</p><pre class="code">btcfg.load_bootcfg()  <span class="c"># 加载配置</span></pre></div>
+          </li>
+          <li class="row">
+            <div class="row-title">ELF 运行 <span class="row-note">src/elf_loader/</span></div>
+            <div class="row-body"><p>整合 ELF 加载、CPU 模拟与系统调用模拟。支持 x86 / x86_64，模拟 Linux 系统调用。</p><pre class="code">run program.elf  <span class="c"># 附 --stats / --map / --strace</span></pre></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="compat-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">兼容性</span>
+          <h2 class="section-title" id="compat-title">能跑 Python 就能跑</h2>
+        </div>
+        <dl class="facts" aria-label="兼容性">
+          <div class="fact"><dt>Windows</dt><dd>Windows 7 及以上，兼容性最好</dd></div>
+          <div class="fact"><dt>Linux</dt><dd>主流发行版（Ubuntu / Debian / Fedora 等）</dd></div>
+          <div class="fact"><dt>macOS</dt><dd>macOS 10.14 及以上</dd></div>
+          <div class="fact"><dt>Python</dt><dd class="mono">3.10+（CI 覆盖 3.10 / 3.12 / 3.14）</dd></div>
+        </dl>
+        <div class="actions">
+          <a class="btn btn-primary" href="ota/index.html">前往下载</a>
+          <a class="btn btn-secondary" href="requirements.html">完整配置要求</a>
+        </div>
+      </div>
+    </section>
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <a href="index.html"><span class="pager-dir">← 上一页</span><span class="pager-name">首页</span></a>
+        <a class="pager-next" href="spaceos8.html"><span class="pager-dir">下一页 →</span><span class="pager-name">SpaceOS 8</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">PySpOS 是 GoutouStdio 开发的 Python 模拟操作系统。学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
+            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="ota/index.html">OTA 下载</a></li>
+            <li><a href="ota/releases.html">版本历史</a></li>
+            <li><a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="index.html#history-title">发展历程</a></li>
+            <li><a href="index.html#contact-title">联系我们</a></li>
+            <li><a href="requirements.html">配置要求</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
 </body>
 </html>
