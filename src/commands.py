@@ -26,6 +26,7 @@ GROUPS = [
     ("ota", "更新与恢复"),
     ("setup", "首次开机"),
     ("app", "内置应用"),
+    ("package", "用户包"),
 ]
 
 
@@ -165,6 +166,18 @@ def render_help(topic: Optional[str] = None) -> str:
 # --------------------------------------------------------------------------
 
 def _apps_dir() -> str:
+    try:
+        import main
+        configured = getattr(main, "apps_dir", None)
+        if configured and os.path.isdir(configured):
+            return configured
+        script_dir = getattr(main, "script_dir", None)
+        if script_dir:
+            candidate = os.path.join(script_dir, "apps")
+            if os.path.isdir(candidate):
+                return candidate
+    except Exception:
+        pass
     return os.path.join(os.getcwd(), "apps")
 
 
@@ -198,8 +211,53 @@ def discover_external() -> List[str]:
     return out
 
 
-def register_discovered() -> None:
-    """把 apps/ 里的 app 注册为外部命令（不覆盖已注册的 builtin）。"""
+def _package_root(root_dir: Optional[str] = None) -> str:
+    if root_dir is not None:
+        return os.path.abspath(root_dir)
+    try:
+        import main
+        return main.root_dir
+    except Exception:
+        return os.environ.get("PYSPOS_BOOT_ROOT", os.getcwd())
+
+
+def discover_package_commands(root_dir: Optional[str] = None) -> List[dict]:
+    try:
+        import package_core as package_manager
+        return package_manager.discover_commands(_package_root(root_dir))
+    except Exception:
+        return []
+
+
+def resolve_package_command(name: str, root_dir: Optional[str] = None) -> Optional[dict]:
+    if not name or "/" in name or "\\" in name:
+        return None
+    try:
+        import package_core as package_manager
+        return package_manager.resolve_command(name, _package_root(root_dir))
+    except Exception:
+        return None
+
+
+def reserved_command_names() -> set[str]:
+    names = set()
+    for name, meta in _REGISTRY.items():
+        if meta.fn is not None:
+            names.add(name)
+            names.update(meta.aliases)
+    names.update(discover_external())
+    return names
+
+
+def register_discovered(root_dir: Optional[str] = None) -> None:
+    """把 apps/ 和已安装包的入口注册为外部命令。"""
     for name in discover_external():
         if not has(name):
             register_external(name, summary="内置应用（fork 独立进程执行）")
+    for target in discover_package_commands(root_dir):
+        names = [target.get("name", "")] + list(target.get("aliases", []))
+        if not names[0] or any(has(name) for name in names):
+            continue
+        register_external(names[0], summary=(
+            f"用户包 {target['package_id']}@{target['version']}"),
+            aliases=names[1:])

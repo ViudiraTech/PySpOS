@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "org.pyspos.greeter",
+  "version": "1.0.0",
+  "description": "一个最简单的 PySpOS 用户包",
+  "entrypoints": [
+    {
+      "name": "greeter",
+      "runtime": "python",
+      "path": "payload/greeter.py",
+      "aliases": ["hello-pkg"]
+    }
+  ],
+  "files": {
+    "payload/greeter.py": "cdc3ae414089b93474bae09aad7bcaaaa2e59e7859d3773edce303de527e1a66"
+  }
+}

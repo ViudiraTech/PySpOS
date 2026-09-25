@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "org.pyspos.wordcount",
+  "version": "1.0.0",
+  "description": "统计 PySpOS 用户包参数中的词数",
+  "entrypoints": [
+    {
+      "name": "wordcount",
+      "runtime": "python",
+      "path": "payload/wordcount.py",
+      "aliases": ["wc-pkg"]
+    }
+  ],
+  "files": {
+    "payload/wordcount.py": "41032a8634f0c2125d7d0b5db0ee5d205e8ebfd437dd11d808a6749dd30d375b"
+  }
+}

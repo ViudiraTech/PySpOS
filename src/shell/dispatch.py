@@ -21,7 +21,7 @@ import commands as cmd_registry
 import printk
 import main
 
-from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds
+from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
 
 # 命令历史（history 命令 + readline 持久化）
 _cmd_history = []
@@ -188,9 +188,11 @@ def _fork_external(name: str, args: str, background: bool):
     rel = name + ".py"
     if background:
         log_path = os.path.join("/tmp", f"pyspos_bg_{name}_{os.getpid()}.log")
-    pcb = forkexec.fork_exec(f"app:{rel}", kind="app", background=background,
-                              src_dir=main.script_dir, log_path=(
-                                  log_path if background else None))
+    pcb = forkexec.fork_exec(
+        f"app:{rel}", kind="app", background=background,
+        src_dir=main.script_dir,
+        env={"PYSPOS_APP_ARGS": args, "PYSPOS_COMMAND_ARGS": args},
+        log_path=(log_path if background else None))
     if background:
         import process
         job = process.new_job(f"{name} {args}".strip(), pids=[pcb.pid])
@@ -201,6 +203,14 @@ def _fork_external(name: str, args: str, background: bool):
         import process
         process.reap_children(pcb.ppid)
     return pcb
+
+
+def _fork_package(target: dict, args: str, background: bool):
+    try:
+        return pkg_cmds.run_entrypoint(target, args, background=background)
+    except Exception as exc:
+        printk.error(f"运行包命令 {target.get('name', '')} 失败: {exc}\n")
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -344,5 +354,9 @@ def handle_command(prompt) -> str:
             printk.error(f"运行 {name} 失败: {e}\n")
         return
 
-    # 3) 未知
+    package_target = cmd_registry.resolve_package_command(real, main.root_dir)
+    if package_target is not None:
+        _fork_package(package_target, args, background)
+        return
+
     print(f"{name}: 未找到命令（输入 help 查看可用命令）\n")

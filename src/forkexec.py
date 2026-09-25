@@ -89,6 +89,9 @@ def _run_app_module(target):
     with open(mod_path, "r", encoding="utf-8") as f:
         source = f.read()
     os.environ["PYSPOS_APP_NAME"] = os.path.basename(mod_path)
+    module_dir = os.path.dirname(mod_path)
+    if module_dir and module_dir not in sys.path:
+        sys.path.insert(0, module_dir)
     runs_on_import = '__name__ == "__exec__"' in source
 
     spec = importlib.util.spec_from_file_location("__exec__", mod_path)
@@ -261,6 +264,43 @@ def _sysctl_handler(op, args, kwargs):
     if op == "get_lockstate":
         import secure_boot
         return secure_boot.read_locked(main.root_dir)
+    if op == "pkg_list":
+        import package_core
+        return package_core.list_packages(main.root_dir)
+    if op == "pkg_info":
+        import package_core
+        return package_core.get_package(str(args[0]), main.root_dir)
+    if op == "pkg_verify":
+        import package_core
+        return package_core.verify_package(str(args[0]))
+    if op == "pkg_build":
+        import package_core
+        return package_core.build_package(str(args[0]), str(args[1]))
+    if op == "pkg_install":
+        import package_core
+        import commands
+        from common.audit import audit
+        main.require_root("包安装")
+        if main.boot_locked:
+            raise PermissionError("LOCKED 模式禁止安装或删除用户包")
+        manifest = package_core.install_package(
+            str(args[0]), main.root_dir,
+            reserved_commands=commands.reserved_command_names())
+        commands.register_discovered(main.root_dir)
+        audit(main.root_dir, "pkg", "install",
+              f"id={manifest['id']} version={manifest['version']}")
+        return manifest
+    if op == "pkg_remove":
+        import package_core
+        import commands
+        from common.audit import audit
+        main.require_root("包删除")
+        if main.boot_locked:
+            raise PermissionError("LOCKED 模式禁止安装或删除用户包")
+        manifest = package_core.remove_package(str(args[0]), main.root_dir)
+        commands.register_discovered(main.root_dir)
+        audit(main.root_dir, "pkg", "remove", f"id={manifest['id']}")
+        return manifest
     if op == "get_system_username":
         return kernel.get_system_username()
     if op == "exit_system":

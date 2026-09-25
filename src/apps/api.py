@@ -220,6 +220,77 @@ def get_lockstate() -> bool:
         return True
 
 
+def _load_package_core():
+    import package_core
+    return package_core
+
+
+def _package_call(op, *args):
+    result = _call(op, *args)
+    if result is None:
+        if os.environ.get(SYSCTL_ENV):
+            raise RuntimeError("包管理 RPC 连接不可用")
+        return False, None
+    ok, value = result
+    if not ok:
+        raise RuntimeError(str(value))
+    return True, value
+
+
+def _local_package_call(op, *args):
+    import main
+    core = _load_package_core()
+    root = main.root_dir
+    if op == "pkg_list":
+        return core.list_packages(root)
+    if op == "pkg_info":
+        return core.get_package(args[0], root)
+    if op == "pkg_verify":
+        return core.verify_package(args[0])
+    if op == "pkg_build":
+        return core.build_package(args[0], args[1])
+    main.require_root("包管理安装/删除")
+    if main.boot_locked:
+        raise PermissionError("LOCKED 模式禁止安装或删除用户包")
+    if op == "pkg_install":
+        import commands
+        return core.install_package(args[0], root,
+                                    reserved_commands=commands.reserved_command_names())
+    if op == "pkg_remove":
+        return core.remove_package(args[0], root)
+    raise ValueError(f"未知包管理操作: {op}")
+
+
+def package_list():
+    handled, value = _package_call("pkg_list")
+    return value if handled else _local_package_call("pkg_list")
+
+
+def package_info(package_id):
+    handled, value = _package_call("pkg_info", package_id)
+    return value if handled else _local_package_call("pkg_info", package_id)
+
+
+def package_verify(source):
+    handled, value = _package_call("pkg_verify", source)
+    return value if handled else _local_package_call("pkg_verify", source)
+
+
+def package_build(source, output):
+    handled, value = _package_call("pkg_build", source, output)
+    return value if handled else _local_package_call("pkg_build", source, output)
+
+
+def package_install(source):
+    handled, value = _package_call("pkg_install", source)
+    return value if handled else _local_package_call("pkg_install", source)
+
+
+def package_remove(package_id):
+    handled, value = _package_call("pkg_remove", package_id)
+    return value if handled else _local_package_call("pkg_remove", package_id)
+
+
 # API: 进入内核主循环（子进程中不允许）
 def enter_kernel_loop():
     import kernel
