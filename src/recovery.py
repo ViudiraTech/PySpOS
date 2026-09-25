@@ -1,9 +1,12 @@
 #
 #   recovery.py
-#   简易的模拟恢复模式
+#   PySpOS 恢复模式：外观对标 AOSP 原生 Recovery。
 #
-#   2026/1/23 By GoutouStdio
-#   @2022~2026 GoutouStdio. Open all rights.
+#   流程（和真机一致）：清屏 → "No command." 待机屏 → 按回车进菜单 →
+#   数字选择、高亮项回车执行。出厂重置走二次确认且默认停在 No。
+#   底部的 Run recovery command 是旧命令循环入口，文档里的
+#   recovery > ota_rollback 步骤继续有效。
+#
 
 import main
 import kernel
@@ -100,17 +103,236 @@ def check_and_terminate_main_process():
 def recovery_main(jumpinfo) -> str:
     # 确保在根目录下运行
     ensure_root_directory()
-    
+
     # 检查并终止可能存在的 main 进程
     check_and_terminate_main_process()
-    
-    kernel.screen_clear() # 清屏
+
+    kernel.screen_clear()  # 清屏
     logk.printl("recovery", f"跳入到recovery, jumpinfo={jumpinfo}", main.boot_time)
-    logk.printl("recovery", f"当前目录: {os.getcwd()}", main.boot_time)
-    logk.printl("recovery", f"根目录: {root_dir}", main.boot_time)
+    _no_command_screen()
+    _menu_loop()
+    logk.printl("recovery", "Recovery已退出", main.boot_time)
+    return "reboot"
+
+
+# ---------------------------------------------------------------------------
+# AOSP 式界面：待机屏 + 菜单
+# ---------------------------------------------------------------------------
+
+_DROID = r"""
+      ___
+   .-"   "-.
+  /  .-.  .-\
+  |  | |  | |
+   \  '-'  '-/
+    '.   .'
+      | |
+     _| |_
+    |_____|
+""".rstrip("\n")
+
+
+def _read(prompt=""):
+    """终端输入统一走 ttyutil（归一化 + 重试上限），缺失时回退 input。"""
+    try:
+        import ttyutil
+        return ttyutil.read_line(prompt)
+    except Exception:
+        try:
+            return input(prompt)
+        except EOFError:
+            return ""
+
+
+def _pause(msg="按回车返回菜单..."):
+    _read(msg)
+
+
+def _build_id():
+    """菜单顶部的版本行：槽位/版本尽量取真实值，取不到就标 unknown。"""
+    import pyspos
+    slot = version = "unknown"
+    try:
+        st = ota.get_ota_status()
+        slot = st.get("current_slot", slot)
+        version = st.get("current_version", version)
+    except Exception:
+        pass
+    return ("PySpOS Recovery\n"
+            f"pyspos/{slot}/{slot}\n"
+            f"{pyspos.OS_VERSION}/{pyspos.OS_DEVELOP_STAGE}/"
+            f"{pyspos.OS_VENDOR}")
+
+
+def _no_command_screen():
+    print(_DROID)
+    print("No command.")
+    print()
+    _read("按回车显示菜单...")
+
+
+def _render_menu(items):
+    kernel.screen_clear()
+    print(_build_id())
+    print()
+    print("Type a number and press Enter.")
+    print()
+    for i, (title, _fn) in enumerate(items):
+        print(f"  {i}  {title}")
+    print()
+
+
+def _choose(n):
+    while True:
+        s = _read("recovery> ").strip()
+        if s.isdigit() and 0 <= int(s) < n:
+            return int(s)
+        print(f"无效选择: {s!r}（请输入 0-{n - 1}）\n")
+
+
+def _menu_loop():
+    items = [
+        ("Reboot system now", _act_reboot),
+        ("Apply update from cloud", _act_ota_update),
+        ("Check for updates", _act_ota_check),
+        ("Show slot / OTA status", _act_ota_status),
+        ("Wipe cache partition", _act_ota_clean),
+        ("Wipe data/factory reset", _act_erase),
+        ("Run recovery command", _act_shell),
+        ("Power off", _act_poweroff),
+    ]
+    while True:
+        _render_menu(items)
+        idx = _choose(len(items))
+        action = items[idx][1]()
+        if action in ("reboot", "poweroff"):
+            return
+
+
+# ---------------------------------------------------------------------------
+# 菜单动作（命令循环复用同一批函数）
+# ---------------------------------------------------------------------------
+
+def _act_reboot():
+    print("正在返回系统...\n")
+    return "reboot"
+
+
+def _act_poweroff():
+    print("正在关机...\n")
+    kernel.exit()
+    return "poweroff"
+
+
+def _act_shell():
+    kernel.screen_clear()
+    print("Recovery 命令行（输入 exit 返回菜单）。\n")
+    recovery_shell()
+    return None
+
+
+def _act_erase():
+    if not _require_root("recovery erase"):
+        _pause()
+        return None
+    print("Wipe all user data?")
+    print("This can not be undone!")
+    print()
+    print("  0  No")
+    print("  1  Factory reset")
+    print()
+    # 默认停在 No：空输入与无效输入都视为拒绝（AOSP 同理）。
+    s = _read("recovery> ").strip()
+    if s != "1":
+        print("操作已取消\n")
+        _pause()
+        return None
+    # 出厂重置：与测试共用 common.reset 工厂实现，保证无残留、
+    # 且下次启动必进 OOBE（etc/.oobe_done 随 etc/ 一起被删）。
+    from common.reset import factory_reset
+    report = factory_reset(root_dir)
+    for _name, (ok, msg) in report.items():
+        if ok:
+            printk.ok(msg)
+        else:
+            printk.error(msg)
+    gc.collect()
+    logk.printl("recovery", "出厂重置完成，重启后将进入首次开机向导（OOBE）\n", main.boot_time)
+    _pause()
+    return None
+
+
+def _act_ota_check():
+    logk.printl("recovery", "检查是否有可用的更新...", main.boot_time)
+    update_info = ota.check_cloud_update()
+    if update_info:
+        if update_info.get('disabled'):
+            print(f"OTA 已临时禁用: {update_info.get('reason', '')}")
+            print(f"当前版本: {update_info.get('current_version', 'unknown')}")
+        elif update_info['has_update']:
+            print(f"发现新版本: {update_info['remote_version']}")
+            print(f"当前版本: {update_info['current_version']}")
+            print(f"更新内容: {update_info['release_notes']}")
+        else:
+            print(f"当前已是最新版本: {update_info['current_version']}")
+    else:
+        print("无法获取云端版本信息（网络失败或 OTA 被禁用）。")
+    print()
+    _pause()
+    return None
+
+
+def _act_ota_update():
+    if not _require_root("recovery OTA 更新"):
+        _pause()
+        return None
+    logk.printl("recovery", "下载并安装更新...", main.boot_time)
+    result = ota.download_and_install_update()
+    if result:
+        print("更新已成功安装，重启后生效\n")
+    else:
+        print("更新失败\n")
+    _pause()
+    return None
+
+
+def _act_ota_status():
+    logk.printl("recovery", "查看OTA更新状态...", main.boot_time)
+    status = ota.get_ota_status()
+    if not status.get('ota_enabled', True):
+        print(f"OTA 状态: 已临时禁用 ({status.get('ota_disable_reason', '')})")
+    print(f"当前槽位: {status['current_slot']}")
+    print(f"当前版本: {status['current_version']}")
+    print(f"其他槽位: {status['other_slot']}")
+    print(f"其他版本: {status['other_version']}")
+    print(f"是否有更新: {'是' if status['has_update'] else '否'}")
+    if status['update_version']:
+        print(f"更新版本: {status['update_version']}")
+    print()
+    _pause()
+    return None
+
+
+def _act_ota_clean():
+    # 对标 AOSP 的 Wipe cache partition：相对无害，无需二次确认。
+    if not _require_root("recovery OTA 清理"):
+        _pause()
+        return None
+    logk.printl("recovery", "清理更新包文件...", main.boot_time)
+    ota.clean_update_package()
+    print()
+    _pause()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# 旧命令循环：菜单第 6 项进入，文档里的 recovery > ota_* 步骤走这里
+# ---------------------------------------------------------------------------
+
+def recovery_shell():
     logk.printl("recovery", "欢迎使用PySpOS Recovery，输入help获取可用命令", main.boot_time)
     while 1:
-        prompt = input("recovery> ")    # 我们recovery的提示符
+        prompt = _read("recovery> ")
 
         if prompt == "help":
             print("help     打印本帮助信息")
@@ -121,16 +343,14 @@ def recovery_main(jumpinfo) -> str:
             print("ota_status 查看OTA更新状态")
             print("ota_rollback 回滚到上一个版本")
             print("ota_clean  清理更新包文件")
-            print("exit     退出Recovery\n")
+            print("exit     返回Recovery菜单\n")
         elif prompt == "erase":
             if not _require_root("recovery erase"):
                 continue
-            # 出厂重置：与测试共用 common.reset 工厂实现，保证无残留、
-            # 且下次启动必进 OOBE（etc/.oobe_done 随 etc/ 一起被删）。
-            from common.reset import factory_reset
             if not printk.confirm("erase 将删除全部用户数据并回到首次开机状态，继续？"):
                 print("操作已取消\n")
             else:
+                from common.reset import factory_reset
                 report = factory_reset(root_dir)
                 for _name, (ok, msg) in report.items():
                     if ok:
@@ -199,9 +419,7 @@ def recovery_main(jumpinfo) -> str:
             logk.printl("recovery", "清理更新包文件...", main.boot_time)
             ota.clean_update_package()
             print()
+        elif prompt == "":
+            continue
         else:
             print(f"找不到 {prompt} 命令")
-    
-    logk.printl("recovery", "Recovery已退出", main.boot_time)
-    
-
