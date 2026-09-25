@@ -53,6 +53,13 @@
   --pg-radius-sm: 6px;
   --pg-radius-md: 10px;
   --pg-radius-lg: 14px;
+  --pg-radius-pill: 999px;
+
+  /* 组件固定尺寸（字面值，主题无关） */
+  --pg-header-h: 64px;
+  --pg-icon-btn: 36px;
+  --pg-brand-mark: 30px;
+  --pg-blueprint: 28px;
 
   --pg-width: 72rem;
 
@@ -89,6 +96,9 @@ body:not(.theme-dark) {
 
   --pg-line-1: var(--pg-ref-line-light);
   --pg-line-2: #d2d2cc;
+  /* 控件边界：按钮/窗框/步骤块的描边，3.0+ 对比度。
+     line-1/line-2 只做纯装饰分隔线，不承载信息。 */
+  --pg-line-strong: #85857e;
 
   --pg-ink: var(--pg-ref-ink-950);
   --pg-ink-hover: #2b2b32;
@@ -138,6 +148,7 @@ body.theme-dark {
 
   --pg-line-1: var(--pg-ref-line-dark);
   --pg-line-2: #3d3d47;
+  --pg-line-strong: #6e6e78;
 
   --pg-ink: #f2f2f5;
   --pg-ink-hover: #ffffff;
