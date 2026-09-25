@@ -75,6 +75,7 @@ def _should_include(relative_path):
     if relative_path in EXCLUDE_FILES:
         return False
     if relative_path in {"src/current_slot", "src/.hotreset",
+                         "current_slot", ".hotreset",
                          "src/boot_manifest.json", "src/boot_manifest.sig",
                          "boot_manifest.json", "boot_manifest.sig"}:
         return False
@@ -113,7 +114,21 @@ def create_zip_file(version):
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for path, relative in _iter_payload_files():
             zipf.write(path, relative)
+    # 构建时自检：启动期状态文件一旦漏网，安装侧会静默跳过；
+    # 但那属于打包事故，必须在这里直接失败，不让坏包出厂。
+    with zipfile.ZipFile(zip_path, 'r') as check:
+        bad = [i.filename for i in check.infolist()
+               if not i.is_dir() and _is_boot_state_member(i.filename)]
+    if bad:
+        os.remove(zip_path)
+        raise ValueError(f"更新包混入启动期状态文件，已作废: {bad}")
     return zip_path, zip_filename
+
+
+def _is_boot_state_member(filename):
+    """与 secure_boot._is_boot_state_member 同规则（构建侧不 import 整包）。"""
+    stripped = filename[4:] if filename.startswith("src/") else filename
+    return stripped in {"current_slot", ".hotreset"}
 
 # 计算文件的SHA256哈希值
 def calculate_sha256(file_path):

@@ -89,6 +89,34 @@ def test_wrong_key_and_rollback_are_rejected(tmp_path):
                                  legacy_slot="slot_a")
 
 
+def test_boot_state_members_are_skipped_not_rejected(tmp_path):
+    """3.2.0 真实事故：包里混入构建机的 src/current_slot。
+
+    启动期状态描述的是构建那台机器，不该落地；验签跳过它们，
+    更新照常进行，而不是让整个包失败。
+    """
+    package = tmp_path / "update.zip"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("src/main.py", "print('package')\n")
+        archive.writestr("src/current_slot", "slot_a")
+        archive.writestr("current_slot", "slot_a")
+        archive.writestr(".hotreset", "x")
+    # 未签名 + 未锁定：跳过状态文件后验证通过
+    assert secure_boot.verify_package(str(package), locked=False) is None
+
+    # 签名路径同样跳过：manifest 清单里不应出现状态文件
+    private, keys = _key_pair()
+    signed = tmp_path / "signed.zip"
+    with zipfile.ZipFile(signed, "w") as archive:
+        archive.writestr("src/main.py", "print('package')\n")
+        archive.writestr("src/current_slot", "slot_a")
+    secure_boot.sign_package(str(signed), "1.0.0", 4, private, trusted_keys=keys)
+    manifest = secure_boot.verify_package(str(signed), keys=keys, locked=True)
+    assert manifest["security_version"] == 4
+    assert "current_slot" not in manifest["files"]
+    assert "src/current_slot" not in manifest["files"]
+
+
 def test_signed_package_and_path_traversal(tmp_path):
     private, keys = _key_pair()
     package = tmp_path / "update.zip"

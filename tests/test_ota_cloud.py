@@ -82,3 +82,30 @@ def test_install_to_slot_rejects_bad_slot(tmp_path):
 
 def test_install_to_slot_missing_package():
     assert ota.install_package_to_slot("/nonexistent/u.zip", "slot_a") is False
+
+
+def test_safe_extract_skips_boot_state(tmp_path):
+    """解包不落地启动期状态文件，正常文件照常解出。"""
+    import zipfile
+    pkg = tmp_path / "u.zip"
+    with zipfile.ZipFile(pkg, "w") as archive:
+        archive.writestr("src/main.py", "x\n")
+        archive.writestr("src/current_slot", "slot_a\n")
+        archive.writestr(".hotreset", "x\n")
+    target = tmp_path / "out"
+    target.mkdir()
+    assert ota._safe_extract_package(str(pkg), str(target)) is True
+    assert (target / "main.py").is_file()
+    assert not (target / "current_slot").exists()
+    assert not (target / ".hotreset").exists()
+    assert not (target / "src" / "current_slot").exists()
+
+
+def test_builder_excludes_boot_state():
+    """打包侧：启动期状态文件进不了包（否则构建直接失败）。"""
+    import build_update
+    for bad in ("src/current_slot", "src/.hotreset",
+                "current_slot", ".hotreset"):
+        assert build_update._should_include(bad) is False
+        assert build_update._is_boot_state_member(bad) is True
+    assert build_update._should_include("src/main.py") is True

@@ -860,6 +860,9 @@ def _safe_extract_package(package_path, target_path):
         for info in infos:
             if info.is_dir():
                 continue
+            if secure_boot._is_boot_state_member(info.filename):
+                # 构建机启动状态：验签已跳过，这里也不落地
+                continue
             if info.filename in (secure_boot.MANIFEST_NAME, secure_boot.SIGNATURE_NAME,
                                  "src/" + secure_boot.MANIFEST_NAME,
                                  "src/" + secure_boot.SIGNATURE_NAME):

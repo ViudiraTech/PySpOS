@@ -385,6 +385,22 @@ def verify_tree(tree_path, manifest, keys=None, floor=0):
     return manifest
 
 
+# 启动期状态文件（构建机/运行期的 current_slot、.hotreset）。
+# 打进更新包属于打包事故：它们描述的是**构建那台机器**的状态，
+# 落到目标槽位会污染启动判断。处理方式是验签与解包时直接跳过
+# （不报错、不落地），而不是让整个更新失败；防线仍在：
+# 签名、manifest 清单比对、防回滚 floor 一行不少。
+_BOOT_STATE_MEMBERS = frozenset({"current_slot", ".hotreset"})
+
+
+def _is_boot_state_member(name):
+    """判断是否为启动期状态文件（允许 src/ 前缀）。"""
+    if not isinstance(name, str):
+        return False
+    stripped = name[4:] if name.startswith("src/") else name
+    return stripped in _BOOT_STATE_MEMBERS
+
+
 def _normalized_member(name):
     if not isinstance(name, str) or not name or "\\" in name or "\x00" in name:
         raise BootVerificationError(f"更新包成员路径无效: {name!r}")
@@ -434,7 +450,7 @@ def verify_package(package_path, keys=None, floor=0, locked=True):
         manifest_path = _package_manifest_path(names)
         if manifest_path is None:
             for info in infos:
-                if not info.is_dir():
+                if not info.is_dir() and not _is_boot_state_member(info.filename):
                     _normalized_member(info.filename)
             if locked:
                 raise BootVerificationError("更新包缺少签名 manifest")
@@ -451,6 +467,8 @@ def verify_package(package_path, keys=None, floor=0, locked=True):
                 continue
             if info.filename in (MANIFEST_NAME, SIGNATURE_NAME,
                                  "src/" + MANIFEST_NAME, "src/" + SIGNATURE_NAME):
+                continue
+            if _is_boot_state_member(info.filename):
                 continue
             rel = _normalized_member(info.filename)
             if rel is None:
@@ -488,6 +506,8 @@ def _zip_member_map(archive):
     has_src = any(info.filename.startswith("src/") for info in archive.infolist())
     for info in archive.infolist():
         if info.is_dir():
+            continue
+        if _is_boot_state_member(info.filename):
             continue
         rel = _normalized_member(info.filename)
         if rel is None or rel in (MANIFEST_NAME, SIGNATURE_NAME):
