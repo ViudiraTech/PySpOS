@@ -38,6 +38,25 @@ def _verify_boot_context():
         raise RuntimeError("热重启期间活动槽位发生变化")
 
 
+def _boot_kernel():
+    """热重启子进程入口：清掉模块缓存后在干净解释器里进 kernel.loop()。
+
+    以前这段逻辑是内联在 `python3 -c` 的 argv 里，结果子进程在
+    /proc/<pid>/cmdline 里就是一整坨源码：ps、top、fastfetch 这类
+    工具读父进程命令行时会直接把这坨源码当成 shell 名打出来
+    （fastfetch 的 Shell 栏）。改走 `hotreset_env.py --kernel`
+    这个短 argv 后，命令行是可读的。
+    """
+    keep = ('sys', 'builtins', '__builtin__', 'importlib', 'types')
+    for name in list(sys.modules.keys()):
+        if name.startswith('_') or name.startswith('os') or name in keep:
+            continue
+        del sys.modules[name]
+    sys._launcher_detected = True
+    import kernel
+    kernel.loop()
+
+
 def run():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     restart_count = 0
@@ -46,16 +65,8 @@ def run():
         _verify_boot_context()
         restart_count += 1
         clear_flag()
-        
-        cmd = [sys.executable, '-u', '-c', '''
-import sys
-sys._launcher_detected = True
-for name in list(sys.modules.keys()):
-    if not name.startswith('_') and not name.startswith('os') and name not in ('sys', 'builtins', '__builtin__', 'importlib', 'types'):
-        del sys.modules[name]
-import kernel
-kernel.loop()
-''']
+
+        cmd = [sys.executable, '-u', os.path.abspath(__file__), '--kernel']
         
         try:
             child_env = os.environ.copy()
@@ -98,4 +109,7 @@ def trigger():
     sys.exit(42)
 
 if __name__ == "__main__":
-    run()
+    if len(sys.argv) > 1 and sys.argv[1] == '--kernel':
+        _boot_kernel()
+    else:
+        run()
