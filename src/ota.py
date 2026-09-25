@@ -1137,50 +1137,19 @@ def ota_init() -> bool:
     else:
         logk.printl("ota", "版本文件 version.txt 已存在", boot_time)
     
-    # 复制src目录文件到当前槽位（惰性同步：槽位已就绪则跳过，避免每次启动全量复制）
+    # 槽位完整性只做检查、不做合并复制：开机自动把 src 合并进槽位，
+    # 会把新 main.py 盖到旧槽位上、而新依赖又没跟上，造出无法启动的
+    # 半成品槽位（3.2.0 的 process.py 等就是这么漏掉的）。槽位是不可
+    # 变的安装产物，只允许经由更新/回滚/force_sync 流程写入。
     current_slot = get_current_slot()
     current_slot_path = os.path.join(root_dir, current_slot)
-
-    # 确保槽位目录存在
-    if not os.path.exists(current_slot_path):
-        try:
-            os.makedirs(current_slot_path, exist_ok=True)
-            logk.printl("ota", f"创建槽位目录 {current_slot_path} 成功", boot_time)
-        except Exception as e:
-            logk.printl("ota", f"创建槽位目录失败: {str(e)}", boot_time)
-            return False
-
-    if _slot_is_ready(current_slot_path) and os.environ.get("PYSPOS_FORCE_SLOT_SYNC") != "1":
-        logk.printl("ota", f"槽位 {current_slot} 已就绪，跳过全量复制（如需强制同步请置 PYSPOS_FORCE_SLOT_SYNC=1）", boot_time)
-        logk.printl("ota", "OTA槽位结构初始化完成", boot_time)
-        return True
-
-    logk.printl("ota", f"正在将src目录文件复制到 {current_slot} 槽位...", boot_time)
-    
-    try:
-        # 获取src目录所有文件和文件夹（排除不必要的文件）
-        src_items = [item for item in os.listdir(script_dir) if item not in ['__pycache__', '.git', 'slot_a', 'slot_b']]
-        
-        for item in src_items:
-            src_path = os.path.join(script_dir, item)
-            dest_path = os.path.join(current_slot_path, item)
-            
-            # 确保目标父目录存在
-            dest_parent = os.path.dirname(dest_path)
-            if not os.path.exists(dest_parent):
-                os.makedirs(dest_parent, exist_ok=True)
-            
-            if os.path.isfile(src_path):
-                shutil.copy2(src_path, dest_path)
-            elif os.path.isdir(src_path):
-                if os.path.exists(dest_path):
-                    shutil.rmtree(dest_path)
-                shutil.copytree(src_path, dest_path)
-        
-        logk.printl("ota", f"src目录文件复制到 {current_slot} 槽位成功", boot_time)
-    except Exception as e:
-        logk.printl("ota", f"复制文件到槽位失败: {str(e)}", boot_time)
-        return False
-    
+    if not _slot_is_ready(current_slot_path):
+        logk.printl("ota", f"槽位 {current_slot} 不完整，本次启动不会自动复制",
+                    boot_time)
+        logk.printl("ota", "UNLOCKED 模式可用 force_sync.py --slot "
+                    f"{current_slot} 手动同步，或进 Recovery 重装该槽位",
+                    boot_time)
+    else:
+        logk.printl("ota", f"槽位 {current_slot} 已就绪", boot_time)
     logk.printl("ota", "OTA槽位结构初始化完成", boot_time)
     return True
