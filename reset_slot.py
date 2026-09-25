@@ -1,3 +1,14 @@
+'''
+ *
+ *      reset_slot.py
+ *      Standalone slot wipe tool.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import os
 import shutil
@@ -6,6 +17,7 @@ import sys
 import secure_boot
 
 
+# Resolve a slot name to its directory, rejecting anything else.
 def _safe_slot_path(root_dir, slot):
     if slot not in secure_boot.SLOTS:
         raise ValueError("槽位必须是 slot_a 或 slot_b")
@@ -16,6 +28,7 @@ def _safe_slot_path(root_dir, slot):
     return path
 
 
+# Erase the contents of the named slots.
 def wipe_slots(root_dir, slots, assume_yes=False):
     root_dir = os.path.abspath(root_dir)
     if secure_boot.read_locked(root_dir):
@@ -38,6 +51,7 @@ def wipe_slots(root_dir, slots, assume_yes=False):
     return True
 
 
+# Parse arguments and wipe the requested slots.
 def main(argv=None):
     parser = argparse.ArgumentParser(description="清空 PySpOS 开发槽位")
     parser.add_argument("--root-dir", default=os.path.dirname(os.path.abspath(__file__)))

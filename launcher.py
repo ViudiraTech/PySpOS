@@ -1,18 +1,32 @@
-#!/usr/bin/env python3
+#!/usr/bin/env/python3
+'''
+ *
+ *      launcher.py
+ *      Secure boot-slot verification and system startup
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import os
 import sys
 import time
 
 
+# Return the current wall-clock time for the boot timestamp.
 def get_boot_time():
     return time.time()
 
 
+# Write a launcher status message and flush it immediately.
 def _log(message):
     print(f"[launcher] {message}", flush=True)
 
 
+# Read a validated choice, returning the default after interruption or exhaustion.
 def _read_choice(prompt, valid=("y", "n"), default="n", max_retries=5):
     for _ in range(max_retries):
         try:
@@ -24,6 +38,7 @@ def _read_choice(prompt, valid=("y", "n"), default="n", max_retries=5):
     return default
 
 
+# Read and validate a legacy slot marker, or return None when unavailable.
 def _read_legacy_slot(root_dir):
     try:
         with open(os.path.join(root_dir, "current_slot"), "r", encoding="utf-8") as stream:
@@ -33,6 +48,7 @@ def _read_legacy_slot(root_dir):
     return value if value in ("slot_a", "slot_b") else None
 
 
+# Load the selected system's terminal helper and apply its TTY setup.
 def _load_terminal_helper(system_path):
     sys.path.insert(0, system_path)
     try:
@@ -43,6 +59,7 @@ def _load_terminal_helper(system_path):
         return None
 
 
+# Verify the requested boot slot, prepare the runtime, and start it.
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="PySpOS 启动器：验签选槽并启动（--slot 强制指定槽位）")
@@ -74,8 +91,7 @@ def main(argv=None):
         return 1
 
     if args.slot is not None and (selection is None or selection["slot"] != args.slot):
-        # 用户明确点了槽位：验签不过就拒绝，不静默换槽（静默换槽会让人
-        # 以为进的是 A 版，实际跑的是 B 版——A/B 槽最忌讳这个）。
+        # Honor an explicitly selected slot; never silently switch to another slot.
         _log(f"启动被拒绝: 槽位 {args.slot} 未通过验证")
         return 1
 
@@ -118,15 +134,13 @@ def main(argv=None):
     sys._launcher_detected = True
 
     if args.slot is not None:
-        # 显式点槽：槽位钉死，但仍走监督循环，这样 hotreset 在
-        # --slot 下也真的能重启（钉死只锁槽位，不取消监督）。
+        # Pin the requested slot while retaining supervision for hot resets.
         _log(f"已指定槽位 {args.slot}，钉住该槽位启动...")
     try:
         _log("启动热重启环境...")
         import hotreset_env
     except ModuleNotFoundError:
-        # 3.1.0 及更早的槽位没有热重启环境：直接调槽位自己的 main.main()
-        # （结尾进 kernel.loop()），与热重启前的启动路径一致。
+        # Older slots lack hotreset_env, so call their main.main() directly.
         _log("槽位版本较旧（无热重启环境），直接启动...")
         try:
             import main as slot_main

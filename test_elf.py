@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""ELF 测试脚本"""
+'''
+ *
+ *      test_elf.py
+ *      Command-line smoke tests for the ELF loader and emulator.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import sys
 import os
@@ -9,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from elf_loader import ELFRunner
 
 
+# Load and run one ELF image, returning whether the smoke test succeeds.
 def test_elf(elf_path: str, max_instructions: int = 100000) -> bool:
     print(f"\n=== 测试 {os.path.basename(elf_path)} ===\n")
     
@@ -49,6 +59,7 @@ def test_elf(elf_path: str, max_instructions: int = 100000) -> bool:
         return False
 
 
+# Run the available ELF fixtures and print a consolidated result summary.
 def main():
     test_files = [
         'splibc/test_simple.elf',

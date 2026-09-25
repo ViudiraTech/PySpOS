@@ -1,3 +1,14 @@
+'''
+ *
+ *      boot_policy.py
+ *      Command-line signer for PySpOS Bootloader policy files.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import getpass
 import os
@@ -5,6 +16,7 @@ import os
 import secure_boot
 
 
+# Parse command-line options and issue a signed Bootloader policy.
 def main(argv=None):
     parser = argparse.ArgumentParser(description="签发 PySpOS Bootloader policy")
     mode = parser.add_mutually_exclusive_group(required=True)

@@ -1,3 +1,14 @@
+'''
+ *
+ *      secure_boot.py
+ *      Signed boot verification and secure update helpers
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import base64
 import hashlib
 import json
@@ -30,19 +41,23 @@ _HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 _KEY_ID = re.compile(r"^[0-9a-fA-F]{16,64}$")
 
 
+# Signal that a boot artifact or policy failed validation.
 class BootVerificationError(Exception):
     pass
 
 
+# Serialize a value into the canonical UTF-8 representation used for signing.
 def canonical_bytes(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True,
                       separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
+# Return the lowercase hexadecimal SHA-256 digest of a byte string.
 def sha256_bytes(value):
     return hashlib.sha256(value).hexdigest()
 
 
+# Hash a file incrementally and return its lowercase hexadecimal SHA-256 digest.
 def sha256_file(path):
     digest = hashlib.sha256()
     with open(path, "rb") as stream:
@@ -51,12 +66,14 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+# Derive the stable key identifier used by manifests from a 32-byte public key.
 def public_key_id(public_bytes):
     if not isinstance(public_bytes, (bytes, bytearray)) or len(public_bytes) != 32:
         raise BootVerificationError("Ed25519 公钥长度无效")
     return hashlib.sha256(bytes(public_bytes)).hexdigest()[:32]
 
 
+# Decode raw or base64 public-key bytes and require an Ed25519-sized key.
 def decode_public_key(value):
     if isinstance(value, (bytes, bytearray)):
         data = bytes(value)
@@ -70,6 +87,7 @@ def decode_public_key(value):
     return data
 
 
+# Load an unencrypted private key from PEM bytes, a file, or a compatible object.
 def load_private_key(path_or_bytes):
     try:
         from cryptography.hazmat.primitives import serialization
@@ -91,6 +109,7 @@ def load_private_key(path_or_bytes):
     return key
 
 
+# Return the raw 32-byte public key corresponding to a private key.
 def public_key_bytes(private_key):
     try:
         from cryptography.hazmat.primitives import serialization
@@ -103,10 +122,12 @@ def public_key_bytes(private_key):
     return raw
 
 
+# Sign a byte payload with the supplied private key.
 def sign_bytes(private_key, payload):
     return private_key.sign(payload)
 
 
+# Normalize configured trusted keys into a lowercase identifier-to-key mapping.
 def _load_trusted_keys(keys=None, include_runtime=True):
     source = TRUSTED_PUBLIC_KEYS if keys is None else keys
     if not source and not (include_runtime and _RUNTIME_TRUSTED_KEYS):
@@ -125,14 +146,17 @@ def _load_trusted_keys(keys=None, include_runtime=True):
     return result
 
 
+# Return the protected path for the device private signing key.
 def _device_private_path(root_dir):
     return os.path.join(root_dir, PROTECTED_DIR, DEVICE_PRIVATE_KEY_NAME)
 
 
+# Return the protected path for the device public signing key.
 def _device_public_path(root_dir):
     return os.path.join(root_dir, PROTECTED_DIR, DEVICE_PUBLIC_KEY_NAME)
 
 
+# Load a valid device public key into the runtime trust store unless boot is locked.
 def configure_runtime_keys(root_dir, locked):
     _RUNTIME_TRUSTED_KEYS.clear()
     if locked:
@@ -150,6 +174,7 @@ def configure_runtime_keys(root_dir, locked):
     return dict(_RUNTIME_TRUSTED_KEYS)
 
 
+# Ensure an unlocked device has a trusted developer key and refresh runtime trust.
 def ensure_developer_key(root_dir, locked=False):
     if locked:
         raise BootVerificationError("LOCKED 模式不能生成设备开发密钥")
@@ -185,6 +210,7 @@ def ensure_developer_key(root_dir, locked=False):
     }
 
 
+# Return the device developer key identifier, or None when no valid key exists.
 def developer_key_id(root_dir):
     path = _device_public_path(root_dir)
     if os.path.islink(path) or not os.path.isfile(path):
@@ -196,6 +222,7 @@ def developer_key_id(root_dir):
         return None
 
 
+# Validate a manifest path as a safe, relative, non-self-referential member.
 def _validate_path(path):
     if not isinstance(path, str) or not path or "\\" in path or "\x00" in path:
         raise BootVerificationError(f"manifest 路径无效: {path!r}")
@@ -213,6 +240,7 @@ def _validate_path(path):
     return path
 
 
+# Validate all manifest metadata and file hash entries before any tree comparison.
 def validate_manifest(manifest):
     if not isinstance(manifest, dict):
         raise BootVerificationError("manifest 必须是 JSON 对象")
@@ -242,6 +270,7 @@ def validate_manifest(manifest):
     return manifest
 
 
+# Decode and validate UTF-8 JSON manifest bytes.
 def parse_manifest(raw):
     try:
         value = json.loads(raw.decode("utf-8"))
@@ -250,6 +279,7 @@ def parse_manifest(raw):
     return validate_manifest(value)
 
 
+# Accept a raw or ASCII-base64 Ed25519 signature and return its 64 bytes.
 def _signature_bytes(raw):
     if len(raw) == 64:
         return raw
@@ -262,6 +292,7 @@ def _signature_bytes(raw):
     return value
 
 
+# Validate the signed bootloader policy schema and supported product identifiers.
 def validate_policy(policy):
     if not isinstance(policy, dict) or policy.get("format") != 1:
         raise BootVerificationError("Bootloader policy 格式无效")
@@ -279,6 +310,7 @@ def validate_policy(policy):
     return policy
 
 
+# Verify raw policy bytes against a trusted key and return the validated policy.
 def verify_policy_bytes(raw, signature, keys=None):
     try:
         policy = validate_policy(json.loads(raw.decode("utf-8")))
@@ -299,6 +331,7 @@ def verify_policy_bytes(raw, signature, keys=None):
     return policy
 
 
+# Verify signed manifest bytes, enforce the rollback floor, and return the manifest.
 def verify_manifest_bytes(raw, signature, keys=None, floor=0):
     manifest = parse_manifest(raw)
     trusted = _load_trusted_keys(keys)
@@ -319,10 +352,12 @@ def verify_manifest_bytes(raw, signature, keys=None, floor=0):
     return manifest
 
 
+# Report whether a system path belongs to mutable runtime data.
 def _is_mutable(path):
     return path in MUTABLE_TOP_LEVEL or path.startswith("etc/")
 
 
+# Yield immutable files in a system tree and reject linked directories.
 def _iter_tree_files(tree_path):
     if os.path.islink(tree_path) or not os.path.isdir(tree_path):
         raise BootVerificationError("系统镜像目录无效")
@@ -343,6 +378,7 @@ def _iter_tree_files(tree_path):
             yield rel, full
 
 
+# Resolve a relative tree member and reject escapes, the root, and symlinks.
 def _safe_tree_path(tree_path, relative):
     relative = _validate_path(relative)
     full = os.path.realpath(os.path.join(tree_path, relative))
@@ -358,6 +394,7 @@ def _safe_tree_path(tree_path, relative):
     return full
 
 
+# Verify that a system tree exactly matches the trusted, rollback-safe manifest.
 def verify_tree(tree_path, manifest, keys=None, floor=0):
     validate_manifest(manifest)
     trusted = _load_trusted_keys(keys)
@@ -385,22 +422,21 @@ def verify_tree(tree_path, manifest, keys=None, floor=0):
     return manifest
 
 
-# 启动期状态文件（构建机/运行期的 current_slot、.hotreset）。
-# 打进更新包属于打包事故：它们描述的是**构建那台机器**的状态，
-# 落到目标槽位会污染启动判断。处理方式是验签与解包时直接跳过
-# （不报错、不落地），而不是让整个更新失败；防线仍在：
-# 签名、manifest 清单比对、防回滚 floor 一行不少。
+# Build-machine state members are skipped from signed packages because they would
+# contaminate a target slot; signatures, manifest matching, and rollback floors
+# still protect every installed system file.
 _BOOT_STATE_MEMBERS = frozenset({"current_slot", ".hotreset"})
 
 
+# Identify boot-state members, accepting the optional source-tree prefix.
 def _is_boot_state_member(name):
-    """判断是否为启动期状态文件（允许 src/ 前缀）。"""
     if not isinstance(name, str):
         return False
     stripped = name[4:] if name.startswith("src/") else name
     return stripped in _BOOT_STATE_MEMBERS
 
 
+# Normalize a package member path and reject unsafe or boot-state entries.
 def _normalized_member(name):
     if not isinstance(name, str) or not name or "\\" in name or "\x00" in name:
         raise BootVerificationError(f"更新包成员路径无效: {name!r}")
@@ -418,6 +454,7 @@ def _normalized_member(name):
     return _validate_path(name)
 
 
+# Locate a package manifest in either the source-root or source-prefixed layout.
 def _package_manifest_path(names):
     if "src/" + MANIFEST_NAME in names:
         return "src/" + MANIFEST_NAME
@@ -426,12 +463,14 @@ def _package_manifest_path(names):
     return None
 
 
+# Derive the signature path that accompanies a package manifest.
 def _package_signature_path(manifest_path):
     if manifest_path.startswith("src/"):
         return "src/" + SIGNATURE_NAME
     return SIGNATURE_NAME
 
 
+# Validate a signed update package's members, manifest, limits, and rollback floor.
 def verify_package(package_path, keys=None, floor=0, locked=True):
     if locked and keys is None:
         _RUNTIME_TRUSTED_KEYS.clear()
@@ -501,6 +540,7 @@ def verify_package(package_path, keys=None, floor=0, locked=True):
         return manifest
 
 
+# Map normalized, immutable ZIP members and report whether a source prefix exists.
 def _zip_member_map(archive):
     result = {}
     has_src = any(info.filename.startswith("src/") for info in archive.infolist())
@@ -520,6 +560,7 @@ def _zip_member_map(archive):
     return result, has_src
 
 
+# Build a manifest containing SHA-256 hashes for a package's system members.
 def make_manifest_from_zip(package_path, version, security_version, key_id):
     with zipfile.ZipFile(package_path, "r") as archive:
         members, has_src = _zip_member_map(archive)
@@ -545,6 +586,7 @@ def make_manifest_from_zip(package_path, version, security_version, key_id):
     }
 
 
+# Add a trusted manifest and signature to a ZIP package and replace it atomically.
 def sign_package(package_path, version, security_version, private_key_path,
                   trusted_keys=None):
     private_key = load_private_key(private_key_path)
@@ -572,18 +614,22 @@ def sign_package(package_path, version, security_version, private_key_path,
     return manifest
 
 
+# Return the protected boot-state path beneath a system root.
 def _state_path(root_dir):
     return os.path.join(root_dir, STATE_RELATIVE_PATH)
 
 
+# Return the protected bootloader-policy path beneath a system root.
 def _policy_path(root_dir):
     return os.path.join(root_dir, POLICY_RELATIVE_PATH)
 
 
+# Return the protected bootloader-policy signature path beneath a system root.
 def _policy_signature_path(root_dir):
     return os.path.join(root_dir, POLICY_SIGNATURE_RELATIVE_PATH)
 
 
+# Return the initial neutral A/B boot state.
 def _default_state():
     return {
         "format": 1,
@@ -595,6 +641,7 @@ def _default_state():
     }
 
 
+# Atomically replace a protected file with bytes and restrict its final mode.
 def _atomic_bytes(path, payload, prefix):
     parent = os.path.dirname(path)
     os.makedirs(parent, mode=0o700, exist_ok=True)
@@ -614,12 +661,14 @@ def _atomic_bytes(path, payload, prefix):
             os.unlink(temporary)
 
 
+# Serialize a value as formatted JSON and write it through the atomic helper.
 def _atomic_json(path, value):
     payload = (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
                + "\n").encode("utf-8")
     _atomic_bytes(path, payload, ".boot-state-")
 
 
+# Validate boot-state metadata, slot names, and non-negative counters.
 def _validate_state(value):
     if not isinstance(value, dict) or value.get("format") != 1:
         raise BootVerificationError("boot state 格式无效")
@@ -636,6 +685,7 @@ def _validate_state(value):
     return value
 
 
+# Load validated boot state, optionally creating a default state atomically.
 def load_state(root_dir, create=True):
     path = _state_path(root_dir)
     if os.path.islink(path):
@@ -653,10 +703,12 @@ def load_state(root_dir, create=True):
         raise BootVerificationError("boot state 损坏，拒绝启动") from exc
 
 
+# Validate and atomically persist boot state.
 def save_state(root_dir, state):
     _atomic_json(_state_path(root_dir), _validate_state(state))
 
 
+# Read and verify a signed bootloader policy, returning None when it is absent.
 def read_policy(root_dir, keys=None):
     policy_path = _policy_path(root_dir)
     signature_path = _policy_signature_path(root_dir)
@@ -675,6 +727,7 @@ def read_policy(root_dir, keys=None):
     return verify_policy_bytes(raw, signature, keys)
 
 
+# Sign and atomically store a bootloader policy with the requested trust state.
 def write_policy(root_dir, locked, rollback_index, private_key_path, trusted_keys=None):
     if isinstance(rollback_index, bool) or not isinstance(rollback_index, int) \
             or rollback_index < 0:
@@ -704,6 +757,7 @@ def write_policy(root_dir, locked, rollback_index, private_key_path, trusted_key
     return policy
 
 
+# Report whether the verified bootloader policy is locked, defaulting to True.
 def read_locked(root_dir, keys=None):
     policy = read_policy(root_dir, keys)
     if policy is None:
@@ -711,11 +765,13 @@ def read_locked(root_dir, keys=None):
     return policy["locked"]
 
 
+# Return the verified policy rollback floor, or zero when no policy exists.
 def policy_rollback_index(root_dir, keys=None):
     policy = read_policy(root_dir, keys)
     return 0 if policy is None else policy["rollback_index"]
 
 
+# Resolve a named A/B slot while enforcing containment and symlink restrictions.
 def _slot_path(root_dir, slot):
     if slot not in SLOTS:
         raise BootVerificationError("槽位名称无效")
@@ -730,6 +786,7 @@ def _slot_path(root_dir, slot):
     return path
 
 
+# Read the legacy current-slot marker, returning None for missing or invalid data.
 def _legacy_slot(root_dir):
     path = os.path.join(root_dir, "current_slot")
     try:
@@ -740,6 +797,7 @@ def _legacy_slot(root_dir):
     return value if value in SLOTS else None
 
 
+# Verify a slot's signed manifest and complete system tree for boot.
 def verify_slot(root_dir, slot, locked=True, keys=None, floor=0):
     if locked and keys is None:
         _RUNTIME_TRUSTED_KEYS.clear()
@@ -749,6 +807,7 @@ def verify_slot(root_dir, slot, locked=True, keys=None, floor=0):
     return manifest
 
 
+# Load and fully verify a slot manifest, returning None when its files are absent.
 def _manifest_from_slot(root_dir, slot, keys, floor):
     path = _slot_path(root_dir, slot)
     manifest_path = os.path.join(path, MANIFEST_NAME)
@@ -764,6 +823,7 @@ def _manifest_from_slot(root_dir, slot, keys, floor):
     return manifest
 
 
+# Build the ordered, deduplicated A/B slot candidates for a boot attempt.
 def _choose_candidates(root_dir, state, legacy_slot, preferred_slot=None):
     candidates = []
     for slot in (preferred_slot, state.get("pending_slot"), state.get("active_slot"),
@@ -773,6 +833,7 @@ def _choose_candidates(root_dir, state, legacy_slot, preferred_slot=None):
     return candidates
 
 
+# Select the first bootable verified slot and update pending-boot attempt state.
 def prepare_boot(root_dir, locked, keys=None, legacy_slot=None,
                    preferred_slot=None):
     if locked and keys is None:
@@ -810,6 +871,7 @@ def prepare_boot(root_dir, locked, keys=None, legacy_slot=None,
     return None
 
 
+# Commit a successful boot and advance the rollback floor from its manifest.
 def mark_boot_success(root_dir, slot, manifest=None):
     if slot not in SLOTS:
         raise BootVerificationError("成功启动的槽位无效")
@@ -826,6 +888,7 @@ def mark_boot_success(root_dir, slot, manifest=None):
     save_state(root_dir, state)
 
 
+# Mark a slot pending with three attempts and preserve the current active slot.
 def stage_slot(root_dir, slot, manifest=None):
     if slot not in SLOTS:
         raise BootVerificationError("待切换槽位无效")
@@ -838,6 +901,7 @@ def stage_slot(root_dir, slot, manifest=None):
     save_state(root_dir, state)
 
 
+# Return a slot manifest's security version without surfacing validation errors.
 def image_security_version(root_dir, slot):
     try:
         manifest = _manifest_from_slot(root_dir, slot, None, 0)
@@ -846,6 +910,7 @@ def image_security_version(root_dir, slot):
     return None if manifest is None else manifest["security_version"]
 
 
+# Report whether a slot has a manifest and tree that pass secure verification.
 def secure_slot_present(root_dir, slot, keys=None, floor=0):
     try:
         return _manifest_from_slot(root_dir, slot, keys, floor) is not None
@@ -853,6 +918,7 @@ def secure_slot_present(root_dir, slot, keys=None, floor=0):
         return False
 
 
+# Atomically install a staged system directory, restoring the old slot on failure.
 def stage_directory_replace(root_dir, slot, staging_path):
     target = _slot_path(root_dir, slot)
     if os.path.commonpath((os.path.realpath(root_dir), os.path.realpath(staging_path))) \

@@ -1,3 +1,14 @@
+'''
+ *
+ *      force_sync.py
+ *      Developer utility for synchronizing source into an unlocked boot slot.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import os
 import shutil
@@ -11,6 +22,7 @@ EXCLUDED_NAMES = {"__pycache__", ".git", ".hotreset", "current_slot",
 EXCLUDED_SUFFIXES = (".pyc", ".pyo")
 
 
+# Read the active slot marker and fall back to slot_a for missing or invalid values.
 def _current_slot(root_dir):
     try:
         with open(os.path.join(root_dir, "current_slot"), encoding="utf-8") as stream:
@@ -20,6 +32,7 @@ def _current_slot(root_dir):
     return value if value in secure_boot.SLOTS else "slot_a"
 
 
+# Copy source files while excluding generated state and rejecting symbolic links.
 def _copy_source(source, destination):
     for root, dirs, files in os.walk(source, topdown=True, followlinks=False):
         dirs[:] = [name for name in dirs
@@ -36,6 +49,7 @@ def _copy_source(source, destination):
             shutil.copy2(source_path, target_path)
 
 
+# Replace a development slot from src, preserving selected runtime state.
 def sync_slot(root_dir, slot=None, assume_yes=False):
     root_dir = os.path.abspath(root_dir)
     if secure_boot.read_locked(root_dir):
@@ -74,6 +88,7 @@ def sync_slot(root_dir, slot=None, assume_yes=False):
     return True
 
 
+# Parse command-line options and return a process-style status code.
 def main(argv=None):
     parser = argparse.ArgumentParser(description="强制把 src 同步到当前开发槽位")
     parser.add_argument("--root-dir", default=os.path.dirname(os.path.abspath(__file__)))

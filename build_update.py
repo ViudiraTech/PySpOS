@@ -1,11 +1,14 @@
-# PySpOS 更新包构建工具（ canonical 构建入口，2026-09-24 起统一）。
-# 说明：历史上有两份构建脚本（根目录 build_update.py 与 src/calculate_zip_info.py），
-# 现统一以本文件为准；src/calculate_zip_info.py 已改为弃用垫片，自动转发到本模块的 main()。
-#
-# 2026-09-24：新增非交互模式（命令行参数）。原版全程 input()，无法在 CI 或
-# 脚本里复现构建；且更新包漏了 requirements.txt / LICENSE / README.md，
-# 而 README 的快速开始恰恰让用户执行 `pip install -r requirements.txt`——
-# 全新安装照做必然失败。
+'''
+ *
+ *      build_update.py
+ *      Update package builder.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import os
 import zipfile
@@ -14,34 +17,26 @@ import json
 import secure_boot
 from datetime import datetime
 
-# 排除的目录和文件
+# Directories and files excluded from update packages.
 EXCLUDE_DIRS = {'docs', 'slot_a', 'slot_b', '__pycache__', 'etc', '.oldcode', '.git'}
 EXCLUDE_FILES = {'.hotreset'}
 
-# 根目录随包分发的文件。
-# 2026-09-24 修正：原先只发 5 个文件，漏掉 requirements.txt（用户装依赖要用）、
-# LICENSE 与 README.md（许可与上手说明），导致从 OTA 装的系统按文档跑不起来。
-# 另：current_slot 是**构建机的运行期状态**，打进包里会让新装系统以为该从某个
-# 槽位启动；它在 src/ 下有槽位校验所需的同名文件，故这里只排除根目录那份。
+# Files distributed from the project root.
+# current_slot is build-host state, so it must not be packaged with a new system.
 ROOT_FILES = [
     'launcher.py', 'start.bat', 'start.sh', 'build_update.py',
     'requirements.txt', 'pyproject.toml', 'LICENSE', 'README.md',
     'secure_boot.py',
 ]
 
-# 站内静态页里内嵌了一份 version.json 的副本做兜底（fetch 失败时用）。
-# 手工维护那份副本必然漂移——它已经落后两个版本了。改为构建时自动回填。
+# The static release page embeds a fallback copy used when fetching version data fails.
 FALLBACK_TARGET = os.path.join('docs', 'ota', 'releases.html')
 FALLBACK_START = 'const fallbackVersionData = '
 FALLBACK_END = ';\n'
 
 
+# Refresh the static page's embedded fallback release data and report whether it changed.
 def sync_static_fallback(version_data=None):
-    """把 version.json 的内容回填进 releases.html 的 fallbackVersionData。
-
-    返回 True 表示已更新。这样任何一次构建都会顺带刷新静态页，
-    不存在「忘了同步」这种可能。
-    """
     if version_data is None:
         vj = os.path.join('docs', 'ota', 'version.json')
         if not os.path.exists(vj):
@@ -56,7 +51,7 @@ def sync_static_fallback(version_data=None):
     if i < 0:
         return False
     head = i + len(FALLBACK_START)
-    # 用 json.JSONDecoder 从原文里切出完整的 JS 对象字面量
+    # Decode the complete JavaScript object so the replacement preserves its suffix.
     try:
         _, end = json.JSONDecoder().raw_decode(html[head:])
     except ValueError:
@@ -70,6 +65,7 @@ def sync_static_fallback(version_data=None):
     return True
 
 
+# Decide whether a normalized archive path belongs in the update payload.
 def _should_include(relative_path):
     relative_path = relative_path.replace(os.sep, "/")
     if relative_path in EXCLUDE_FILES:
@@ -84,6 +80,7 @@ def _should_include(relative_path):
     return not relative_path.endswith(".pyc")
 
 
+# Yield every file that belongs in an update payload.
 def _iter_payload_files():
     paths = []
     for base in ("src", "splibc"):
@@ -104,7 +101,7 @@ def _iter_payload_files():
     return sorted(paths, key=lambda item: item[1])
 
 
-# 创建PySpOS更新包
+# Write the update package as a zip, then self-check the result.
 def create_zip_file(version):
     create_date = datetime.now().strftime("%Y%m%d")
     zip_filename = f"PySpOS-{version}-{create_date}.zip"
@@ -114,8 +111,6 @@ def create_zip_file(version):
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for path, relative in _iter_payload_files():
             zipf.write(path, relative)
-    # 构建时自检：启动期状态文件一旦漏网，安装侧会静默跳过；
-    # 但那属于打包事故，必须在这里直接失败，不让坏包出厂。
     with zipfile.ZipFile(zip_path, 'r') as check:
         bad = [i.filename for i in check.infolist()
                if not i.is_dir() and _is_boot_state_member(i.filename)]
@@ -125,25 +120,24 @@ def create_zip_file(version):
     return zip_path, zip_filename
 
 
+# Report whether a path is runtime boot state, matching secure_boot's rule.
 def _is_boot_state_member(filename):
-    """与 secure_boot._is_boot_state_member 同规则（构建侧不 import 整包）。"""
     stripped = filename[4:] if filename.startswith("src/") else filename
     return stripped in {"current_slot", ".hotreset"}
 
-# 计算文件的SHA256哈希值
+# Return the SHA-256 hex digest of a file.
 def calculate_sha256(file_path):
     sha256_hash = hashlib.sha256()
     with open(file_path, 'rb') as f:
-        # 分块读取文件以处理大文件
         for byte_block in iter(lambda: f.read(4096), b''):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
-# 获取文件大小
+# Return a file's size in bytes.
 def get_file_size(file_path):
     return os.path.getsize(file_path)
 
-# 读取当前版本号
+# Read the version the build is currently based on.
 def get_current_version():
     version_path = os.path.join('src', 'version.txt')
     if os.path.exists(version_path):
@@ -151,7 +145,7 @@ def get_current_version():
             return f.read().strip()
     return None
 
-# 读取现有的version.json
+# Load version.json from the payload.
 def load_version_json():
     version_json_path = os.path.join('docs', 'ota', 'version.json')
     if os.path.exists(version_json_path):
@@ -159,7 +153,7 @@ def load_version_json():
             return json.load(f)
     return None
 
-# 更新version.json文件
+# Write an updated version back into the payload.
 def update_version_json(zip_filename, file_size, sha256, version, release_notes,
                         stage=None, release_type=None, changes=None,
                         min_version=None, date=None, non_interactive=False,
@@ -167,7 +161,6 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
     version_json_path = os.path.join('docs', 'ota', 'version.json')
     today = date or datetime.now().strftime("%Y-%m-%d")
 
-    # 读取现有数据或创建新数据
     if os.path.exists(version_json_path):
         with open(version_json_path, 'r', encoding='utf-8') as f:
             version_data = json.load(f)
@@ -186,7 +179,6 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
             "changelog": []
         }
 
-    # 更新顶级信息
     version_data['version'] = version
     version_data['release_date'] = today
     version_data['release_notes'] = release_notes
@@ -202,12 +194,10 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
     if min_version:
         version_data['min_version'] = min_version
 
-    # 检查当前版本是否已在changelog中
     version_exists = False
     for entry in version_data['changelog']:
         if entry['version'] == version:
             version_exists = True
-            # 重新构建时同步日期、类型与更新说明，否则网页上会留旧元数据
             entry['sha256'] = sha256
             entry['file_size'] = file_size
             entry['download_url'] = zip_filename
@@ -221,7 +211,6 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
                 entry['type'] = release_type
             break
 
-    # 如果版本不存在，添加新条目
     if not version_exists:
         if not changes:
             if non_interactive:
@@ -251,7 +240,6 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
                 type_choice = _ask("> ")
                 release_type = "beta" if type_choice != "2" else "release"
 
-        # 创建新的changelog条目
         new_entry = {
             "version": version,
             "date": today,
@@ -264,26 +252,22 @@ def update_version_json(zip_filename, file_size, sha256, version, release_notes,
             "changes": changes
         }
 
-        # 添加到changelog开头
         version_data['changelog'].insert(0, new_entry)
         print(f"\n✓ 已将版本 {version} 添加到changelog")
     else:
         print(f"\n✓ 版本 {version} 已存在于changelog中，已更新SHA256和文件大小")
 
-    # 写回文件
     with open(version_json_path, 'w', encoding='utf-8') as f:
         json.dump(version_data, f, ensure_ascii=False, indent=2)
 
     print(f"✓ 已更新 {version_json_path}")
-    # 同步静态页里内嵌的兜底副本，避免 releases.html 长期停留在旧版本
     if sync_static_fallback(version_data):
         print(f"✓ 已同步 {FALLBACK_TARGET} 的静态兜底数据")
     else:
         print(f"- 跳过静态兜底同步（{FALLBACK_TARGET} 无 fallbackVersionData）")
 
-# 主函数
+# Ask a yes/no question on the terminal.
 def _ask(prompt, default=""):
-    """交互读取；stdio 非 tty（CI / 管道）时直接返回默认值，绝不阻塞。"""
     import sys
     try:
         if not sys.stdin.isatty():
@@ -299,6 +283,7 @@ def _ask(prompt, default=""):
     return v or default
 
 
+# Parse command line arguments for the package builder.
 def _parse_args(argv=None):
     p = argparse.ArgumentParser(
         description="PySpOS 更新包构建工具（非交互模式供 CI/脚本使用）")
@@ -319,12 +304,14 @@ def _parse_args(argv=None):
     return p.parse_args(argv)
 
 
+# Build an update package and run its self-check.
 def main(argv=None):
     args = _parse_args(argv)
     non_interactive = bool(args.version or args.note or args.quiet
                            or args.date or args.min_version or args.stage
                            or args.private_key)
 
+# Print a progress line unless quiet mode is on.
     def say(*a):
         if not args.quiet:
             print(*a)
@@ -333,7 +320,6 @@ def main(argv=None):
         say("PySpOS 更新包构建工具")
         say("=" * 50)
 
-        # 获取当前版本
         current_version = get_current_version()
         if not current_version:
             print("✗ 错误: 无法读取 src/version.txt")
@@ -345,7 +331,6 @@ def main(argv=None):
             build_version = args.version
             say(f"✓ 非交互模式，指定版本: {build_version}")
         else:
-            # 询问是否是新版本更新
             say("\n这是新版本更新吗？")
             say("1. 是，我要发布新版本")
             say("2. 否，只是重新构建当前版本")
@@ -356,7 +341,6 @@ def main(argv=None):
                 build_version = new_version or current_version
             say(f"✓ 将构建版本: {build_version}")
 
-        # 创建zip文件
         zip_path, zip_filename = create_zip_file(build_version)
         signed_manifest = None
         if args.private_key:
@@ -368,11 +352,9 @@ def main(argv=None):
             say("⚠ 未提供私钥：生成的是未签名开发包，锁定设备会拒绝启动")
         say(f"✓ 成功创建更新包: {zip_path}")
 
-        # 获取文件大小
         file_size = get_file_size(zip_path)
         say(f"✓ 文件大小: {file_size} 字节")
 
-        # 计算SHA256哈希值
         sha256 = calculate_sha256(zip_path)
         say(f"✓ SHA256: {sha256}")
 
@@ -381,7 +363,6 @@ def main(argv=None):
         say(f"SHA256哈希: {sha256}")
         say(f"下载路径: {zip_filename}")
 
-        # 获取更新说明
         if args.note:
             release_notes_list = list(args.note)
         else:
@@ -395,7 +376,6 @@ def main(argv=None):
         release_notes_text = "\n".join(release_notes_list) if release_notes_list \
             else "PySpOS 更新包"
 
-        # 更新version.json文件
         update_version_json(zip_filename, file_size, sha256, build_version,
                             release_notes_text,
                             stage=args.stage, release_type=args.release_type,

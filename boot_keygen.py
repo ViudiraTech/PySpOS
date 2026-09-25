@@ -1,3 +1,14 @@
+'''
+ *
+ *      boot_keygen.py
+ *      Generate the PySpOS bootloader Ed25519 signing key
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import argparse
 import base64
 import hashlib
@@ -7,6 +18,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
+# Generate a private key, write it with restrictive permissions, and print the public metadata.
 def main(argv=None):
     parser = argparse.ArgumentParser(description="生成 PySpOS Bootloader Ed25519 签名密钥")
     parser.add_argument("--private-key", default="boot_signing_key.pem")

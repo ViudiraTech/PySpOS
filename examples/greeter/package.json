@@ -8,10 +8,12 @@
       "name": "greeter",
       "runtime": "python",
       "path": "payload/greeter.py",
-      "aliases": ["hello-pkg"]
+      "aliases": [
+        "hello-pkg"
+      ]
     }
   ],
   "files": {
-    "payload/greeter.py": "cdc3ae414089b93474bae09aad7bcaaaa2e59e7859d3773edce303de527e1a66"
+    "payload/greeter.py": "d75f33013f0bb1b035721b62f42c58025219355cb15814e9bebd437d26a1a881"
   }
 }
