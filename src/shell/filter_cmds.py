@@ -1,13 +1,13 @@
-#
-#   shell/filter_cmds.py
-#   文本过滤器：一行一个命令，无文件参数时读 stdin（管线即插即用）。
-#
-
-"""wc/head/tail/sort/uniq/tr/cut/rev/seq/tee/tac/nl/sed/date/test/true/false。
-约定和 grep/cat 一致：给文件读文件，不给读 stdin；stdin 是 tty 且没给
-文件就报用法（免得交互式下傻等输入）。返回 int 即退出码，专供 &&/||。
-"""
-
+'''
+ *
+ *      filter_cmds.py
+ *      Pipeline-friendly text filter commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 import os
 import re
 import sys
@@ -17,6 +17,7 @@ import printk
 import stdinctx
 
 
+# Split shell-style arguments, falling back to whitespace when quoting is invalid.
 def _split_args(args):
     import shlex
     try:
@@ -25,8 +26,9 @@ def _split_args(args):
         return args.split() if args else []
 
 
+# Read named files, or stdin when no files are given, and return (texts, error).
+# Missing files are reported and skipped, matching shell filter behavior.
 def _read_inputs(tokens, usage):
-    """(文本列表, 错误串|None)。文件读不到记错误继续（bash 风）。"""
     if tokens:
         texts = []
         for name in tokens:
@@ -41,6 +43,7 @@ def _read_inputs(tokens, usage):
     return None, f"用法: {usage}\n"
 
 
+# Read one logical input and join its text, or return (None, error).
 def _one_input(tokens, usage):
     texts, err = _read_inputs(tokens, usage)
     if err:
@@ -48,14 +51,17 @@ def _one_input(tokens, usage):
     return "".join(texts), None
 
 
+# Return success status for the true command.
 def cmd_true(args=""):
     return 0
 
 
+# Return failure status for the false command.
 def cmd_false(args=""):
     return 1
 
 
+# Count lines, words, and characters in files or stdin.
 def cmd_wc(args=""):
     tokens = _split_args(args)
     flags = {t for t in tokens if t.startswith("-") and len(t) > 1}
@@ -76,6 +82,7 @@ def cmd_wc(args=""):
         printk.error("用法: wc [-lwc] [文件...]\n")
         return 1
 
+    # Format the selected line, word, and character counts for one input.
     def cols_of(text):
         cols = []
         if not flags or "-l" in flags:
@@ -94,6 +101,7 @@ def cmd_wc(args=""):
     return 0
 
 
+# Parse -N and +N line-count options, returning (count, rest, error, plus).
 def _parse_n(tokens, default):
     count, rest, err, plus = default, [], None, False
     skip = False
@@ -120,12 +128,9 @@ def _parse_n(tokens, default):
     return count, rest, err, plus
 
 
+# Return lines from files or streamed stdin, limiting stdin reads when requested.
+# Early termination lets upstream writers receive SIGPIPE instead of blocking.
 def _stream_lines(tokens, usage, limit=None):
-    """给文件就切片，给 stdin 就流式按行读（最多 limit 行）。
-
-    流式是为了能提前收手：head/grep -q 读完要的行就退，上游立刻拿到
-    SIGPIPE，`yes | head -1` 才不会把管线挂死。
-    """
     if tokens:
         text, err = _one_input(tokens, usage)
         if err:
@@ -135,14 +140,17 @@ def _stream_lines(tokens, usage, limit=None):
     return stdinctx.read_lines(limit), None
 
 
+# Emit the first requested number of lines from files or stdin.
 def cmd_head(args=""):
     tokens = _split_args(args)
     count, files, err, _ = _parse_n(tokens, 10)
     if err:
         printk.error(err + "\n")
         return 1
+    # limit=0 must stay 0 (not None): a zero limit means read nothing, while
+    # None means "read until EOF", which would hang on an endless producer.
     lines, err = _stream_lines(files, "head [-n 行数] [文件]",
-                               max(count, 0) or None)
+                               max(count, 0))
     if err:
         printk.error(err)
         return 1
@@ -150,6 +158,7 @@ def cmd_head(args=""):
     return 0
 
 
+# Emit the last requested number of lines from files or stdin.
 def cmd_tail(args=""):
     tokens = _split_args(args)
     count, files, err, plus = _parse_n(tokens, 10)
@@ -171,6 +180,7 @@ def cmd_tail(args=""):
     return 0
 
 
+# Sort input lines with optional reverse, numeric, and unique modes.
 def cmd_sort(args=""):
     tokens = _split_args(args)
     flags = {t for t in tokens if t.startswith("-")}
@@ -181,6 +191,7 @@ def cmd_sort(args=""):
         return 1
     lines = text.splitlines()
     if "-n" in flags:
+        # Build a numeric key, placing non-numeric lines before matched numbers.
         def key(line):
             match = re.match(r"\s*(-?\d+)", line)
             return (1, int(match.group(1)), "") if match else (0, 0, line)
@@ -201,6 +212,7 @@ def cmd_sort(args=""):
     return 0
 
 
+# Collapse adjacent duplicate lines and optionally prefix counts.
 def cmd_uniq(args=""):
     tokens = _split_args(args)
     flags = {t for t in tokens if t.startswith("-")}
@@ -226,6 +238,7 @@ def cmd_uniq(args=""):
     return 0
 
 
+# Expand escape sequences and ranges into a character translation set.
 def _expand_tr_set(spec):
     out = []
     i = 0
@@ -246,6 +259,7 @@ def _expand_tr_set(spec):
     return out
 
 
+# Translate or delete characters from stdin using one or two character sets.
 def cmd_tr(args=""):
     tokens = _split_args(args)
     delete = "-d" in tokens
@@ -271,6 +285,7 @@ def cmd_tr(args=""):
     return 0
 
 
+# Parse a comma-separated field list, including open and closed ranges.
 def _parse_cut_list(spec, total):
     picked = set()
     for part in spec.split(","):
@@ -287,6 +302,7 @@ def _parse_cut_list(spec, total):
     return picked
 
 
+# Select and join fields from files or stdin using a delimiter.
 def cmd_cut(args=""):
     tokens = _split_args(args)
     delim, fields, files = "\t", None, []
@@ -332,6 +348,7 @@ def cmd_cut(args=""):
     return 0
 
 
+# Reverse each input line independently.
 def cmd_rev(args=""):
     tokens = _split_args(args)
     text, err = _one_input(tokens, "rev [文件]")
@@ -343,6 +360,7 @@ def cmd_rev(args=""):
     return 0
 
 
+# Emit input lines in reverse order.
 def cmd_tac(args=""):
     tokens = _split_args(args)
     text, err = _one_input(tokens, "tac [文件]")
@@ -354,6 +372,7 @@ def cmd_tac(args=""):
     return 0
 
 
+# Number input lines, optionally including blank lines.
 def cmd_nl(args=""):
     tokens = _split_args(args)
     files = [t for t in tokens if t != "-ba"]
@@ -372,6 +391,7 @@ def cmd_nl(args=""):
     return 0
 
 
+# Emit a numeric sequence with an optional step.
 def cmd_seq(args=""):
     tokens = _split_args(args)
     try:
@@ -405,6 +425,7 @@ def cmd_seq(args=""):
     return 0
 
 
+# Copy stdin to files and stdout, optionally appending to each file.
 def cmd_tee(args=""):
     tokens = _split_args(args)
     append = "-a" in tokens
@@ -434,6 +455,7 @@ def cmd_tee(args=""):
     return 0
 
 
+# Apply a regular-expression substitution to each input line.
 def cmd_sed(args=""):
     tokens = _split_args(args)
     if not tokens or not tokens[0].startswith("s"):
@@ -469,6 +491,7 @@ def cmd_sed(args=""):
     return 0
 
 
+# Print the current local date and time in the requested strftime format.
 def cmd_date(args=""):
     import datetime
     tokens = _split_args(args)
@@ -481,8 +504,8 @@ def cmd_date(args=""):
     return 0
 
 
+# Evaluate a test expression, raising ValueError for invalid syntax.
 def _test_expr(tokens):
-    """返回 True/False；表达式错抛 ValueError。"""
     if not tokens:
         return False
     if len(tokens) == 1:
@@ -525,15 +548,17 @@ def _test_expr(tokens):
     raise ValueError("表达式太复杂（只支持单层）")
 
 
+# Evaluate a test expression and return its shell status.
 def cmd_test(args=""):
     return _run_test(_split_args(args), bracketed=False)
 
 
+# Evaluate the bracketed test command after checking for a closing ']'.
 def cmd_lbracket(args=""):
-    """`[` 命令：`[` 本身是命令名，只需校验闭合的 `]`。"""
     return _run_test(_split_args(args), bracketed=True)
 
 
+# Evaluate a test expression and convert errors into status 2.
 def _run_test(tokens, bracketed):
     if bracketed:
         if not tokens or tokens[-1] != "]":

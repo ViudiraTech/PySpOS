@@ -1,13 +1,13 @@
-#
-#   stdinctx.py
-#   builtin 读 stdin 的统一入口。
-#
-
-"""后台线程里跑 builtin 时不能换 sys.stdin：主循环的 input() 正在用它，
-抢了就撞 EOFError，shell 直接退出。改用线程局部标记，让「stdin 是空的」
-这件事只对当前后台线程成立。
-"""
-
+'''
+ *
+ *      stdinctx.py
+ *      Thread-local standard-input handling for shell builtins.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 import io
 import sys
 import threading
@@ -16,6 +16,7 @@ _LOCAL = threading.local()
 _REAL_STDIN = None
 
 
+# Cache and return the process's real standard-input stream.
 def _real_stdin():
     global _REAL_STDIN
     if _REAL_STDIN is None:
@@ -23,20 +24,23 @@ def _real_stdin():
     return _REAL_STDIN
 
 
+# Mark the current background thread as having no standard input.
 def suppress():
     _LOCAL.no_stdin = True
 
 
+# Clear the current thread's suppressed-standard-input marker.
 def release():
     _LOCAL.no_stdin = False
 
 
+# Report whether the current thread has suppressed standard input.
 def suppressed():
     return bool(getattr(_LOCAL, "no_stdin", False))
 
 
+# Report whether stdin is a terminal; suppressed background input is always False.
 def is_tty():
-    """stdin 是不是终端：后台线程里恒为 False（等于空输入）。"""
     if suppressed():
         return False
     stream = sys.stdin
@@ -46,8 +50,8 @@ def is_tty():
         return False
 
 
+# Read all standard input, returning an empty string when suppressed.
 def read_text():
-    """读全部 stdin；被抑制时返回空串。"""
     if suppressed():
         return ""
     stream = sys.stdin
@@ -59,11 +63,9 @@ def read_text():
         return ""
 
 
+# Read at most limit lines, or through EOF when limit is None.
+# Early termination lets upstream writers receive SIGPIPE instead of blocking.
 def read_lines(limit=None):
-    """按行读，最多 limit 行（None 表示读到 EOF）。
-
-    早停能让上游拿到 SIGPIPE，`yes | head -1` 这类才不会挂死。
-    """
     if suppressed():
         return []
     stream = sys.stdin
@@ -81,8 +83,8 @@ def read_lines(limit=None):
         return []
 
 
+# Yield input lines lazily for commands that can stop before EOF.
 def iter_lines():
-    """流式按行读：head 这类要提前收手的命令用它。"""
     if suppressed():
         return
     stream = sys.stdin

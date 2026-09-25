@@ -123,6 +123,14 @@ def test_infinite_producer_into_early_exiting_builtin():
 
 
 @needs_posix
+def test_head_zero_reads_nothing():
+    out = run("yes | head -n 0")
+    assert out.strip() == ""
+    out = run("seq 1 1000000 | head -0")
+    assert out.strip() == ""
+
+
+@needs_posix
 def test_large_output_does_not_deadlock():
     out = run("seq 1 20000 | wc -l")
     assert out.strip() == "20000"

@@ -1,28 +1,13 @@
-#
-#   shell/hostexec.py
-#   宿主 Linux 程序执行：builtin/注册表都 miss 时的 fork+exec 回退。
-#
-#   对齐 bash 的成熟语义（另见 oils 的 ExternalProgram 与 ptyprocess 文档）：
-#     - 分发顺序：builtin → 注册表 → apps/ → 包命令 → 宿主 PATH；
-#     - PATH 查找：stat + 执行位（shutil.which），含 '/' 则按路径直解；
-#     - 前台：子进程继承终端（全屏 vt100 程序零改造可跑），父进程在
-#       wait 期间把 SIGINT/SIGQUIT 挂空处理器（投递只杀子进程，
-#       不掀 shell）；捕获型处置跨 exec 自动复位为默认，子进程天生
-#       就是 SIG_DFL，不碰 preexec_fn（多线程父进程下它可能死锁）；
-#       同进程组（dash 式简化，不做 tcsetpgrp 作业控制）；
-#     - vt100：全程二进制直通，不解码不断行，ESC 序列原样过；
-#       TERM 未设置时补 xterm-256color；
-#     - 退出后 ttyutil.ensure_sane_tty() 恢复终端（防子进程改坏回显）；
-#     - 后台：stdin 接 DEVNULL，stdout/stderr 二进制管道 + 中继线程
-#       实时写回父终端（交互式程序请前台运行）；
-#     - 进程表：PCB(kind="host", remote=True) + 复用 forkexec 的句柄表，
-#       kill/jobs/fg/bg/wait/$! 全部沿用现有语义；
-#     - 安全：宿主程序以 OS 用户身份跑在 PySpOS 权限模型之外，
-#       每次执行写审计日志（失败不阻断执行）。
-#
-#   Windows：按普通 Popen 继承控制台尽力而为。
-#
-
+'''
+ *
+ *      hostexec.py
+ *      Host Linux program execution fallback for shell commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 import os
 import shutil
 import signal
@@ -36,20 +21,20 @@ _PATH_BIN_CACHE = None
 _WRITE_LOCK = threading.Lock()
 
 
+# Set the temporary stdout fd used by dispatch for this command only.
 def set_override(fd):
-    """供 dispatch 的重定向/管道：在本次 handle_command 内把子进程 stdout
-    接到指定 fd。同步调用，用完即清，不跨命令。"""
     global _STDOUT_FD_OVERRIDE
     _STDOUT_FD_OVERRIDE = fd
 
 
+# Clear the temporary stdout fd after one command.
 def clear_override():
     global _STDOUT_FD_OVERRIDE
     _STDOUT_FD_OVERRIDE = None
 
 
+# Return a session-cached list of executable names found on PATH.
 def path_commands():
-    """PATH 里可执行文件名的缓存扫描（补全用，会话内缓存）。"""
     global _PATH_BIN_CACHE
     if _PATH_BIN_CACHE is not None:
         return _PATH_BIN_CACHE
@@ -76,8 +61,8 @@ def path_commands():
     return _PATH_BIN_CACHE
 
 
+# Resolve a program to an absolute executable path, or return None if absent.
 def resolve(name):
-    """解析宿主程序：含 '/' 走路径，否则走 PATH。返回绝对路径或 None。"""
     if not name:
         return None
     if "/" in name:
@@ -95,20 +80,15 @@ def resolve(name):
     return found
 
 
+# Provide a no-op signal handler while the shell waits for a child.
 def _noop_handler(signum, frame):
     return None
 
 
+# Replace ignored signals with catchable handlers and return their saved values.
+# After exec, the child resets to SIG_DFL; preexec_fn is avoided because it can
+# deadlock in this multithreaded parent.
 def _make_catchable(signums):
-    """把 SIG_IGN 换成可捕获的处理器，返回需要还原的旧值。
-
-    exec 会把「捕获型」处理器复位成 SIG_DFL，但 SIG_IGN 会跨 exec
-    保留下来。所以要让子进程拿到默认处置，父进程这边就不能用
-    SIG_IGN，得挂处理器：子进程 exec 之后自动就是 SIG_DFL。
-
-    这么绕是为了彻底不碰 preexec_fn —— CPython 明确说它在多线程
-    父进程里可能死锁，而 PySpOS 的 shell 进程是有常驻线程的。
-    """
     saved = {}
     for signum in signums:
         try:
@@ -120,6 +100,7 @@ def _make_catchable(signums):
     return saved
 
 
+# Restore handlers from a saved signal map, ignoring unsupported signals.
 def _restore_signals(saved):
     for signum, handler in saved.items():
         try:
@@ -128,6 +109,7 @@ def _restore_signals(saved):
             pass
 
 
+# Record host command execution without blocking the command if auditing fails.
 def audit_cmd(cmdline):
     try:
         import main
@@ -139,8 +121,8 @@ def audit_cmd(cmdline):
         pass
 
 
+# Register the process in the process and handle tables for remote signaling.
 def _register(cmdline, popen_obj):
-    """进进程表 + 句柄表（复用 forkexec 的远程信号后端）。"""
     import process as proc
     try:
         shell_pid = proc.current_shell_pid()
@@ -155,8 +137,8 @@ def _register(cmdline, popen_obj):
     return pcb
 
 
+# Relay binary data to stdout without decoding or modifying escape sequences.
 def _pump_to_terminal(src_fd):
-    """二进制中继：vt100 转义原样过，不解码。"""
     try:
         dst = sys.stdout.buffer
     except Exception:
@@ -180,6 +162,7 @@ def _pump_to_terminal(src_fd):
         pass
 
 
+# Start a host process with the requested stream, session, and environment settings.
 def _spawn(argv, background, stdout_fd, stdin_fd=None, stderr_fd=None,
              merge_stderr=False, env_extra=None):
     env = dict(os.environ)
@@ -220,6 +203,7 @@ def _spawn(argv, background, stdout_fd, stdin_fd=None, stderr_fd=None,
         _restore_signals(saved)
 
 
+# Restore terminal settings after a foreground child exits.
 def _restore_tty():
     try:
         import ttyutil
@@ -228,6 +212,7 @@ def _restore_tty():
         pass
 
 
+# Wait for a foreground process and normalize its exit code for the PCB.
 def _wait_foreground(popen_obj, pcb):
     import process as proc
     old_handlers = {}
@@ -256,8 +241,8 @@ def _wait_foreground(popen_obj, pcb):
     return norm
 
 
+# Reap a background process and report its normalized exit status to the job table.
 def _watch_background(popen_obj, pcb):
-    """后台回收：退出即转僵尸，走现有 jobs/reap 语义。"""
     import process as proc
     started = time.time()
     try:
@@ -274,8 +259,9 @@ def _watch_background(popen_obj, pcb):
         pass
 
 
+# Start daemon relay threads for a background process's piped output.
 def _start_relay(popen_obj):
-    # dup 出来再关原件：fd 所有权归中继线程，避免和 Popen 析构抢关。
+    # Duplicate each stream before closing the original so the relay owns the fd.
     for stream in (popen_obj.stdout, popen_obj.stderr):
         if stream is None:
             continue
@@ -291,13 +277,10 @@ def _start_relay(popen_obj):
                          daemon=True).start()
 
 
+# Start and register a host process; return its (Popen, PCB) pair without waiting.
+# Background pipe output is relayed automatically; callers must wait or track it.
 def spawn_host(argv, background=False, stdout_fd=None, stdin_fd=None,
                stderr_fd=None, merge_stderr=False, env_extra=None):
-    """起一个宿主进程并进进程表。返回 (Popen, PCB)，不等待。
-
-    background 且 stdout/stderr 落到 PIPE 时自动起中继线程。
-    调用方负责 wait_host 或 track_bg。
-    """
     popen_obj = _spawn(argv, background, stdout_fd, stdin_fd, stderr_fd,
                        merge_stderr, env_extra)
     cmdline = " ".join(argv)
@@ -308,13 +291,13 @@ def spawn_host(argv, background=False, stdout_fd=None, stdin_fd=None,
     return popen_obj, pcb
 
 
+# Wait for a foreground host process and return its normalized exit code.
 def wait_host(popen_obj, pcb):
-    """前台等待，返回规范化退出码。"""
     return _wait_foreground(popen_obj, pcb)
 
 
+# Register a background process as a job, print its job line, and start reaping.
 def track_bg(popen_obj, pcb, cmdline):
-    """后台登记：进 jobs 表、打印作业行、起回收线程。"""
     import process as proc
     job = proc.new_job(cmdline, pids=[pcb.pid])
     import printk
@@ -324,12 +307,10 @@ def track_bg(popen_obj, pcb, cmdline):
     return job
 
 
+# Resolve and run a host command, returning (handled, status).
+# Return (False, 127) when PATH resolution fails so the caller can report 127.
 def run_status(tokens, background, stdout_fd=None, stdin_fd=None,
                stderr_fd=None, merge_stderr=False, env_extra=None):
-    """找到可执行文件即处理，返回 (handled, status)。
-
-    PATH 里没有返回 (False, 127)，调用方报 127。
-    """
     import printk
     if not tokens:
         return False, 127
@@ -363,8 +344,7 @@ def run_status(tokens, background, stdout_fd=None, stdin_fd=None,
     return True, wait_host(popen_obj, pcb)
 
 
+# Run a host command when PATH resolution succeeds; return whether it was handled.
 def run(tokens, background):
-    """dispatch 回退位入口。找到可执行文件即处理并返回 True；
-    PATH 里没有才返回 False（调用方报 127）。"""
     handled, _ = run_status(tokens, background)
     return handled
