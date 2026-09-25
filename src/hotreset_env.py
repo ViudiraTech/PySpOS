@@ -38,15 +38,36 @@ def _verify_boot_context():
         raise RuntimeError("热重启期间活动槽位发生变化")
 
 
+SHELL_ARGV0 = 'PySpOS shell'
+
+
+def _set_comm(name):
+    """把进程名（comm，ps/top/htop 那一栏）也改成 PySpOS shell。
+
+    fastfetch 之类的工具读父进程时多数看 comm，只有部分（如某些
+    fastfetch 版本）回退到 argv[0]；两边都设上才稳。comm 上限 15 字节，
+    超了内核静默截断，这里做个长度保护。
+    """
+    if not sys.platform.startswith('linux'):
+        return
+    try:
+        import ctypes
+        libc = ctypes.CDLL('libc.so.6', use_errno=True)
+        libc.prctl(15, name.encode('utf-8')[:15], 0, 0, 0)  # PR_SET_NAME
+    except Exception:
+        pass
+
+
 def _boot_kernel():
     """热重启子进程入口：清掉模块缓存后在干净解释器里进 kernel.loop()。
 
-    以前这段逻辑是内联在 `python3 -c` 的 argv 里，结果子进程在
-    /proc/<pid>/cmdline 里就是一整坨源码：ps、top、fastfetch 这类
-    工具读父进程命令行时会直接把这坨源码当成 shell 名打出来
-    （fastfetch 的 Shell 栏）。改走 `hotreset_env.py --kernel`
-    这个短 argv 后，命令行是可读的。
+    这段逻辑以前是内联在 `python3 -c` 的 argv 里，于是子进程在
+    /proc/<pid>/cmdline 里就是一整坨源码：ps、top、fastfetch 这类读
+    父进程的工具会把源码当 shell 名打出来。现在改成
+    `PySpOS shell -u hotreset_env.py --kernel` 这个既有名字又短的
+    argv，工具看到的 shell 名就是 PySpOS shell。
     """
+    _set_comm(SHELL_ARGV0)
     keep = ('sys', 'builtins', '__builtin__', 'importlib', 'types')
     for name in list(sys.modules.keys()):
         if name.startswith('_') or name.startswith('os') or name in keep:
@@ -66,7 +87,9 @@ def run():
         restart_count += 1
         clear_flag()
 
-        cmd = [sys.executable, '-u', os.path.abspath(__file__), '--kernel']
+        # argv[0] 报 shell 名，executable 才是真的 python —— 两者要分开，
+        # 否则 python 会把 argv[0] 当脚本名去解释，-u 之类的开关就废了。
+        cmd = [SHELL_ARGV0, '-u', os.path.abspath(__file__), '--kernel']
         
         try:
             child_env = os.environ.copy()
@@ -79,6 +102,7 @@ def run():
             child_env["PYTHONPATH"] = os.pathsep.join(python_paths)
             process = subprocess.Popen(
                 cmd,
+                executable=sys.executable,
                 cwd=script_dir,
                 stdin=sys.stdin,
                 stdout=sys.stdout,
