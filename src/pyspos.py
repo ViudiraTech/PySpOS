@@ -75,11 +75,11 @@ else:
 DEVELOPER_MODE = False # Developer mode is disabled by default. You can enable it for development and testing purposes.
 
 # OTA master switch.
-#   2026-09-24: OTA 服务器故障，临时禁用云端更新。
+#   2026-09-24 曾因服务器故障临时禁用；云端已迁移到
+#   goutoustdio.rainyland.top，服务恢复后改回 True。
 #   禁用后：check_cloud_update / download_and_install_update 直接返回降级提示，
 #   不发任何网络请求；本地安装 install_update / 回滚 rollback / 状态查询不受影响。
-#   恢复时只需把 False 改回 True（ota.py 会自动读取本开关）。
-OTA_ENABLED = False
+OTA_ENABLED = True
 OTA_DISABLE_REASON = "OTA 服务器维护中，云端更新已临时禁用（本地安装/回滚不受影响）"
 
 # OTA update channel: "stable" / "beta" / "nightly".

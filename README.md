@@ -32,7 +32,7 @@ PySpOS 是一个教学向的**模拟操作系统**：在用户态把进程调度
 | ELF | 默认 Unicorn 执行真 x86 指令，syscall 转发到模拟层 | `src/elf_loader/unicorn_runner.py` |
 | 配置 | SpaceConfig v2：转义、行尾注释、null、列表、Schema 校验 | `src/spc.py` |
 | Shell | 元数据驱动的命令注册表、分组 help、Tab 补全、管道与重定向 | `src/commands.py` |
-| OTA | A/B 槽位、Ed25519 镜像验签与本地回滚（云端维护中，默认关闭） | `src/ota.py` `secure_boot.py` |
+| OTA | A/B 槽位、Ed25519 镜像验签、云端更新与本地回滚（Recovery 可从云端选版本装到指定槽位） | `src/ota.py` `secure_boot.py` |
 
 ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Windows 也能跑。
 
@@ -268,7 +268,7 @@ Python 为主，另有部分 C（`splibc/` 里的 ELF 测试程序）。核心�
 ## 🌐 在线访问
 
 - 官网：<https://viudiratech.rainyland.top>
-- OTA 更新地址（维护中）：<https://viudiratech.rainyland.top/ota/>
+- OTA 更新地址：<https://goutoustdio.rainyland.top/ota/>
 
 ## 🖥️ 支持系统
 

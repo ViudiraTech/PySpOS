@@ -55,7 +55,7 @@ VERSION_FILE = "version.txt"                # 版本信息文件名
 UPDATE_LOG = "update_log.json"              # 更新日志文件名
 
 # 云端更新服务器配置
-OTA_SERVER_URL = "https://pyspos.us.ci/ota/" # 更新服务器域名
+OTA_SERVER_URL = "https://goutoustdio.rainyland.top/ota/"  # 更新服务器域名
 REMOTE_VERSION_FILE = "version.json"        # 云端版本信息文件名
 REMOTE_UPDATE_FILE = "PySpOS.zip"           # 云端更新包文件名
 
@@ -209,7 +209,7 @@ def _fetch_with_requests(url: str) -> dict:
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
-            'Referer': 'https://pyspos.us.ci/',
+            'Referer': 'https://goutoustdio.rainyland.top/',
             'Cache-Control': 'max-age=0'
         })
         response = session.get(url, timeout=15, allow_redirects=True)
@@ -232,7 +232,7 @@ def _fetch_with_urllib(url: str) -> dict:
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         'Connection': 'keep-alive',
-        'Referer': 'https://pyspos.us.ci/',
+        'Referer': 'https://goutoustdio.rainyland.top/',
         'Cache-Control': 'max-age=0'
     }
     req = urllib.request.Request(url, headers=headers)
@@ -255,7 +255,7 @@ def _fetch_with_curl(url: str) -> dict:
             '-H', 'Accept: application/json, text/plain, */*',
             '-H', 'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
             '-H', 'Connection: keep-alive',
-            '-H', 'Referer: https://pyspos.us.ci/',
+            '-H', 'Referer: https://goutoustdio.rainyland.top/',
             '-H', 'Cache-Control: max-age=0',
             '--compressed',
             url
@@ -291,7 +291,7 @@ def download_update_package(remote_url: str, local_path: str, expected_size: int
             'Accept': '*/*',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Connection': 'keep-alive',
-            'Referer': 'https://pyspos.us.ci/',
+            'Referer': 'https://goutoustdio.rainyland.top/',
             'Cache-Control': 'max-age=0'
         }
         req = urllib.request.Request(remote_url, headers=headers)
@@ -431,6 +431,65 @@ def verify_update_compatibility(package_path=None) -> bool:
         logk.printl("ota", "更新包版本低于当前版本", boot_time)
         return False
 
+def resolve_download_url(download_url: str) -> str:
+    """把 version.json 里的 download_url 归一化成绝对 URL。
+
+    相对路径按 OTA_SERVER_URL 拼接；重构版文件名
+    （PySpOS-版本-日期.zip）直接可用，由调用方取 basename。
+    """
+    if not download_url:
+        return OTA_SERVER_URL + REMOTE_UPDATE_FILE
+    if not download_url.startswith('http://') and not download_url.startswith('https://'):
+        return OTA_SERVER_URL + download_url
+    return download_url
+
+
+def list_cloud_versions() -> list:
+    """列出云端 version.json 里 changelog 的全部版本（新到旧）。
+
+    每项：version / date / type / download_url（绝对）/
+    sha256 / file_size / notes。无 changelog 时退化为顶层单版本。
+    开关关闭或网络失败返回 []，不抛异常（调用方直接判空）。
+    """
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
+        return []
+    try:
+        data = fetch_remote_version()
+    except Exception as e:
+        logk.printl("ota", f"获取云端版本列表失败: {e}", boot_time)
+        return []
+    if not data:
+        return []
+    entries = []
+    changelog = data.get('changelog') or []
+    if changelog:
+        for rel in changelog:
+            try:
+                entries.append({
+                    'version': str(rel.get('version', 'unknown')),
+                    'date': str(rel.get('date', '')),
+                    'type': str(rel.get('type', '')),
+                    'download_url': resolve_download_url(rel.get('download_url', '')),
+                    'sha256': rel.get('sha256'),
+                    'file_size': rel.get('file_size', 0) or 0,
+                    'notes': rel.get('changes') or rel.get('release_notes', ''),
+                })
+            except Exception as e:
+                logk.printl("ota", f"跳过一条损坏的版本记录: {e}", boot_time)
+    else:
+        entries.append({
+            'version': str(data.get('version', 'unknown')),
+            'date': str(data.get('release_date', '')),
+            'type': str(data.get('develop_stage', '')),
+            'download_url': resolve_download_url(data.get('download_url', '')),
+            'sha256': data.get('sha256'),
+            'file_size': data.get('file_size', 0) or 0,
+            'notes': data.get('release_notes', ''),
+        })
+    return entries
+
+
 # 从云端检查更新
 def check_cloud_update() -> dict:
     if not _ota_enabled():
@@ -461,14 +520,12 @@ def check_cloud_update() -> dict:
     if comparison > 0:
         logk.printl("ota", f"发现新版本: {remote_ver}", boot_time)
         # 处理下载URL，确保是完整的URL
-        download_url = remote_info.get('download_url', OTA_SERVER_URL + REMOTE_UPDATE_FILE)
-        
+        raw_url = remote_info.get('download_url', '')
+
         # 判断是否是重构版（文件名格式为PySpOS-版本-日期.zip）
-        is_rebuild = download_url and re.match(r'PySpOS-[\d.]+-[\d]+\.zip', download_url)
-        
-        # 如果是相对路径，转换为完整URL
-        if not download_url.startswith('http://') and not download_url.startswith('https://'):
-            download_url = OTA_SERVER_URL + download_url
+        is_rebuild = raw_url and re.match(r'PySpOS-[\d.]+-[\d]+\.zip', raw_url)
+
+        download_url = resolve_download_url(raw_url)
         
         return {
             'has_update': True,
@@ -849,9 +906,16 @@ def _find_update_package():
 
 
 # 将更新包安装到另一槽位
-def install_update() -> bool:
-    package_path = _find_update_package()
-    if package_path is None:
+def install_package_to_slot(package_path: str, slot: str,
+                            allow_downgrade: bool = False) -> bool:
+    """把已下载的更新包安装到指定槽位（不切换当前槽位）。
+
+    签名验签与防回滚 floor 始终执行；allow_downgrade 只放行
+    「版本不高于当前」的新旧比较，且必须由用户显式确认后传入。
+    """
+    if slot not in (SLOT_A, SLOT_B):
+        raise ValueError("无效槽位")
+    if not package_path or not os.path.isfile(package_path):
         logk.printl("ota", "未找到更新包", boot_time)
         return False
     if not verify_update_package(package_path):
@@ -864,13 +928,14 @@ def install_update() -> bool:
     except secure_boot.BootVerificationError as exc:
         logk.printl("ota", f"更新包验证失败: {exc}", boot_time)
         return False
-    if not verify_update_compatibility(package_path):
+    if allow_downgrade:
+        logk.printl("ota", "已显式允许同级/降级安装，跳过新旧版本比较", boot_time)
+    elif not verify_update_compatibility(package_path):
         logk.printl("ota", "版本不兼容", boot_time)
         return False
 
-    target_name = get_other_slot()
-    target_slot = os.path.join(root_dir, target_name)
-    staging = os.path.join(root_dir, f".{target_name}.staging-{uuid.uuid4().hex[:12]}")
+    target_slot = os.path.join(root_dir, slot)
+    staging = os.path.join(root_dir, f".{slot}.staging-{uuid.uuid4().hex[:12]}")
     current_ver = get_current_version()
     update_ver = get_update_version(package_path)
     logk.printl("ota", f"安装更新: {current_ver} -> {update_ver}", boot_time)
@@ -895,10 +960,9 @@ def install_update() -> bool:
             raise ValueError("更新包核心文件不完整")
         if manifest is not None:
             secure_boot.verify_tree(staging, manifest, floor=_rollback_floor())
-        secure_boot.stage_directory_replace(root_dir, target_name, staging)
+        secure_boot.stage_directory_replace(root_dir, slot, staging)
         staging = None
-        secure_boot.stage_slot(root_dir, target_name, manifest)
-        set_current_slot(target_name)
+        secure_boot.stage_slot(root_dir, slot, manifest)
     except Exception as exc:
         logk.printl("ota", f"安装失败: {exc}", boot_time)
         if staging and os.path.isdir(staging):
@@ -914,6 +978,48 @@ def install_update() -> bool:
     except Exception as e:
         logk.printl("ota", f"删除更新包失败: {str(e)}", boot_time)
     return True
+
+
+def install_update() -> bool:
+    """本地安装/默认升级：把更新包目录里的包袱装到另一槽位并切换过去。"""
+    package_path = _find_update_package()
+    if package_path is None:
+        logk.printl("ota", "未找到更新包", boot_time)
+        return False
+    target_name = get_other_slot()
+    if not install_package_to_slot(package_path, target_name):
+        return False
+    set_current_slot(target_name)
+    return True
+
+
+def download_and_install_version(entry: dict, slot: str,
+                                 allow_downgrade: bool = False) -> bool:
+    """下载云端指定版本并安装到指定槽位（不自动切换当前槽位）。
+
+    entry 取自 list_cloud_versions() 的条目。调用方负责在降级/
+    同级时先拿到用户明确确认，再传 allow_downgrade=True。
+    """
+    if not _ota_enabled():
+        logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
+        return False
+    if slot not in (SLOT_A, SLOT_B):
+        logk.printl("ota", f"无效槽位: {slot}", boot_time)
+        return False
+    url = (entry or {}).get('download_url', '')
+    if not url:
+        logk.printl("ota", "版本条目缺少下载地址", boot_time)
+        return False
+    os.makedirs(OTA_PACKAGE_DIR, exist_ok=True)
+    package_name = url.split('/')[-1].split('?')[0] or OTA_PACKAGE_NAME
+    package_path = os.path.join(OTA_PACKAGE_DIR, package_name)
+    file_size = (entry or {}).get('file_size', 0) or 0
+
+    if not download_update_package(url, package_path, file_size):
+        return False
+    if not verify_update_package(package_path, (entry or {}).get('sha256')):
+        return False
+    return install_package_to_slot(package_path, slot, allow_downgrade)
 
 # 切换槽位
 def switch_slot() -> bool:

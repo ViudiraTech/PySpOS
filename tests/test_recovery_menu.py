@@ -104,20 +104,77 @@ def _stub_recovery_env(monkeypatch):
 def test_recovery_menu_to_reboot(monkeypatch, capsys):
     recovery = _stub_recovery_env(monkeypatch)
     # No-command 回车 → 输错一次 → 进命令 shell → exit 回菜单 → 重启
-    _feed(monkeypatch, "", "9", "6", "exit", "0")
+    _feed(monkeypatch, "", "9", "7", "exit", "0")
     assert recovery.recovery_main("test") == "reboot"
     out = capsys.readouterr().out
     assert "No command." in out
     assert "Reboot system now" in out
+    assert "Install version from cloud" in out
     assert "Wipe data/factory reset" in out
 
 
 def test_recovery_wipe_defaults_to_no(monkeypatch, capsys):
     recovery = _stub_recovery_env(monkeypatch)
     # No-command 回车 → 选出厂重置 → 空输入（默认 No）→ 重启
-    _feed(monkeypatch, "", "5", "", "0")
+    _feed(monkeypatch, "", "6", "", "0")
     assert recovery.recovery_main("test") == "reboot"
     assert "操作已取消" in capsys.readouterr().out
+
+
+def test_recovery_install_version_to_slot(monkeypatch, capsys):
+    """云端选版本装到指定槽位：新版本一次确认，装完可切换启动槽位。"""
+    import ota
+    recovery = _stub_recovery_env(monkeypatch)
+    entries = [{
+        "version": "3.3.0", "date": "2026-10-01", "type": "beta",
+        "download_url": "https://example.invalid/ota/PySpOS-3.3.0.zip",
+        "sha256": "abc", "file_size": 10, "notes": "",
+    }]
+    monkeypatch.setattr(ota, "list_cloud_versions", lambda: entries)
+    monkeypatch.setattr(ota, "get_current_slot", lambda: "slot_a")
+    monkeypatch.setattr(ota, "get_current_version", lambda: "3.2.0")
+    calls = {}
+
+    def fake_install(entry, slot, allow_downgrade=False):
+        calls["entry"] = entry
+        calls["slot"] = slot
+        calls["downgrade"] = allow_downgrade
+        return True
+
+    monkeypatch.setattr(ota, "download_and_install_version", fake_install)
+    switched = []
+    monkeypatch.setattr(ota, "set_current_slot", switched.append)
+    monkeypatch.setattr(recovery.printk, "confirm", lambda *a, **k: True)
+    # No-command 回车 → 选安装版本(2) → 选第一个版本 → 选槽位(默认非当前) → 重启
+    _feed(monkeypatch, "", "2", "", "", "0")
+    assert recovery.recovery_main("test") == "reboot"
+    assert calls == {"entry": entries[0], "slot": "slot_b", "downgrade": False}
+    assert switched == ["slot_b"]
+    assert "已安装到 slot_b" in capsys.readouterr().out
+
+
+def test_recovery_install_version_downgrade_needs_confirm(monkeypatch, capsys):
+    """同级/降级必须经过第二次明确确认；拒绝则取消且不调用安装。"""
+    import ota
+    recovery = _stub_recovery_env(monkeypatch)
+    entries = [{
+        "version": "3.1.0", "date": "2026-03-15", "type": "release",
+        "download_url": "https://example.invalid/ota/old.zip",
+        "sha256": None, "file_size": 0, "notes": "",
+    }]
+    monkeypatch.setattr(ota, "list_cloud_versions", lambda: entries)
+    monkeypatch.setattr(ota, "get_current_slot", lambda: "slot_a")
+    monkeypatch.setattr(ota, "get_current_version", lambda: "3.2.0")
+    called = []
+    monkeypatch.setattr(
+        ota, "download_and_install_version",
+        lambda *a, **k: called.append((a, k)) or True)
+    monkeypatch.setattr(recovery.printk, "confirm", lambda *a, **k: False)
+    _feed(monkeypatch, "", "2", "", "", "0")
+    assert recovery.recovery_main("test") == "reboot"
+    assert called == []
+    out = capsys.readouterr().out
+    assert "不高于当前版本" in out and "操作已取消" in out
 
 
 def test_recovery_shell_keeps_ota_commands(monkeypatch, capsys):

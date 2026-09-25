@@ -178,6 +178,7 @@ def _menu_loop():
     items = [
         ("Reboot system now", _act_reboot),
         ("Apply update from cloud", _act_ota_update),
+        ("Install version from cloud...", _act_install_version),
         ("Check for updates", _act_ota_check),
         ("Show slot / OTA status", _act_ota_status),
         ("Wipe cache partition", _act_ota_clean),
@@ -300,6 +301,99 @@ def _act_ota_status():
     if status['update_version']:
         print(f"更新版本: {status['update_version']}")
     print()
+    _pause()
+    return None
+
+
+def _act_install_version():
+    """从云端选版本、装到指定槽位（AOSP sideload 的云端版）。
+
+    不自动切换当前槽位；装完询问是否切换。降级/同级安装必须
+    经过第二次明确确认；签名验签与防回滚 floor 不可跳过。
+    """
+    if not _require_root("recovery 指定版本安装"):
+        _pause()
+        return None
+    entries = ota.list_cloud_versions()
+    if not entries:
+        print("未能获取云端版本列表（网络失败或 OTA 被禁用）。\n")
+        _pause()
+        return None
+    try:
+        ver_labels = []
+        for e in entries:
+            tag = f"v{e['version']}"
+            if e.get('date'):
+                tag += f"  {e['date']}"
+            if e.get('type'):
+                tag += f"  [{e['type']}]"
+            ver_labels.append(tag)
+        ver_idx = tui.ask_menu("Select a version to install:", ver_labels, 0)
+    except (TUIAbort, EOFError, KeyboardInterrupt):
+        return None
+    if ver_idx is BACK:
+        return None
+    entry = entries[ver_idx]
+    try:
+        current_slot = ota.get_current_slot()
+    except Exception:
+        current_slot = None
+    other_slot = ota.SLOT_B if current_slot == ota.SLOT_A else ota.SLOT_A
+    slot_options = [other_slot, current_slot]
+    slot_labels = []
+    for s in slot_options:
+        if s is None:
+            continue
+        mark = "当前" if s == current_slot else "非当前"
+        slot_labels.append(f"{s}（{mark}槽位）")
+    try:
+        slot_idx = tui.ask_menu(
+            f"Install v{entry['version']} to which slot?", slot_labels, 0)
+    except (TUIAbort, EOFError, KeyboardInterrupt):
+        return None
+    if slot_idx is BACK:
+        return None
+    slot = slot_options[slot_idx]
+    try:
+        current_ver = ota.get_current_version()
+    except Exception:
+        current_ver = "unknown"
+    try:
+        newer = ota.compare_versions(entry['version'], current_ver) > 0
+    except Exception:
+        newer = True
+    print(f"版本: v{entry['version']}  →  槽位: {slot}")
+    print(f"当前版本: {current_ver}，当前槽位: {current_slot}")
+    if entry.get('sha256'):
+        print(f"SHA-256: {entry['sha256'][:16]}…")
+    print()
+    if newer:
+        if not printk.confirm(f"下载 v{entry['version']} 并安装到 {slot}？"):
+            print("操作已取消\n")
+            _pause()
+            return None
+        allow_downgrade = False
+    else:
+        print("所选版本不高于当前版本（同级或降级）。")
+        if not printk.confirm("仍要安装到指定槽位？签名验签与防回滚照常执行。"):
+            print("操作已取消\n")
+            _pause()
+            return None
+        allow_downgrade = True
+    ok = ota.download_and_install_version(entry, slot, allow_downgrade)
+    if not ok:
+        print("安装失败\n")
+        _pause()
+        return None
+    print(f"v{entry['version']} 已安装到 {slot}\n")
+    if slot != current_slot and printk.confirm(f"把启动槽位切换到 {slot}？（否则下次启动仍进 {current_slot}）"):
+        try:
+            ota.set_current_slot(slot)
+            print(f"启动槽位已切换到 {slot}，重启后生效\n")
+        except Exception as e:
+            printk.error(f"切换槽位失败: {e}\n")
+    else:
+        print(f"保持启动槽位 {current_slot}，新槽位留待以后切换\n")
     _pause()
     return None
 
