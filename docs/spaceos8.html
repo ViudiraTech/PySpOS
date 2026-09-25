@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="SpaceOS 8：基于 Uinxed 自研内核与全套自研用户态的抢先体验系统。OpenJDK、DOOM 已能跑，第二版镜像修复 xHCI USB HID。">
-  <title>SpaceOS 8 — 抢先体验 | GoutouStdio</title>
+  <meta name="description" content="SpaceOS 8：第二束光。基于 Uinxed 自研内核与全套自研用户态的抢先体验系统。OpenJDK、DOOM 已能跑，第二版 slim 镜像修复 xHCI USB HID，USB 键鼠可用。">
+  <title>第二束光，来了。 | SpaceOS 8 抢先体验 | GoutouStdio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
@@ -43,9 +43,9 @@
 
   <main id="main" class="site-main">
     <div class="wrap page-head">
-      <span class="eyebrow">SpaceOS 8 · 公开测试 · 第二版</span>
-      <h1>从内核到能用的桌面。</h1>
-      <p class="lede">SpaceOS 6 与 7 停更之后，方向收回到一件事上：把一个能启动的内核，做成一台真正能用的机器。第二版 slim 抢先体验镜像已开放下载，修复了 xHCI USB HID，USB 键鼠可用。</p>
+      <span class="eyebrow">SpaceOS 8 · 公开测试 · 第二版 slim 镜像</span>
+      <h1>第二束光，来了。</h1>
+      <p class="lede">第一束光停在 SpaceOS 7 的半路。我们没有换方向，只是又点了一次——这次不为点亮屏幕，是为了让 USB 键鼠、Java、DOOM 都在上面好好工作。第二版 slim 抢先体验镜像已开放下载。</p>
       <div class="actions">
         <a class="btn btn-primary" href="spaceos8-download.html">下载第二版镜像</a>
         <a class="btn btn-secondary" href="spaceos8-download.html#usage">先读使用声明</a>
@@ -65,7 +65,7 @@
           <div>
             <p class="notice-title">抢先体验版，不是正式 release</p>
             <div class="notice-body">
-              <p>构建在自研内核 <a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">Uinxed-Kernel</a> 之上，配一套自研用户态。内核已在实体服务器上跑通，桌面能启动、能跑 Linux 软件，OpenJDK 与 DOOM 已经真的能跑。图形与部分 ABI 尚未补齐，精简版镜像已开放下载。</p>
+              <p>构建在自研内核 <a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">Uinxed-Kernel</a> 之上，配一套完全自研的用户态。内核已在实体服务器上跑通，桌面能启动，能跑现成的 Linux 软件——OpenJDK 与 DOOM 不是演示，是真的在跑。这一版 slim 镜像修好了 xHCI USB HID，USB 键盘与鼠标终于可用。图形与部分 ABI 仍在补齐，所以它叫抢先体验。</p>
             </div>
           </div>
         </div>
@@ -73,7 +73,7 @@
         <div class="section-head">
           <span class="eyebrow">规模</span>
           <h2 class="section-title" id="overview-title">先说用户态——它比内核更大，也更少见</h2>
-          <p class="section-lede">结构化数据用表格呈现，读得快，也不占用版面层级。</p>
+          <p class="section-lede">从窗口合成器到浏览器，没有一层是套现成的。下面是这一版的实际规模。</p>
         </div>
         <div class="table-scroll">
           <table class="data">
@@ -98,7 +98,7 @@
         <div class="section-head">
           <span class="eyebrow">验证</span>
           <h2 class="section-title" id="proof-title">能不能用，看它扛不扛得住现成的软件</h2>
-          <p class="section-lede">一个系统是否真的能用，不看它自己有多少功能，看它能不能扛住别人写好的软件。这是这一版最实在的进展，也是内核与用户态一起扛下来的结果。</p>
+          <p class="section-lede">一个系统是否真的能用，不看它自己有多少功能，看它能不能扛住别人写好的软件。下面四个程序，没有一个是为我们的内核写的。</p>
         </div>
         <ul class="rows">
           <li class="row row-ok">
@@ -254,7 +254,7 @@
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">诚实说明</span>
-          <h2 class="section-title" id="status-title">现在到哪一步了</h2>
+          <h2 class="section-title" id="status-title">走到哪一步，就写到哪一步</h2>
         </div>
         <div class="notice notice-warn" role="note">
           <span class="notice-icon" aria-hidden="true">!</span>
@@ -262,7 +262,7 @@
             <p class="notice-title">实验性系统，不要拿重要数据冒险</p>
             <div class="notice-body">
               <p>已跑通：内核在实体服务器上启动；能引导 Alpine Linux 并拉起图形桌面（Weston/Wayland 与 Xfce 两条路径都验证过），终端可用；SPUI 桌面与自研用户态在同一套内核上运行；X11 兼容层能跑 DOOM 这类真实图形程序；真实 JVM（OpenJDK）已经能跑。</p>
-              <p>第二版更新：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可用。第一版镜像继续保留，详情与校验值见下载页版本记录。</p>
+              <p>第二版更新：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可用——这是「第二束光」里最靠近日常的一小步。第一版镜像继续保留，详情与校验值见下载页版本记录。</p>
               <p>仍在补：GPU 驱动、虚拟化设备、音频，以及 Linux ABI 的相当一部分。PS/2 输入路径、evdev 消费者、poll/epoll 唤醒与 EEVDF 调度器都在验证阶段。systemd 只是初步跑通，离生产可用还有距离。NTFS 写入驱动尚未被认为可以信任，请用可抛弃的机器与测试盘。</p>
               <p>内核版本串为 <code>Uinxed 1.0.0-alpha.1</code>，已在 Dell PowerEdge R410 等实体服务器上验证。</p>
             </div>
