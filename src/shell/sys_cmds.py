@@ -63,7 +63,7 @@ def cmd_echo(text: str = ""):
     if interpret:
         out = out.encode("utf-8").decode("unicode_escape")
     if newline:
-        print(f"{out}\n")
+        print(out)
     else:
         print(out, end="")
 
@@ -140,6 +140,7 @@ def cmd_cd(path: str = None):
         os.environ["OLDPWD"] = old_cwd
         # 打印当前目录
         print(os.getcwd())
+        return 0
     except FileNotFoundError:
         printk.error(f"cd: 没有那个文件或目录: {path}\n")
     except NotADirectoryError:
@@ -148,6 +149,7 @@ def cmd_cd(path: str = None):
         printk.error(f"cd: 权限拒绝: {path}\n")
     except Exception as e:
         printk.error(f"cd: 错误: {e}\n")
+    return 1
 
 def cmd_finfo(filename: str):
     info = fs.get_file_info(filename) # 获取文件信息
@@ -312,9 +314,9 @@ def cmd_cat(args: str = ""):
     except ValueError:
         tokens = args.split() if args else []
     if not tokens:
-        import sys as _sys
-        if not _sys.stdin.isatty():
-            print(_sys.stdin.read(), end="")
+        import stdinctx
+        if not stdinctx.is_tty():
+            print(stdinctx.read_text(), end="")
             return
         printk.error("用法: cat <文件>\n")
         return
@@ -358,10 +360,18 @@ def cmd_grep(args: str = ""):
                 printk.error(f"grep: 未找到文件: {name}\n")
                 continue
             texts.append((name, text))
+    elif "q" in flags:
+        import stdinctx
+        for line in stdinctx.iter_lines():
+            ok = match(line)
+            if "v" in flags:
+                ok = not ok
+            if ok:
+                return 0
+        return 1
     else:
-        import sys as _sys
-        data = _sys.stdin.read() if not _sys.stdin.isatty() else ""
-        texts = [(None, data)]
+        import stdinctx
+        texts = [(None, stdinctx.read_text())]
     hits = 0
     multi = len(texts) > 1
     for name, text in texts:
@@ -384,10 +394,6 @@ def cmd_grep(args: str = ""):
             print(prefix + line if prefix else line)
     if "c" in flags and "q" not in flags:
         print(hits)
-        print()
-        return 0 if hits else 1
-    if "q" not in flags:
-        print()
     return 0 if hits else 1
 
 

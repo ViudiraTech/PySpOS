@@ -11,6 +11,7 @@ import subprocess
 import time
 
 FLAG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.hotreset')
+SUPERVISED_ENV = 'PYSPOS_HOTRESET_SUPERVISED'
 
 def set_flag():
     with open(FLAG_FILE, 'w') as f:
@@ -23,9 +24,15 @@ def clear_flag():
 def check_flag():
     return os.path.exists(FLAG_FILE)
 
-def _verify_boot_context():
+def _verify_boot_context(pinned_slot=None):
     root_dir = os.environ.get("PYSPOS_BOOT_ROOT")
     if not root_dir:
+        return
+    here = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+    if pinned_slot:
+        target = os.path.realpath(os.path.join(root_dir, pinned_slot))
+        if here != target:
+            raise RuntimeError("热重启期间指定槽位发生变化")
         return
     import secure_boot
     locked = os.environ.get("PYSPOS_BOOT_LOCKED") == "1"
@@ -33,8 +40,7 @@ def _verify_boot_context():
     selection = secure_boot.prepare_boot(root_dir, locked, legacy_slot=current_slot)
     if locked and selection is None:
         raise RuntimeError("热重启前 Bootloader 验证失败")
-    if selection and os.path.realpath(os.path.join(root_dir, selection["slot"])) \
-            != os.path.realpath(os.path.dirname(os.path.abspath(__file__))):
+    if selection and os.path.realpath(os.path.join(root_dir, selection["slot"])) != here:
         raise RuntimeError("热重启期间活动槽位发生变化")
 
 
@@ -78,12 +84,12 @@ def _boot_kernel():
     kernel.loop()
 
 
-def run():
+def run(pinned_slot=None):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     restart_count = 0
 
     while True:
-        _verify_boot_context()
+        _verify_boot_context(pinned_slot)
         restart_count += 1
         clear_flag()
 
@@ -100,6 +106,7 @@ def run():
             if old_pythonpath:
                 python_paths.append(old_pythonpath)
             child_env["PYTHONPATH"] = os.pathsep.join(python_paths)
+            child_env[SUPERVISED_ENV] = "1"
             process = subprocess.Popen(
                 cmd,
                 executable=sys.executable,
@@ -127,7 +134,16 @@ def run():
             break
 
 def trigger():
+    """请求热重启：置 flag 后以 42 退出，由 run() 的监督循环重启。
+
+    没有监督进程时不能退——退出去就没谁来重启，等于把 shell 关了。
+    这时只提示，不动 flag。
+    """
     import printk
+    if os.environ.get(SUPERVISED_ENV) != "1":
+        printk.warn("当前启动方式没有热重启监督进程，hotreset 不可用"
+                    "（请用 launcher.py 启动）")
+        return
     printk.info("Hot resetting...")
     set_flag()
     sys.exit(42)

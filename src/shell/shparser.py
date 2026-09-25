@@ -85,12 +85,30 @@ def tokenize(line):
             tokens.append(("op", c))
             i += 1
             continue
+        if c in "()":
+            flush_word()
+            tokens.append(("op", c))
+            i += 1
+            continue
+        if c == "&" and line.startswith("&1", i) and not spans and not buf \
+                and (not i or line[i - 1] == ">"):
+            flush_word()
+            tokens.append(("op", "&1"))
+            i += 2
+            continue
         if c.isdigit():
             j = i
             while j < n and line[j].isdigit():
                 j += 1
             if j < n and line[j] in "><" and not spans and not buf:
                 flush_word()
+                if line.startswith(">&", j) and j + 2 < n and line[j + 2].isdigit():
+                    k = j + 2
+                    while k < n and line[k].isdigit():
+                        k += 1
+                    tokens.append(("op", f"{int(line[i:j])}>&{int(line[j + 2:k])}"))
+                    i = k
+                    continue
                 if line.startswith(">>", j):
                     tokens.append(("op", str(int(line[i:j])) + ">>"))
                     i = j + 2
@@ -165,6 +183,11 @@ def tokenize(line):
 def _scan_dollar(line, i, quoted):
     """扫 $ 开头的扩展，返回 (kind, 名/内部命令, quoted, 新位置)。"""
     n = len(line)
+    if line.startswith("$((", i):
+        j = line.find("))", i + 3)
+        if j < 0:
+            raise LexError("未闭合的 $((...))")
+        return "arith", line[i + 3:j], quoted, j + 2
     if line.startswith("$(", i):
         depth = 1
         j = i + 2
@@ -219,18 +242,34 @@ def _scan_backtick(line, i):
 
 
 def _split_statements(tokens):
-    """按 ; & && || 切语句，返回 [(tokens, cond, background)]。"""
+    """按 ; & && || 切语句，返回 [(tokens, cond, background)]。
+
+    圆括号做嵌套分组：只有配平的顶层括号会被剥掉，当成一次普通命令。
+    """
     out = []
     cur = []
     pending_cond = None
+    depth = 0
     for kind, value in tokens:
-        if kind == "op" and value in (";", "&", "&&", "||"):
+        if kind == "op" and value == "(":
+            depth += 1
+            cur.append((kind, value))
+            continue
+        if kind == "op" and value == ")":
+            depth -= 1
+            if depth < 0:
+                raise LexError("多余的右括号")
+            cur.append((kind, value))
+            continue
+        if kind == "op" and depth == 0 and value in (";", "&", "&&", "||"):
             if cur or value in ("&&", "||"):
                 out.append((cur, pending_cond, value == "&"))
                 cur = []
             pending_cond = None if value in (";", "&") else value
             continue
         cur.append((kind, value))
+    if depth:
+        raise LexError("未闭合的左括号")
     if cur:
         out.append((cur, pending_cond, False))
     elif pending_cond in ("&&", "||"):
@@ -238,21 +277,54 @@ def _split_statements(tokens):
     return out
 
 
+def _strip_group(tokens):
+    """剥掉 ( ... ) 外层括号；未配平或首尾不是括号时返回 None。"""
+    if not (tokens and tokens[0] == ("op", "(")
+            and tokens[-1] == ("op", ")")):
+        return None
+    inner = tokens[1:-1]
+    if not inner:
+        raise LexError("空括号")
+    return inner
+
+
 def _split_pipeline(tokens):
+    """按 | 切管线。括号分组整体算一段，可以做管线成员。"""
     parts, cur = [], []
-    for kind, value in tokens:
+    i, n = 0, len(tokens)
+    while i < n:
+        kind, value = tokens[i]
         if kind == "op" and value == "|":
             parts.append(cur)
             cur = []
+            i += 1
             continue
+        if kind == "op" and value == "(":
+            depth, j = 1, i + 1
+            while j < n and depth:
+                k2, v2 = tokens[j]
+                if k2 == "op" and v2 == "(":
+                    depth += 1
+                elif k2 == "op" and v2 == ")":
+                    depth -= 1
+                j += 1
+            if depth:
+                raise LexError("未闭合的左括号")
+            cur.append(("group", tokens[i + 1:j - 1]))
+            i = j
+            continue
+        if kind == "op" and value == ")":
+            raise LexError("多余的右括号")
         cur.append((kind, value))
+        i += 1
     parts.append(cur)
     if any(not p for p in parts):
         raise LexError("管道缺了一段")
     return parts
 
 
-_REDIRECTS = {">", ">>", "<", "2>", "2>&1"}
+_REDIRECTS = {">", ">>", "<", "2>", "2>&1", "&1"}
+_FD_DUP_RE = re.compile(r"\A(\d+)>?&(\d+)\Z")
 
 
 def _parse_command(tokens):
@@ -260,11 +332,17 @@ def _parse_command(tokens):
     i, n = 0, len(tokens)
     while i < n:
         kind, value = tokens[i]
-        if kind == "op" and (value in _REDIRECTS or
-                             (len(value) > 1 and value[0].isdigit()
-                              and value[-1] in "><")):
-            if value == "2>&1":
-                redirects.append((2, "dup", None))
+        if kind == "op" and (value in _REDIRECTS
+                             or _FD_DUP_RE.match(value)
+                             or (len(value) > 1 and value[0].isdigit()
+                                 and value[-1] in "><")):
+            dup = _FD_DUP_RE.match(value)
+            if value == "2>&1" or value == "&1" or dup:
+                if dup:
+                    redirects.append((int(dup.group(1)), "dup_fd",
+                                     ("fd", int(dup.group(2)))))
+                else:
+                    redirects.append((2, "dup", None))
                 i += 1
                 continue
             i += 1
@@ -300,17 +378,41 @@ def _parse_command(tokens):
     return {"argv": argv, "redirects": redirects, "assign": assign}
 
 
+def _build_cmd(part, parse_inner):
+    """把一段 token 变成 cmd；遇到括号分组就递归解析成子程序。"""
+    groups = [tok for tok in part if tok[0] == "group"]
+    if groups:
+        if len(groups) > 1 or groups[0] is not part[0]:
+            raise LexError("括号分组后面只能跟重定向")
+        rest = part[1:]
+        trailing = _parse_command(rest)
+        inner_tokens = groups[0][1]
+        if not inner_tokens:
+            raise LexError("空括号")
+        return {"argv": [], "redirects": trailing["redirects"],
+                "assign": trailing["assign"],
+                "program": parse_inner(inner_tokens)}
+    return _parse_command(part)
+
+
 def parse(line):
     """line -> [({"cmds": [...], "background": bool}, cond)]。"""
+    return _parse_tokens(tokenize(line))
+
+
+def _parse_tokens(tokens, depth=0):
+    if depth > 16:
+        raise LexError("括号嵌套太深")
     program = []
-    for stmt_tokens, cond, background in _split_statements(tokenize(line)):
-        cmds = [_parse_command(part)
+    for stmt_tokens, cond, background in _split_statements(tokens):
+        cmds = [_build_cmd(part, lambda inner, d=depth: _parse_tokens(inner, d + 1))
                 for part in _split_pipeline(stmt_tokens)]
         program.append(({"cmds": cmds, "background": background}, cond))
     return program
 
 
-def _lookup_var(name, ctx):
+def _lookup_raw(name, ctx):
+    """未设返回 None，已设但为空返回 ""。${V-d} / ${V:-d} 就靠这个区分。"""
     if name == "?":
         return str(ctx.get("last", 0))
     if name == "$":
@@ -319,15 +421,199 @@ def _lookup_var(name, ctx):
         try:
             import process as _proc
             pid = _proc.last_bg_pid()
-            return "" if pid is None else str(pid)
+            return None if pid is None else str(pid)
         except Exception:
-            return ""
+            return None
     if name == "#":
         return "0"
-    value = ctx.get("vars", {}).get(name)
-    if value is None:
-        value = os.environ.get(name, "")
-    return value
+    if name in ctx.get("vars", {}):
+        return ctx["vars"][name]
+    return os.environ.get(name)
+
+
+def _lookup_var(name, ctx):
+    value = _lookup_raw(name, ctx)
+    return "" if value is None else value
+
+
+def _expand_var_spec(spec, ctx):
+    """${V} / ${V:-d} / ${V:=d} / ${V:?msg} / ${V:+alt}。
+
+    没写运算符就是 ${V}；:- 类在未设或为空时取默认值，- 类只看未设。
+    """
+    match = _VAR_MOD_RE.match(spec)
+    if not match:
+        name = spec
+        if not _is_name(name) and name not in ("?", "$", "!", "#"):
+            raise ExpandError(f"非法变量名: {name}")
+        return _lookup_var(name, ctx)
+    name, op, arg = match.group(1), match.group(2), match.group(3)
+    if not _is_name(name) and name not in ("?", "$", "!", "#"):
+        raise ExpandError(f"非法变量名: {name}")
+    raw = _lookup_raw(name, ctx)
+    value = "" if raw is None else raw
+    if op is None:
+        return value
+    unset = raw is None
+    empty = raw == ""
+    if op in (":-", "-"):
+        if not unset and not (op == ":-" and empty):
+            return value
+        return _eval_operand(arg, ctx) if op == ":-" else arg
+    if op in (":=", "="):
+        if not unset and not (op == ":=" and empty):
+            return value
+        new = _eval_operand(arg, ctx) if op == ":=" else arg
+        ctx["vars"][name] = new
+        return new
+    if op in (":+", "+"):
+        if unset or (op == ":+" and empty):
+            return ""
+        return _eval_operand(arg, ctx) if op == ":+" else arg
+    raise ExpandError(f"{name}: {arg or '缺少参数'}")
+
+
+_VAR_MOD_RE = re.compile(r"\A([A-Za-z_][A-Za-z0-9_]*)"
+                         r"(?:(:-|-|:\+|\+|:=|=|\?|:\?)(.*))?\Z", re.S)
+
+
+def _eval_operand(text, ctx):
+    """默认值/备选值里的 $VAR 仍要展开。"""
+    if not text:
+        return ""
+    toks = tokenize(text)
+    out = []
+    for kind, spans in toks:
+        if kind != "word":
+            continue
+        out.extend(expand_word(spans, ctx))
+    return " ".join(out)
+
+
+class _Arith:
+    """$(( )) 的整数表达式求值。
+
+    手写递归下降而不是 eval：算术展开里出现函数名/属性/下标就意味着
+    有人想从 shell 逃到 Python，沙子箱里不做这事。
+    """
+
+    def __init__(self, text, ctx):
+        self.text = text
+        self.ctx = ctx
+        self.pos = 0
+
+    def _peek(self):
+        return self.text[self.pos] if self.pos < len(self.text) else ""
+
+    def _skip(self):
+        while self._peek().isspace():
+            self.pos += 1
+
+    def _eat(self, ch):
+        self._skip()
+        if self._peek() == ch:
+            self.pos += 1
+            return True
+        return False
+
+    def value(self):
+        result = self.expr()
+        self._skip()
+        if self.pos != len(self.text):
+            raise ExpandError(f"算术表达式有多余内容: {self.text[self.pos:]}")
+        return str(result)
+
+    def expr(self):
+        left = self.term()
+        while True:
+            self._skip()
+            ch = self._peek()
+            if ch == "+":
+                self.pos += 1
+                left += self.term()
+            elif ch == "-":
+                self.pos += 1
+                left -= self.term()
+            else:
+                return left
+
+    def term(self):
+        left = self.power()
+        while True:
+            self._skip()
+            ch = self._peek()
+            if ch == "*":
+                self.pos += 1
+                left *= self.power()
+            elif ch == "/":
+                self.pos += 1
+                divisor = self.power()
+                if divisor == 0:
+                    raise ExpandError("算术表达式除以零")
+                left = int(left / divisor)
+            elif ch == "%":
+                self.pos += 1
+                divisor = self.power()
+                if divisor == 0:
+                    raise ExpandError("算术表达式模零")
+                left = left - divisor * int(left / divisor)
+            else:
+                return left
+
+    def power(self):
+        base = self.unary()
+        self._skip()
+        if self._peek() == "*" and self.text[self.pos:self.pos + 2] == "**":
+            self.pos += 2
+            return base ** self.power()
+        return base
+
+    def unary(self):
+        self._skip()
+        if self._eat("-"):
+            return -self.power()
+        if self._eat("+"):
+            return self.power()
+        return self.atom()
+
+    def atom(self):
+        self._skip()
+        if self._eat("("):
+            inner = self.expr()
+            self._skip()
+            if not self._eat(")"):
+                raise ExpandError("算术表达式缺右括号")
+            return inner
+        if self._peek() == "$":
+            self.pos += 1
+            kind, name, _quoted, self.pos = _scan_dollar(
+                self.text, self.pos, True)
+            if kind == "var":
+                return _as_int(_lookup_var(name, self.ctx), self.text)
+            raise ExpandError("算术表达式里不支持命令替换")
+        start = self.pos
+        while self._peek().isdigit():
+            self.pos += 1
+        if start != self.pos:
+            return int(self.text[start:self.pos])
+        if self._peek().isalpha() or self._peek() == "_":
+            j = self.pos
+            while j < len(self.text) and (self.text[j].isalnum()
+                                          or self.text[j] == "_"):
+                j += 1
+            name = self.text[self.pos:j]
+            self.pos = j
+            if not _is_name(name):
+                raise ExpandError(f"非法变量名: {name}")
+            return _as_int(_lookup_var(name, self.ctx), self.text)
+        raise ExpandError(f"算术表达式无法解析: {self.text[start:]}")
+
+
+def _as_int(value, context=""):
+    try:
+        return int(str(value).strip() or "0")
+    except ValueError:
+        raise ExpandError(f"算术表达式需要整数: {value!r}") from None
 
 
 def _has_magic(text):
@@ -365,9 +651,13 @@ def expand_word(spans, ctx):
                          magic=not quoted)
         elif kind == "var":
             name, quoted = span[1], span[2]
-            if not _is_name(name) and name not in ("?", "$", "!", "#"):
-                raise ExpandError(f"非法变量名: {name}")
-            value = _lookup_var(name, ctx)
+            value = _expand_var_spec(name, ctx)
+            touched[0] = touched[0] or bool(value) or quoted
+            _append_text(fields, flags, value, split=not quoted,
+                         magic=not quoted)
+        elif kind == "arith":
+            expr_text, quoted = span[1], span[2]
+            value = _Arith(expr_text, ctx).value()
             touched[0] = touched[0] or bool(value) or quoted
             _append_text(fields, flags, value, split=not quoted,
                          magic=not quoted)

@@ -14,6 +14,7 @@ import sys
 
 import fs
 import printk
+import stdinctx
 
 
 def _split_args(args):
@@ -35,8 +36,8 @@ def _read_inputs(tokens, usage):
                 continue
             texts.append(text)
         return texts, None
-    if not sys.stdin.isatty():
-        return [sys.stdin.read()], None
+    if not stdinctx.is_tty():
+        return [stdinctx.read_text()], None
     return None, f"用法: {usage}\n"
 
 
@@ -69,8 +70,8 @@ def cmd_wc(args=""):
             rows.append((name, text))
         if not rows:
             return 1
-    elif not sys.stdin.isatty():
-        rows = [("", sys.stdin.read())]
+    elif not stdinctx.is_tty():
+        rows = [("", stdinctx.read_text())]
     else:
         printk.error("用法: wc [-lwc] [文件...]\n")
         return 1
@@ -119,20 +120,33 @@ def _parse_n(tokens, default):
     return count, rest, err, plus
 
 
+def _stream_lines(tokens, usage, limit=None):
+    """给文件就切片，给 stdin 就流式按行读（最多 limit 行）。
+
+    流式是为了能提前收手：head/grep -q 读完要的行就退，上游立刻拿到
+    SIGPIPE，`yes | head -1` 才不会把管线挂死。
+    """
+    if tokens:
+        text, err = _one_input(tokens, usage)
+        if err:
+            return None, err
+        lines = text.splitlines()
+        return (lines[:limit] if limit is not None else lines), None
+    return stdinctx.read_lines(limit), None
+
+
 def cmd_head(args=""):
     tokens = _split_args(args)
     count, files, err, _ = _parse_n(tokens, 10)
     if err:
         printk.error(err + "\n")
         return 1
-    text, err = _one_input(files, "head [-n 行数] [文件]")
+    lines, err = _stream_lines(files, "head [-n 行数] [文件]",
+                               max(count, 0) or None)
     if err:
         printk.error(err)
         return 1
-    lines = text.splitlines()
-    print("\n".join(lines[:count]))
-    if lines[:count]:
-        print()
+    print("\n".join(lines[:count] if count > 0 else []))
     return 0
 
 
@@ -154,8 +168,6 @@ def cmd_tail(args=""):
     else:
         picked = lines[-count:]
     print("\n".join(picked))
-    if picked:
-        print()
     return 0
 
 
@@ -186,8 +198,6 @@ def cmd_sort(args=""):
         lines = deduped
     for line in lines:
         print(line)
-    if lines:
-        print()
     return 0
 
 
@@ -243,8 +253,8 @@ def cmd_tr(args=""):
     if (len(sets) < 1) or (not delete and len(sets) < 2):
         printk.error("用法: tr [-d] 字符集1 [字符集2]\n")
         return 1
-    if not sys.stdin.isatty():
-        text = sys.stdin.read()
+    if not stdinctx.is_tty():
+        text = stdinctx.read_text()
     else:
         printk.error("用法: tr [-d] 字符集1 [字符集2]\n")
         return 1
@@ -319,8 +329,6 @@ def cmd_cut(args=""):
         out.append(delim.join(
             cols[k - 1] for k in sorted(picked) if 1 <= k <= len(cols)))
     print("\n".join(out))
-    if out:
-        print()
     return 0
 
 
@@ -332,8 +340,6 @@ def cmd_rev(args=""):
         return 1
     lines = [line[::-1] for line in text.splitlines()]
     print("\n".join(lines))
-    if lines:
-        print()
     return 0
 
 
@@ -345,8 +351,6 @@ def cmd_tac(args=""):
         return 1
     lines = text.splitlines()[::-1]
     print("\n".join(lines))
-    if lines:
-        print()
     return 0
 
 
@@ -365,8 +369,6 @@ def cmd_nl(args=""):
             print(f"{num:>6}\t{line}")
         else:
             print()
-    if text.splitlines():
-        print()
     return 0
 
 
@@ -400,8 +402,6 @@ def cmd_seq(args=""):
         if count > 1000000:
             printk.error("seq: 输出过多，已截断\n")
             return 1
-    if count:
-        print()
     return 0
 
 
@@ -417,8 +417,8 @@ def cmd_tee(args=""):
         if not is_safe_filename(name):
             printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
             return 1
-    if not sys.stdin.isatty():
-        text = sys.stdin.read()
+    if not stdinctx.is_tty():
+        text = stdinctx.read_text()
     else:
         printk.error("用法: tee [-a] 文件...（需要管道输入）\n")
         return 1
@@ -466,8 +466,6 @@ def cmd_sed(args=""):
         printk.error(f"sed: 替换失败: {exc}\n")
         return 1
     print(out)
-    if text.splitlines():
-        print()
     return 0
 
 
