@@ -106,6 +106,20 @@ def main():
     try:
         _log("启动热重启环境...")
         import hotreset_env
+    except ModuleNotFoundError:
+        # 3.1.0 及更早的槽位没有热重启环境：直接调槽位自己的 main.main()
+        #（结尾进 kernel.loop()），与热重启前的启动路径一致。
+        _log("槽位版本较旧（无热重启环境），直接启动...")
+        try:
+            import main as slot_main
+            slot_main.main()
+        except Exception as exc:
+            _log(f"直接启动失败: {exc}")
+            import traceback
+            traceback.print_exc()
+            return 1
+        return 0
+    try:
         hotreset_env.run()
     except Exception as exc:
         _log(f"启动失败: {exc}")
