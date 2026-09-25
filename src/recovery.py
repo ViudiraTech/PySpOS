@@ -3,7 +3,8 @@
 #   PySpOS 恢复模式：外观对标 AOSP 原生 Recovery。
 #
 #   流程（和真机一致）：清屏 → "No command." 待机屏 → 按回车进菜单 →
-#   数字选择、高亮项回车执行。出厂重置走二次确认且默认停在 No。
+#   curses 下 ↑↓ 移动高亮、回车执行、Esc 返回；无 curses 时输编号。
+#   出厂重置走二次确认且默认停在 No。
 #   底部的 Run recovery command 是旧命令循环入口，文档里的
 #   recovery > ota_rollback 步骤继续有效。
 #
@@ -11,6 +12,8 @@
 import main
 import kernel
 import logk
+import tui
+from tui import BACK, TUIAbort
 import printk
 import shutil
 import os
@@ -171,25 +174,6 @@ def _no_command_screen():
     _read("按回车显示菜单...")
 
 
-def _render_menu(items):
-    kernel.screen_clear()
-    print(_build_id())
-    print()
-    print("Type a number and press Enter.")
-    print()
-    for i, (title, _fn) in enumerate(items):
-        print(f"  {i}  {title}")
-    print()
-
-
-def _choose(n):
-    while True:
-        s = _read("recovery> ").strip()
-        if s.isdigit() and 0 <= int(s) < n:
-            return int(s)
-        print(f"无效选择: {s!r}（请输入 0-{n - 1}）\n")
-
-
 def _menu_loop():
     items = [
         ("Reboot system now", _act_reboot),
@@ -201,9 +185,17 @@ def _menu_loop():
         ("Run recovery command", _act_shell),
         ("Power off", _act_poweroff),
     ]
+    titles = [title for title, _fn in items]
     while True:
-        _render_menu(items)
-        idx = _choose(len(items))
+        kernel.screen_clear()
+        try:
+            idx = tui.ask_menu(_build_id(), titles)
+        except (TUIAbort, EOFError, KeyboardInterrupt):
+            # 中止输入 = 离开 Recovery（旧行为是 EOF 上浮到 kernel.loop，
+            # 同样结束会话；这里显式回系统更干净）。
+            return
+        if idx is BACK:
+            continue
         action = items[idx][1]()
         if action in ("reboot", "poweroff"):
             return
@@ -235,15 +227,14 @@ def _act_erase():
     if not _require_root("recovery erase"):
         _pause()
         return None
-    print("Wipe all user data?")
-    print("This can not be undone!")
-    print()
-    print("  0  No")
-    print("  1  Factory reset")
-    print()
-    # 默认停在 No：空输入与无效输入都视为拒绝（AOSP 同理）。
-    s = _read("recovery> ").strip()
-    if s != "1":
+    try:
+        sel = tui.ask_menu(
+            "Wipe all user data?\nThis can not be undone!",
+            ["No", "Factory reset"], 0)
+    except (TUIAbort, EOFError, KeyboardInterrupt):
+        return None
+    # 默认停在 No：Esc / 空输入 / 选 No 都视为拒绝（AOSP 同理）。
+    if sel is BACK or sel != 1:
         print("操作已取消\n")
         _pause()
         return None

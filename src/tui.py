@@ -266,6 +266,23 @@ def _line_text(title, body, question, default="", i=None, n=None):
         return s
 
 
+def _line_menu(header, options, default_idx=0):
+    """行式菜单（d-i text 前端语义）：编号+回车，空输入=默认高亮项。"""
+    print(sanitize(header))
+    print()
+    for idx, opt in enumerate(options):
+        mark = ">" if idx == default_idx else " "
+        print(f"{mark} {idx}  {sanitize(str(opt))}")
+    print()
+    while True:
+        s = _line_input("recovery> ").strip()
+        if s == "":
+            return default_idx
+        if s.isdigit() and 0 <= int(s) < len(options):
+            return int(s)
+        print(_("tui.invalid"))
+
+
 def _line_select(title, body, options, default_idx=0, i=None, n=None):
     print(f"\n==== {_step_prefix(i, n)}{sanitize(title)} ====\n{sanitize(body)}")
     for idx, opt in enumerate(options, 1):
@@ -582,6 +599,50 @@ class _CursesUI:
                         idx, top = j, j
                         break
 
+    def menu(self, header, options, default_idx=0):
+        """AOSP Recovery 式全屏文本菜单：无对话框框体，`>` + 反白表高亮。
+
+        ↑↓（循环）移动，回车确认，Esc 返回 BACK，Home/End 跳首尾。
+        条目多于一屏时滚动，选中行永远可见。
+        """
+        head = [sanitize(l) for l in str(header).split("\n")]
+        opts = [sanitize(str(o)) for o in options]
+        idx = max(0, min(default_idx, len(opts) - 1))
+        top = 0
+        while True:
+            self.s.erase()
+            h, w = self.h, self.w
+            y = 1
+            for l in head:
+                self._put(y, 2, l, self.C_TEXT)
+                y += 1
+            y += 1
+            page = max(1, h - y - 1)      # 末行留给页脚提示
+            if idx < top:
+                top = idx
+            if idx >= top + page:
+                top = idx - page + 1
+            for k in range(top, min(top + page, len(opts))):
+                mark = ">" if k == idx else " "
+                attr = (_curses.A_REVERSE | _curses.A_BOLD) if k == idx else self.C_TEXT
+                self._put(y, 2, f"{mark} {k}  {opts[k]}", attr)
+                y += 1
+            self._put(h - 1, 2, "↑↓移动  回车确认  Esc返回", self.C_FOOT)
+            self.s.refresh()
+            c = self.s.getch()
+            if c == _curses.KEY_UP:
+                idx = (idx - 1) % len(opts)
+            elif c == _curses.KEY_DOWN:
+                idx = (idx + 1) % len(opts)
+            elif c == _curses.KEY_HOME:
+                idx, top = 0, 0
+            elif c == _curses.KEY_END:
+                idx = len(opts) - 1
+            elif c == 27:
+                return BACK
+            elif c in (10, 13, _curses.KEY_ENTER):
+                return idx
+
     def progress(self, title, body, frac):
         lines, width = self._layout(body)
         filled = int(width * max(0.0, min(1.0, frac)))
@@ -661,7 +722,7 @@ def _with_curses(fn, *args, **kwargs):
 
 
 # --------------------------------------------------------------------------
-# 统一入口（调用方只用这五个）
+# 统一入口（调用方只用这六个）
 # --------------------------------------------------------------------------
 
 def note(title, body, i=None, n=None):
@@ -687,6 +748,14 @@ def ask_select(title, body, options, default_idx=0, i=None, n=None):
     if backend() == "curses":
         return _with_curses("select", title, body, options, default_idx, i, n)
     return _line_select(title, body, options, default_idx, i, n)
+
+
+def ask_menu(header, options, default_idx=0):
+    """全屏菜单（Recovery 风格）。curses 下方向键+回车，否则编号+回车。
+    Esc 返回 BACK；EOF/中断抛 TUIAbort，调用方按「离开」处理。"""
+    if backend() == "curses":
+        return _with_curses("menu", header, options, default_idx)
+    return _line_menu(header, options, default_idx)
 
 
 def progress(title, body, frac):
