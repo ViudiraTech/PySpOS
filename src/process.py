@@ -1,25 +1,13 @@
-#
-#   process.py
-#   PySpOS 模拟进程管理 + EEVDF 调度器
-#
-#   建模依据（Linux 6.6+ EEVDF，Peter Zijlstra 2023）：
-#   - https://docs.kernel.org/scheduler/sched-eevdf.html
-#   - Earliest Eligible Virtual Deadline First：每个可运行任务维护 vruntime；
-#     运行 delta 时间后 vruntime += delta * NICE_0_LOAD / weight；
-#     虚拟截止期 deadline = vruntime + slice；每次挑选“eligible（lag>=0，
-#     即 vruntime <= avg_vruntime）任务中 deadline 最早者”，无 eligible
-#     者时退化为全局最早 deadline；用完 slice（vruntime >= deadline）则
-#     更新 deadline 并重排；短 slice 任务天然 deadline 更早，从而低延迟。
-#   - 为教学实现做的简化（与内核差异处均有注释标明 SIMPLIFY）：
-#     单 CPU、协作式 tick 驱动、无 cgroup、无 PELT 负载追踪、
-#     睡眠任务 lag 衰减简化为唤醒时 vruntime 箝位到 min_vruntime、
-#     切片保护简化为 min_slice 运行保护。
-#
-#   对外 API（shell / 测试使用）：
-#     spawn / fork_task / exit_task / block / unblock /
-#     send_signal / parse_signal / list_procs / get / reset /
-#     sched_tick / pick_next / set_nice
-#
+'''
+ *
+ *      process.py
+ *      Process table, PCB state, EEVDF scheduling and job control.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import heapq
 import itertools
@@ -28,24 +16,24 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 # --------------------------------------------------------------------------
-# 常量：对齐内核语义（数值按教学可读性取用，单位：毫秒浮点）
+# constants mirroring kernel semantics; values are picked for teaching readability and are float milliseconds
 # --------------------------------------------------------------------------
 
-NICE_0_LOAD = 1024          # 内核 NICE_0_LOAD
-PID_MAX = 32768             # 内核 PID_MAX_DEFAULT（简化版位图上限）
+NICE_0_LOAD = 1024          # the kernel's NICE_0_LOAD
+PID_MAX = 32768             # the kernel's PID_MAX_DEFAULT, simplified as a bitmap ceiling
 
-# 保留 PID（Linux 语义）：0=idle/swapper（不可见调度器驱动），
-# 1=init（孤儿收养+僵尸回收+信号转发），2=shell（init 的子进程，交互驱动）。
+# reserved PIDs, with Linux semantics: 0=idle/swapper (driven by the invisible scheduler),
+# 1=init (orphan adoption, zombie reaping, signal forwarding), 2=shell (init's child, driven interactively).
 PID_IDLE = 0
 PID_INIT = 1
 PID_SHELL = 2
 RESERVED_PIDS = (PID_IDLE, PID_INIT, PID_SHELL)
 
-BASE_SLICE_MS = 6.0         # sysctl_sched_base_slice（内核默认约 3~6ms 量级）
-MIN_SLICE_MS = 0.75         # 最小切片保护（内核 sysctl_sched_min_granularity 思想）
-MAX_SLICE_MS = 24.0         # 单个 slice 上限，防止独占
+BASE_SLICE_MS = 6.0         # sysctl_sched_base_slice, whose kernel default is roughly 3-6ms
+MIN_SLICE_MS = 0.75         # minimum slice guard, after sysctl_sched_min_granularity
+MAX_SLICE_MS = 24.0         # per-slice ceiling so one task cannot monopolise the CPU
 
-# 内核 sched_prio_to_weight[40]（nice -20..19），照搬数值保证权重比真实。
+# the kernel's sched_prio_to_weight[40] for nice -20..19, copied verbatim so the weight ratios are real
 _SCHED_PRIO_TO_WEIGHT = (
     88761, 71755, 56483, 46273, 36291,
     29154, 23254, 18705, 14949, 11916,
@@ -58,13 +46,14 @@ _SCHED_PRIO_TO_WEIGHT = (
 )
 
 
+# Map a nice value in [-20, 19] onto its scheduler weight.
 def nice_to_weight(nice: int) -> int:
     nice = max(-20, min(19, int(nice)))
     return _SCHED_PRIO_TO_WEIGHT[nice + 20]
 
 
 # --------------------------------------------------------------------------
-# 信号（沿用 proc.py 的编号，保持 shell 命令兼容）
+# signal numbers, kept from proc.py so the shell commands stay compatible
 # --------------------------------------------------------------------------
 
 SIGTERM = 15
@@ -86,6 +75,7 @@ SIGNALS: Dict[str, int] = {
 }
 
 
+# Turn a signal name or number into a signal number, or None.
 def parse_signal(text: str) -> Optional[int]:
     if text is None:
         return None
@@ -93,16 +83,16 @@ def parse_signal(text: str) -> Optional[int]:
 
 
 # --------------------------------------------------------------------------
-# 任务状态（对齐 Linux task_state，另保留旧 proc.py 的英文名做兼容）
+# task states mirroring Linux task_state, with the old proc.py English names kept for compatibility
 # --------------------------------------------------------------------------
 
-TASK_RUNNING = "Running"            # TASK_RUNNING：可运行/运行中
-TASK_INTERRUPTIBLE = "Sleeping"     # TASK_INTERRUPTIBLE：可中断睡眠
-TASK_STOPPED = "Stopped"            # TASK_STOPPED：SIGSTOP 暂停
-EXIT_ZOMBIE = "Zombie"              # EXIT_ZOMBIE：已退出待回收
-EXIT_DEAD = "Dead"                  # EXIT_DEAD：已回收
+TASK_RUNNING = "Running"            # TASK_RUNNING: runnable or running
+TASK_INTERRUPTIBLE = "Sleeping"     # TASK_INTERRUPTIBLE: interruptible sleep
+TASK_STOPPED = "Stopped"            # TASK_STOPPED: stopped by SIGSTOP
+EXIT_ZOMBIE = "Zombie"              # EXIT_ZOMBIE: exited, awaiting reaping
+EXIT_DEAD = "Dead"                  # EXIT_DEAD: already reaped
 
-# 旧 proc.py 状态名兼容
+# kept for the old proc.py state names
 RUNNING = TASK_RUNNING
 DONE = "Done"
 FAILED = "Failed"
@@ -110,36 +100,37 @@ KILLED = "Killed"
 STOPPED = TASK_STOPPED
 
 
+# Process control block: the teaching subset of Linux's task_struct.
 @dataclass
 class PCB:
-    """进程控制块（对齐 Linux task_struct 的教学子集）。"""
     pid: int
-    comm: str                       # 任务名（Linux task_struct.comm）
+    comm: str                       # task name, Linux task_struct.comm
     state: str = TASK_RUNNING
     ppid: int = 0
-    pgrp: int = 0                   # 进程组（默认 = pid，自成一组，如 bash 每条命令）
-    session: int = 0                # 会话（默认 = shell 会话）
+    pgrp: int = 0                   # process group, defaulting to the pid so each command stands alone as in bash
+    session: int = 0                # session, defaulting to the shell's session
     nice: int = 0
-    static_prio: int = 120          # 内核 static_prio = MAX_RT_PRIO(100) + nice + 20
+    static_prio: int = 120          # the kernel's static_prio = MAX_RT_PRIO(100) + nice + 20
     weight: int = NICE_0_LOAD
     vruntime: float = 0.0           # sched_entity.vruntime
-    deadline: float = 0.0           # sched_entity.deadline（虚拟截止期）
-    slice: float = BASE_SLICE_MS    # 本轮请求的时间片（真实时间 ms）
-    sum_exec_runtime: float = 0.0   # se.sum_exec_runtime（累计真实运行 ms）
-    nvcsw: int = 0                  # 自愿切换次数
-    nivcsw: int = 0                 # 非自愿（被抢占）切换次数
+    deadline: float = 0.0           # sched_entity.deadline, the virtual deadline
+    slice: float = BASE_SLICE_MS    # slice requested this round, in real milliseconds
+    sum_exec_runtime: float = 0.0   # se.sum_exec_runtime, cumulative real running time in ms
+    nvcsw: int = 0                  # voluntary context switches
+    nivcsw: int = 0                 # involuntary switches, that is preemptions
     exit_code: int = 0
-    signal: int = 0                 # 最后收到的致死信号
-    pending: List[int] = field(default_factory=list)  # 待处理信号队列
+    signal: int = 0                 # last fatal signal received
+    pending: List[int] = field(default_factory=list)  # pending signal queue
     start_time: float = field(default_factory=time.time)
     end_time: Optional[float] = None
     kind: str = "app"               # app | elf | spf | shell | init | idle | kthread
-    remote: bool = False            # True=跑在真实 OS 子进程里，不进 EEVDF 就绪队
-    job_id: Optional[int] = None    # 所属后台作业号
+    remote: bool = False            # True means it runs as a real host child and never enters the EEVDF run queue
+    job_id: Optional[int] = None    # owning background job number
     note: str = ""
-    cmd: str = ""                   # 旧 proc.py 兼容：完整命令行
-    _gen: int = 0                   # runqueue 堆条目版本号（内部）
+    cmd: str = ""                   # legacy proc.py compatibility: the full command line
+    _gen: int = 0                   # run queue heap entry generation, internal
 
+# Default the command name to comm when it was not given.
     def __post_init__(self):
         if not self.cmd:
             self.cmd = self.comm
@@ -150,22 +141,25 @@ class PCB:
         self.static_prio = 100 + self.nice + 20
         self.weight = nice_to_weight(self.nice)
 
+# Return the last scheduling-lag snapshot; the run queue owns the live value.
     @property
     def lag(self) -> float:
-        """lag 估算（相对 runqueue 均值由调度器计算；此处仅保留上次快照）。"""
         return getattr(self, "_lag_snapshot", 0.0)
 
 
 # --------------------------------------------------------------------------
-# PID 分配（Linux 位图思想的简化版：区间内顺序分配 + 回绕复用）
+# PID allocation, a simplification of the Linux bitmap: sequential inside a range, wrapping to reuse
 # --------------------------------------------------------------------------
 
+# Hands out PIDs from a bounded range, wrapping to avoid the reserved low ones.
 class PidAllocator:
+# Set the highest PID this allocator may hand out.
     def __init__(self, pid_max: int = PID_MAX):
         self.pid_max = pid_max
         self._used: set = set()
         self._next = 1
 
+# Return the next free PID, skipping the reserved low range.
     def alloc(self) -> int:
         for _ in range(self.pid_max):
             pid = self._next
@@ -177,43 +171,48 @@ class PidAllocator:
                 return pid
         raise RuntimeError("pid 位图耗尽")
 
+# Return a PID to the free pool.
     def free(self, pid: int) -> None:
         self._used.discard(pid)
 
+# Mark a PID as permanently taken, such as idle, init and shell.
     def reserve(self, pid: int) -> None:
-        """占用保留 PID（0/1/2 由 boot_system 登记）。"""
         self._used.add(pid)
         if self._next <= pid:
             self._next = pid + 1
 
+# Forget every reserved and allocated PID.
     def reset(self) -> None:
         self._used.clear()
         self._next = 1
 
 
 # --------------------------------------------------------------------------
-# EEVDF 运行队列（单 CPU，对应内核 struct cfs_rq 的 EEVDF 子集）
+# the EEVDF run queue for a single CPU, the EEVDF subset of the kernel's struct cfs_rq
 # --------------------------------------------------------------------------
 
+# Earliest Eligible Virtual Deadline First run queue.
 class EEVDFRunQueue:
+# Create an empty run queue with the given slice bounds.
     def __init__(self, base_slice: float = BASE_SLICE_MS,
                  min_slice: float = MIN_SLICE_MS):
         self.base_slice = base_slice
         self.min_slice = min_slice
-        self.min_vruntime = 0.0     # cfs_rq->min_vruntime（单调递增）
+        self.min_vruntime = 0.0     # cfs_rq->min_vruntime, monotonically increasing
         self.curr: Optional[PCB] = None
         self._heap: list = []       # (deadline, vruntime, seq, pid)
         self._seq = itertools.count()
-        self._queued: Dict[int, PCB] = {}   # pid -> pcb（在队可运行任务）
+        self._queued: Dict[int, PCB] = {}   # pid to PCB, for tasks currently on the run queue
         self.nr_switches = 0
         self.timeline: List[Tuple[float, int, str]] = []  # (vtime, pid, event)
 
-    # -- 入队/出队 --------------------------------------------------------
+# -- enqueue / dequeue ------------------------------------------------
 
+# Make a runnable task eligible, ignoring host children.
     def enqueue(self, pcb: PCB) -> None:
-        # SIMPLIFY: place_entity 简化——唤醒任务 vruntime 箝位到 min_vruntime，
-        # 保留“欠账者优先”，但不实现内核的 PLACE_LAG/vlag 衰减全套逻辑。
-        # remote 任务跑在真实 OS 子进程上，由宿主 CPU 并发执行，不进虚拟就绪队。
+# SIMPLIFY: place_entity is simplified; a woken task is clamped to min_vruntime,
+# keeping the owed-debt preference but not the kernel's full PLACE_LAG/vlag decay.
+# a remote task runs as a real host child on the host CPU and stays out of the virtual run queue.
         if pcb.remote:
             return
         if pcb.state == TASK_RUNNING:
@@ -226,36 +225,39 @@ class EEVDFRunQueue:
             heapq.heappush(self._heap,
                             (pcb.deadline, pcb.vruntime, next(self._seq), pcb.pid, pcb._gen))
 
+# Remove a task from the run queue by PID.
     def dequeue(self, pcb: PCB) -> None:
-        self._queued.pop(pcb.pid, None)   # 堆条目惰性失效（靠 _gen 识别）
+        self._queued.pop(pcb.pid, None)   # heap entries are invalidated lazily, detected through _gen
         if self.curr is pcb:
             self.curr = None
 
+# Return the queued PCB for a PID when the generation still matches.
     def _live_entry(self, pid: int, gen: int) -> Optional[PCB]:
         pcb = self._queued.get(pid)
         if pcb is None or pcb._gen != gen or pcb.state != TASK_RUNNING:
             return None
         return pcb
 
-    # -- vruntime / deadline 核心公式 -------------------------------------
+# -- core vruntime / deadline formulas ---------------------------------
 
+# Return the fair delta: exec slice scaled by NICE_0_LOAD over weight.
     @staticmethod
     def calc_delta_fair(delta_ms: float, weight: int) -> float:
-        """内核 calc_delta_fair：delta_exec * NICE_0_LOAD / weight。"""
         return delta_ms * NICE_0_LOAD / max(1, weight)
 
+# Sum the weights of every queued task.
     def _total_weight(self) -> int:
         w = sum(p.weight for p in self._queued.values())
         if self.curr is not None and self.curr.pid not in self._queued:
             w += self.curr.weight
         return max(1, w)
 
+# Return the virtual slice, the real slice normalised by weight.
     def _vslice(self, pcb: PCB) -> float:
-        """虚拟切片 = 真实 slice 经权重归一（deadline 推进量）。"""
         return self.calc_delta_fair(pcb.slice, pcb.weight)
 
+# Return min_vruntime plus the weighted mean lag, Linux-style.
     def avg_vruntime(self) -> float:
-        """内核 avg_vruntime 加权平均思想：min_vruntime + Σw(v-min)/Σw。"""
         ents = [p for p in self._queued.values() if p.state == TASK_RUNNING]
         if self.curr is not None and self.curr.state == TASK_RUNNING \
                 and self.curr.pid not in self._queued:
@@ -268,6 +270,7 @@ class EEVDFRunQueue:
         s = sum(p.weight * (p.vruntime - self.min_vruntime) for p in ents)
         return self.min_vruntime + s / total_w
 
+# Recompute min_vruntime from runnable, non-preempted tasks.
     def _update_min_vruntime(self) -> None:
         cands = [p.vruntime for p in self._queued.values()
                  if p.state == TASK_RUNNING]
@@ -278,19 +281,20 @@ class EEVDFRunQueue:
             if m > self.min_vruntime:
                 self.min_vruntime = m
 
+# eligible <=> lag >= 0 <=> vruntime <= avg_vruntime。
     def eligible(self, pcb: PCB) -> bool:
-        """eligible <=> lag >= 0 <=> vruntime <= avg_vruntime。"""
         return pcb.vruntime <= self.avg_vruntime() + 1e-9
 
-    # -- 选任务：pick_eevdf ----------------------------------------------
+# -- picking a task: pick_eevdf -----------------------------------------
 
+# Choose the eligible task with the smallest virtual runtime.
     def pick_next(self) -> Optional[PCB]:
         avg = self.avg_vruntime()
         best = None
         best_key = None
         fallback = None
         fallback_key = None
-        # 堆顶可能过期，弹出失效条目后扫描（任务数小，直接全量扫描更稳）。
+# eligible the heap top may be stale, so pop dead entries and scan; task counts are small enough that a full scan is safer.
         cands = [p for p in self._queued.values() if p.state == TASK_RUNNING]
         for p in cands:
             key = (p.deadline, p.vruntime, p.pid)
@@ -301,43 +305,44 @@ class EEVDFRunQueue:
                 fallback, fallback_key = p, key
         return best if best is not None else fallback
 
-    # -- 切片分配 ----------------------------------------------------------
+# -- slice assignment ----------------------------------------------------
 
+# Assign the next time slice, scaled by weight and clamped to bounds.
     def assign_slice(self, pcb: PCB) -> None:
-        """sched_slice 思想：slice = base * w / total，箝位 [min, max]。"""
         total = self._total_weight()
         s = self.base_slice * pcb.weight / total
         pcb.slice = max(self.min_slice, min(MAX_SLICE_MS, s))
         pcb.deadline = pcb.vruntime + self._vslice(pcb)
 
-    # -- tick：update_curr + 调度 ------------------------------------------
+# -- tick: update_curr plus scheduling ----------------------------------
 
+# Advance the running task and reschedule when its slice runs out.
     def tick(self, delta_ms: float) -> Optional[PCB]:
-        """推进当前任务 delta_ms，必要时重调度；返回调度后的 current。"""
         if self.curr is None or self.curr.state != TASK_RUNNING:
             nxt = self.pick_next()
             self._switch_to(nxt)
             return self.curr
         cur = self.curr
-        # update_curr：vruntime 推进
+# update_curr: advance vruntime
         cur.sum_exec_runtime += delta_ms
         cur.vruntime += self.calc_delta_fair(delta_ms, cur.weight)
         self._update_min_vruntime()
-        # slice 用尽（vruntime 越过 deadline）→ 更新 deadline 并重选
+# slice spent (vruntime passes the deadline): update the deadline and pick again
         if cur.vruntime >= cur.deadline - 1e-9:
             self._requeue_current()
             nxt = self.pick_next()
             self._switch_to(nxt)
         else:
-            # 抢占检查：存在 eligible 且 deadline 更早的任务 → 抢占当前任务。
-            # （内核 wakeup_preempt + RUN_TO_PARITY 切片保护的教学简化：
-            #  保护收敛为 min_slice 运行保护，由 assign_slice 保证 slice 下限。）
+# preemption check: if an eligible task has an earlier deadline, preempt the current one.
+# a teaching simplification of the kernel's wakeup_preempt plus RUN_TO_PARITY slice protection:
+# the protection collapses to a min_slice floor enforced by assign_slice.
             r = self._preempt_candidate(cur)
             if r is not None:
                 self._requeue_current(preempted=True)
                 self._switch_to(r)
         return self.curr
 
+# Return the task that should take over from the current one.
     def _preempt_candidate(self, cur: PCB) -> Optional[PCB]:
         avg = self.avg_vruntime()
         best = None
@@ -349,6 +354,7 @@ class EEVDFRunQueue:
                     best = p
         return best
 
+# Put the preempted task back on the queue with its lag recorded.
     def _requeue_current(self, preempted: bool = False) -> None:
         cur = self.curr
         if cur is None:
@@ -358,7 +364,7 @@ class EEVDFRunQueue:
         else:
             cur.nvcsw += 1
         if cur.state == TASK_RUNNING:
-            # update_deadline：deadline 已越过则顺延一个 vslice
+# update_deadline: once the deadline has passed, push it out by one vslice
             if cur.vruntime >= cur.deadline - 1e-9:
                 cur.deadline = cur.vruntime + self._vslice(cur)
             cur._gen += 1
@@ -367,11 +373,12 @@ class EEVDFRunQueue:
                             (cur.deadline, cur.vruntime, next(self._seq), cur.pid, cur._gen))
         self.curr = None
 
+# Make a task current, or clear the current task when given None.
     def _switch_to(self, nxt: Optional[PCB]) -> None:
         if nxt is None:
             self.curr = None
             return
-        self.dequeue(nxt)          # 从就绪队取出（curr 不在队里）
+        self.dequeue(nxt)          # take from the runnable set; curr is not on the queue
         self.assign_slice(nxt)
         self.curr = nxt
         self.nr_switches += 1
@@ -379,12 +386,12 @@ class EEVDFRunQueue:
 
 
 # --------------------------------------------------------------------------
-# 进程表（全局单例思想，对应内核 pid 哈希 + 全局 runqueue）
+# the process table, a global singleton standing in for the kernel's PID hash plus global run queues
 # --------------------------------------------------------------------------
 
+# A background job: a command line plus the PIDs sharing its process group.
 @dataclass
 class Job:
-    """后台作业（bash jobs 语义的子集）：一组同 pgrp 的进程 + 命令行。"""
     job_id: int
     cmdline: str
     pids: List[int] = field(default_factory=list)
@@ -396,26 +403,29 @@ class Job:
 TERMINAL_STATES = (DONE, FAILED, "Killed", EXIT_ZOMBIE, EXIT_DEAD)
 
 
+# The system-wide process table, job list and run queue.
 class ProcessTable:
+# Create an empty process table with its PID allocator.
     def __init__(self):
         self.pids = PidAllocator()
         self.tasks: Dict[int, PCB] = {}
         self.rq = EEVDFRunQueue()
-        # 真子进程句柄（multiprocessing.Process，不透明存放在此以保持 PCB 可拷贝）
+# real child handle (multiprocessing.Process), stored opaquely so the PCB stays copyable
         self.handles: Dict[int, Any] = {}
         self.jobs: Dict[int, Job] = {}
         self._job_seq = itertools.count(1)
         self.last_bg_pid: Optional[int] = None   # $!
-        # remote 信号后端（forkexec 注册；未注册时 remote 退化为纯模拟）
+# remote signal backend, registered by forkexec; without it remote tasks stay purely simulated
         self._remote_signal_backend = None
 
+# Install the callback that delivers signals to host processes.
     def set_remote_signal_backend(self, fn) -> None:
         self._remote_signal_backend = fn
 
-    # -- 启动：idle(0) / init(1) / shell(2) ----------------------------------
+# -- boot: idle(0) / init(1) / shell(2) -----------------------------------
 
+# Register idle(0), init(1) and shell(2) so ps works before any command; idempotent.
     def boot_system(self) -> Dict[str, PCB]:
-        """建立 PID 语义顶层，供 kernel 启动时调用一次（幂等：已存在则直接返回）。"""
         if PID_INIT in self.tasks:
             return {"idle": self.tasks[PID_IDLE], "init": self.tasks[PID_INIT],
                     "shell": self.tasks[PID_SHELL]}
@@ -433,14 +443,17 @@ class ProcessTable:
         self.tasks[PID_SHELL] = shell
         return {"idle": idle, "init": init, "shell": shell}
 
+# Report whether the process tree has been created.
     def is_booted(self) -> bool:
         return PID_INIT in self.tasks
 
+# Return the shell PID, or 0 before boot.
     def current_shell_pid(self) -> int:
         return PID_SHELL if self.is_booted() else 0
 
-    # -- 创建 / 退出 ------------------------------------------------------
+# -- create / exit ------------------------------------------------------
 
+# Create a PCB, defaulting the parent to the shell.
     def spawn(self, comm: str, kind: str = "app", nice: int = 0,
               ppid: int = 0, note: str = "", remote: bool = False,
               pgrp: int = 0, enqueue_rq: bool = True) -> PCB:
@@ -455,8 +468,9 @@ class ProcessTable:
             self.rq.enqueue(pcb)
         return pcb
 
-    fork_task = spawn  # 别名：教学上 fork ≈ spawn
+    fork_task = spawn  # alias: for teaching purposes fork is about spawn
 
+# Retire a task into an explicit state, Zombie meaning not yet reaped.
     def exit_task(self, pid: int, exit_code: int = 0,
                   state: str = EXIT_ZOMBIE) -> Optional[PCB]:
         pcb = self.tasks.get(pid)
@@ -467,15 +481,15 @@ class ProcessTable:
         pcb.end_time = time.time()
         self.rq.dequeue(pcb)
         if state in (DONE, FAILED, "Killed", EXIT_DEAD):
-            # 兼容旧 proc.py 的结束态命名
+# terminal state names kept compatible with the old proc.py
             pass
-        # Linux 语义：父进程消亡时子进程过继给 init（收养后僵尸子女立即由 init 回收）
+# Linux semantics: when a parent dies its children are re-parented to init, whose newly adopted zombies are reaped at once
         self.adopt_orphans(pid)
         return pcb
 
+# Settle CPU time for a real child and move it to Zombie.
     def child_exited(self, pid: int, exit_code: int = 0,
                      wall_ms: float = 0.0) -> Optional[PCB]:
-        """真子进程退出时由 pump 线程回调：结算 CPU 时间并转僵尸。"""
         pcb = self.tasks.get(pid)
         if pcb is None:
             return None
@@ -483,6 +497,7 @@ class ProcessTable:
             self.charge_remote(pid, wall_ms)
         return self.exit_task(pid, exit_code=exit_code, state=EXIT_ZOMBIE)
 
+# Book wall-clock CPU time for a host process the scheduler never saw.
     def charge_remote(self, pid: int, wall_ms: float) -> None:
         pcb = self.tasks.get(pid)
         if pcb is None or wall_ms <= 0:
@@ -490,8 +505,8 @@ class ProcessTable:
         pcb.sum_exec_runtime += wall_ms
         pcb.vruntime += self.rq.calc_delta_fair(wall_ms, pcb.weight)
 
+# Re-parent the children of a dead PID, reaping those already zombies.
     def adopt_orphans(self, dead_pid: int) -> List[PCB]:
-        """孤儿收养：ppid 指向消亡者的任务过继给 init；已是僵尸的当场回收。"""
         reaped = []
         for pcb in list(self.tasks.values()):
             if pcb.ppid == dead_pid and pcb.pid != dead_pid:
@@ -501,8 +516,8 @@ class ProcessTable:
                     reaped.append(pcb)
         return reaped
 
+# Reap a parent's zombie children, wait semantics, and return their PCBs.
     def reap_children(self, ppid: int) -> List[PCB]:
-        """父进程回收自己的僵尸子女（wait 语义），返回回收到的 PCB。"""
         done = []
         for pcb in list(self.tasks.values()):
             if pcb.ppid == ppid and pcb.state in TERMINAL_STATES:
@@ -512,8 +527,8 @@ class ProcessTable:
             self._refresh_job_states()
         return done
 
+# Block until a PID reaches a terminal state; timeout None waits forever.
     def wait_for(self, pid: int, timeout: Optional[float] = 30.0) -> Optional[PCB]:
-        """阻塞等待指定 pid 进入终止态；timeout=None 表示无限等待。"""
         deadline = None if timeout is None else time.time() + max(0.0, timeout)
         while deadline is None or time.time() < deadline:
             pcb = self.tasks.get(pid)
@@ -522,8 +537,8 @@ class ProcessTable:
             time.sleep(0.02)
         return self.tasks.get(pid)
 
+# Release a Zombie PCB and free its PID, the simple release_task equivalent.
     def reap(self, pid: int) -> Optional[PCB]:
-        """回收 ZOMBIE → 释放 pid（对应内核 release_task 简化）。"""
         pcb = self.tasks.get(pid)
         if pcb is None:
             return None
@@ -532,8 +547,9 @@ class ProcessTable:
         self.pids.free(pid)
         return self.tasks.pop(pid, None)
 
-    # -- 睡眠 / 唤醒 -------------------------------------------------------
+# -- sleep / wake ------------------------------------------------------
 
+# Move a task out of the runnable set into a blocked state.
     def block(self, pid: int, state: str = TASK_INTERRUPTIBLE) -> bool:
         pcb = self.tasks.get(pid)
         if pcb is None or pcb.state != TASK_RUNNING:
@@ -543,15 +559,16 @@ class ProcessTable:
         self.rq.dequeue(pcb)
         return True
 
+# Move a blocked task back into the runnable set.
     def unblock(self, pid: int) -> bool:
         pcb = self.tasks.get(pid)
         if pcb is None or pcb.state not in (TASK_INTERRUPTIBLE, TASK_STOPPED):
             return False
         if pcb.state == TASK_STOPPED:
-            return False  # STOP 只能由 SIGCONT 解除
+            return False  # only SIGCONT clears STOP
         pcb.state = TASK_RUNNING
         self.rq.enqueue(pcb)
-        # wakeup_preempt 简化：唤醒后若 deadline 更早则直接抢占
+# wakeup_preempt simplified: a woken task with an earlier deadline preempts immediately
         cur = self.rq.curr
         if cur is not None and pcb.deadline < cur.deadline - 1e-9 \
                 and self.rq.eligible(pcb):
@@ -559,15 +576,16 @@ class ProcessTable:
             self.rq._switch_to(pcb)
         return True
 
-    # -- 信号 ---------------------------------------------------------------
+# -- signals --------------------------------------------------------------
 
+# Deliver a signal to a simulated or host process.
     def send_signal(self, pid: int, signum: int) -> Tuple[bool, str]:
         pcb = self.tasks.get(pid)
         if pcb is None:
             return False, f"没有 PID 为 {pid} 的进程"
         if pcb.state in (DONE, FAILED, EXIT_ZOMBIE, EXIT_DEAD):
             return False, f"进程 {pid} 已结束（{pcb.state}），无法发信号"
-        # 真子进程：先走 OS 级投递（terminate/kill/POSIX 信号），再落统一状态机
+# a real child: deliver at the OS level first (terminate/kill/POSIX signal), then fold into the shared state machine
         via = ""
         if pcb.remote and self._remote_signal_backend is not None:
             try:
@@ -609,8 +627,9 @@ class ProcessTable:
             pcb.note = (pcb.note + f" [sig{signum}]").strip()
         return True, f"已向 {pid} 发送信号 {signum}{via}"
 
-    # -- 后台作业（bash jobs 语义） -----------------------------------------
+# -- background jobs (bash jobs semantics) --------------------------------
 
+# Register a job with its PIDs and return the Job record.
     def new_job(self, cmdline: str, pids: Optional[List[int]] = None,
                 background: bool = True) -> Job:
         job = Job(job_id=next(self._job_seq), cmdline=cmdline, pids=list(pids or []))
@@ -623,13 +642,16 @@ class ProcessTable:
                 pcb.job_id = job.job_id
         return job
 
+# Return one job by ID, or None.
     def get_job(self, job_id: int) -> Optional[Job]:
         return self.jobs.get(job_id)
 
+# Return every known job.
     def list_jobs(self) -> List[Job]:
         self._refresh_job_states()
         return [self.jobs[j] for j in sorted(self.jobs)]
 
+# Recompute each job's state from whether any of its PIDs are still alive.
     def _refresh_job_states(self) -> None:
         for job in self.jobs.values():
             live = [self.tasks[p] for p in job.pids
@@ -643,19 +665,22 @@ class ProcessTable:
             else:
                 job.state = DONE
 
+# Record a PID as the most recent background job, which is what $! reports.
     def mark_last_bg(self, pid: int) -> None:
         self.last_bg_pid = pid
 
-    # -- 调度驱动 -------------------------------------------------------------
+# -- scheduling driver ------------------------------------------------------
 
+# Advance the scheduler by a delta and return the current task.
     def sched_tick(self, delta_ms: float = 1.0) -> Optional[PCB]:
         return self.rq.tick(delta_ms)
 
+# Return the task the run queue would schedule next.
     def pick_next(self) -> Optional[PCB]:
         return self.rq.pick_next()
 
+# Advance virtual time and return the milliseconds granted per PID, for teaching and tests.
     def run_virtual(self, total_ms: float, tick_ms: float = 1.0) -> Dict[int, float]:
-        """虚拟时间推进（教学/测试用）：返回 {pid: 分得的 ms}。"""
         got: Dict[int, float] = {}
         t = 0.0
         while t < total_ms - 1e-9:
@@ -666,8 +691,9 @@ class ProcessTable:
             t += tick_ms
         return got
 
-    # -- 查询 ------------------------------------------------------------------
+# -- queries ----------------------------------------------------------------
 
+# List processes, optionally including retired ones.
     def list_procs(self, include_done: bool = False) -> List[PCB]:
         rows = sorted(self.tasks.values(), key=lambda p: p.pid)
         if include_done:
@@ -676,11 +702,12 @@ class ProcessTable:
                 if p.state in (TASK_RUNNING, TASK_STOPPED, TASK_INTERRUPTIBLE)
                 or p.remote and p.state not in TERMINAL_STATES]
 
+# Return one PCB by PID.
     def get(self, pid: int) -> Optional[PCB]:
         return self.tasks.get(pid)
 
+# Change a task's nice value and weight.
     def set_nice(self, pid: int, nice: int) -> bool:
-        """renice：重算权重并重排 deadline（内核 reweight 简化）。"""
         pcb = self.tasks.get(pid)
         if pcb is None or pcb.state != TASK_RUNNING:
             return False
@@ -692,6 +719,7 @@ class ProcessTable:
         self.rq.enqueue(pcb)
         return True
 
+# Clear the process table and job list.
     def reset(self) -> None:
         self.tasks.clear()
         self.handles.clear()
@@ -704,62 +732,74 @@ class ProcessTable:
                                 min_slice=avg_w.min_slice)
 
 
-# 全局进程表（内核 init_task + 全局 runqueue 的教学对应物）
+# the global process table, the teaching stand-in for the kernel's init_task plus global run queues
 _pt = ProcessTable()
 
 
+# Return the module-level process table singleton.
 def _table() -> ProcessTable:
     return _pt
 
 
+# Register idle(0), init(1) and shell(2) so ps works before any command; idempotent.
 def boot_system() -> Dict[str, PCB]:
-    """建立 idle(0)/init(1)/shell(2) 进程树顶层（幂等）。"""
     return _pt.boot_system()
 
 
+# Report whether the process tree has been created.
 def is_booted() -> bool:
     return _pt.is_booted()
 
 
+# Install the callback that delivers signals to host processes.
 def set_remote_signal_backend(fn) -> None:
     _pt.set_remote_signal_backend(fn)
 
 
+# Register a job with its PIDs and return the Job record.
 def new_job(cmdline: str, pids: Optional[List[int]] = None,
             background: bool = True) -> Job:
     return _pt.new_job(cmdline, pids, background)
 
 
+# Return every known job.
 def list_jobs() -> List[Job]:
     return _pt.list_jobs()
 
 
+# Return one job by ID, or None.
 def get_job(job_id: int) -> Optional[Job]:
     return _pt.get_job(job_id)
 
 
+# Reap a parent's zombie children and return their PCBs.
 def reap_children(ppid: int) -> List[PCB]:
     return _pt.reap_children(ppid)
 
 
+# Return the shell PID, or 0 before boot.
 def current_shell_pid() -> int:
     return _pt.current_shell_pid()
 
 
+# Re-parent the children of a dead PID to init.
 def adopt_orphans(dead_pid: int) -> List[PCB]:
     return _pt.adopt_orphans(dead_pid)
 
 
+# Block until a PID reaches a terminal state.
 def wait_for(pid: int, timeout: Optional[float] = 30.0) -> Optional[PCB]:
     return _pt.wait_for(pid, timeout)
 
 
+# Return the most recent background PID, which is what $! expands to.
 def last_bg_pid() -> Optional[int]:
     return _pt.last_bg_pid
 
 
-# ---- 模块级便捷 API（shell 直接调用） ----
+# ---- module-level convenience API, called straight from the shell ----
 
+# Create a PCB and optionally enqueue it.
 def spawn(cmd: str, kind: str = "app", nice: int = 0, note: str = "",
           remote: bool = False, pgrp: int = 0, enqueue_rq: bool = True,
           ppid: int = 0) -> PCB:
@@ -767,61 +807,74 @@ def spawn(cmd: str, kind: str = "app", nice: int = 0, note: str = "",
                      remote=remote, pgrp=pgrp, enqueue_rq=enqueue_rq, ppid=ppid)
 
 
+# Create a child PCB of the current shell with scheduler defaults.
 def fork_task(comm: str, **kw) -> PCB:
     return _pt.spawn(comm=comm, **kw)
 
 
+# Retire a task as done or failed and free its PID.
 def finish(pid: int, exit_code: int = 0, failed: bool = False) -> Optional[PCB]:
     state = FAILED if failed else DONE
     return _pt.exit_task(pid, exit_code=exit_code, state=state)
 
 
+# Retire a task into an explicit state; Zombie means not yet reaped.
 def exit_task(pid: int, exit_code: int = 0,
               state: str = EXIT_ZOMBIE) -> Optional[PCB]:
-    """显式以指定状态退出（EXIT_ZOMBIE 即 Linux 的未回收僵尸）。"""
     return _pt.exit_task(pid, exit_code=exit_code, state=state)
 
 
+# Settle CPU time for a real child and move it to Zombie.
 def child_exited(pid: int, exit_code: int = 0,
                  wall_ms: float = 0.0) -> Optional[PCB]:
     return _pt.child_exited(pid, exit_code=exit_code, wall_ms=wall_ms)
 
 
+# Deliver a signal to a simulated or host process.
 def send_signal(pid: int, signum: int) -> Tuple[bool, str]:
     return _pt.send_signal(pid, signum)
 
 
+# List processes, optionally including retired ones.
 def list_procs(include_done: bool = False) -> List[PCB]:
     return _pt.list_procs(include_done=include_done)
 
 
+# Return one PCB by PID.
 def get(pid: int) -> Optional[PCB]:
     return _pt.get(pid)
 
 
+# Clear the process table and job list.
 def reset() -> None:
     _pt.reset()
 
 
+# Advance the scheduler by a delta and return the current task.
 def sched_tick(delta_ms: float = 1.0) -> Optional[PCB]:
     return _pt.sched_tick(delta_ms)
 
 
+# Return the task the run queue would schedule next.
 def pick_next() -> Optional[PCB]:
     return _pt.pick_next()
 
 
+# Change a task's nice value and weight.
 def set_nice(pid: int, nice: int) -> bool:
     return _pt.set_nice(pid, nice)
 
 
+# Return the run queue's weighted average virtual runtime.
 def avg_vruntime() -> float:
     return _pt.rq.avg_vruntime()
 
 
+# Move a task out of the runnable set into a blocked state.
 def block(pid: int, state: str = TASK_INTERRUPTIBLE) -> bool:
     return _pt.block(pid, state)
 
 
+# Move a blocked task back into the runnable set.
 def unblock(pid: int) -> bool:
     return _pt.unblock(pid)
