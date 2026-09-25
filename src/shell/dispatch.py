@@ -10,22 +10,21 @@
 #     宿主 PATH     → fork+exec 跑 Linux 原生程序（hostexec）
 #     其余          → 127 command not found
 #
+#   行级语法（引号/管道/&&/||/;/重定向/变量/$()）由 shparser 解析、
+#   shexec 执行；本模块只保留注册表、分发目标与主入口。
+#
 #   后台/并发：`cmd &` 立即返回并注册后台作业，$! 取最近后台 PID；
 #   jobs/fg/bg/wait 走 process.py 的作业表 + 僵尸回收。
 #
 
-import contextlib
-import io
 import os
-import shlex
-import sys
-import threading
 
 import commands as cmd_registry
 import printk
 import main
 
-from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds, hostexec
+from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
+from . import filter_cmds, hostexec, shexec
 
 # 命令历史（history 命令 + readline 持久化）
 _cmd_history = []
@@ -130,7 +129,26 @@ _REG = [
     ("ls", sys_cmds.cmd_ls, "列出目录内容", "ls", "file", ["dir"], False),
     ("cd", sys_cmds.cmd_cd, "切换目录", "cd [路径]", "file", [], True),
     ("cat", sys_cmds.cmd_cat, "打印文件", "cat <文件>", "file", [], True),
-    ("grep", sys_cmds.cmd_grep, "过滤文本", "grep <模式> [文件]", "file", [], True),
+    ("grep", sys_cmds.cmd_grep, "过滤文本", "grep [-ivncq] <模式> [文件]", "file", [], True),
+    # text
+    ("wc", filter_cmds.cmd_wc, "统计行/词/字节", "wc [-lwc] [文件...]", "text", [], True),
+    ("head", filter_cmds.cmd_head, "取前 N 行", "head [-n 行数] [文件]", "text", [], True),
+    ("tail", filter_cmds.cmd_tail, "取后 N 行", "tail [-n 行数] [文件]", "text", [], True),
+    ("sort", filter_cmds.cmd_sort, "排序", "sort [-r] [-n] [-u] [文件]", "text", [], True),
+    ("uniq", filter_cmds.cmd_uniq, "相邻去重", "uniq [-c] [文件]", "text", [], True),
+    ("tr", filter_cmds.cmd_tr, "字符替换/删除", "tr [-d] 字符集1 [字符集2]", "text", [], True),
+    ("cut", filter_cmds.cmd_cut, "按列切分", "cut -d 分隔符 -f 字段 [文件]", "text", [], True),
+    ("rev", filter_cmds.cmd_rev, "每行反转", "rev [文件]", "text", [], True),
+    ("tac", filter_cmds.cmd_tac, "倒序输出行", "tac [文件]", "text", [], True),
+    ("nl", filter_cmds.cmd_nl, "行号", "nl [文件]", "text", [], True),
+    ("seq", filter_cmds.cmd_seq, "生成数列", "seq 起点 [步长] 终点", "text", [], True),
+    ("tee", filter_cmds.cmd_tee, "管道分流落盘", "tee [-a] 文件...", "text", [], True),
+    ("sed", filter_cmds.cmd_sed, "流替换（s///）", "sed 's/查找/替换/[g]' [文件]", "text", [], True),
+    ("date", filter_cmds.cmd_date, "当前时间", "date [+格式]", "text", [], False),
+    ("test", filter_cmds.cmd_test, "条件判断（供 &&/||）", "test 表达式", "text", [], True),
+    ("[", filter_cmds.cmd_lbracket, "条件判断（[ 表达式 ]）", "[ 表达式 ]", "text", [], True),
+    ("true", filter_cmds.cmd_true, "恒真（供 &&/||）", "true", "text", [], False),
+    ("false", filter_cmds.cmd_false, "恒假（供 &&/||）", "false", "text", [], False),
     ("mkdir", sys_cmds.cmd_mkdir, "创建目录", "mkdir [-p] <目录>", "file", [], True),
     ("touch", sys_cmds.cmd_touch, "创建空文件", "touch <文件>", "file", [], True),
     ("cp", sys_cmds.cmd_cp, "复制文件", "cp <源> <目标>", "file", [], True),
@@ -222,123 +240,11 @@ def _fork_package(target: dict, args: str, background: bool):
 
 
 # --------------------------------------------------------------------------
-# 重定向 / 管道
-# --------------------------------------------------------------------------
-
-def _run_with_redirect(prompt: str) -> bool:
-    op = None
-    if " >> " in prompt:
-        op = " >> "
-    elif " > " in prompt:
-        op = " > "
-    if not op:
-        return False
-    left, _, target = prompt.partition(op)
-    left, target = left.strip(), target.strip()
-    if not left or not target:
-        return False
-    if not main.is_safe_filename(target):
-        printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
-        return True
-    # 文件只 open 一次：宿主子进程（fd 级直写）和内置命令
-    #（Python 级 StringIO）都往同一个 fd 落，避免二次 open 截断丢数据。
-    flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if op == " >> " else os.O_TRUNC)
-    try:
-        fd = os.open(target, flags, 0o644)
-    except OSError as e:
-        printk.error(f"打开 {target} 失败: {e}\n")
-        return True
-    buf = io.StringIO()
-    hostexec.set_override(fd)
-    try:
-        with contextlib.redirect_stdout(buf):
-            handle_command(left)
-    except Exception as e:
-        printk.error(f"重定向执行失败: {e}\n")
-        return True
-    finally:
-        hostexec.clear_override()
-    try:
-        data = buf.getvalue()
-        if data:
-            os.write(fd, data.encode(sys.stdout.encoding or "utf-8", errors="replace"))
-        printk.ok(f"已重定向输出到: {target}\n")
-    except Exception as e:
-        printk.error(f"写入 {target} 失败: {e}\n")
-    finally:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-    return True
-
-
-def _drain_to_list(fd, chunks):
-    """管道读端抽水线程：左端输出超 64K 时，读端必须有人消费，
-    否则子进程写满管道就和等它的父进程互相卡死。"""
-    while True:
-        try:
-            chunk = os.read(fd, 65536)
-        except OSError:
-            break
-        if not chunk:
-            break
-        chunks.append(chunk)
-
-
-def _run_with_pipe(prompt: str) -> bool:
-    if "|" not in prompt or "||" in prompt:
-        return False
-    left, _, right = prompt.partition("|")
-    left, right = left.strip(), right.strip()
-    if not left or not right:
-        return False
-    # 宿主子进程写的是真 fd（绕过 Python 级 redirect_stdout），
-    # 必须给它一条 fd 级通路，再和内置命令的 StringIO 合并。
-    read_fd, write_fd = os.pipe()
-    chunks = []
-    drainer = threading.Thread(target=_drain_to_list, args=(read_fd, chunks),
-                               daemon=True)
-    drainer.start()
-    buf = io.StringIO()
-    hostexec.set_override(write_fd)
-    try:
-        with contextlib.redirect_stdout(buf):
-            handle_command(left)
-    except Exception as e:
-        printk.error(f"管道左端执行失败: {e}\n")
-        return True
-    finally:
-        hostexec.clear_override()
-        try:
-            os.close(write_fd)
-        except OSError:
-            pass
-    drainer.join(timeout=30)
-    try:
-        os.close(read_fd)
-    except OSError:
-        pass
-    text = buf.getvalue() + b"".join(chunks).decode(
-        sys.stdout.encoding or "utf-8", errors="replace")
-    r_tokens = right.split()
-    if r_tokens[0] == "grep" and len(r_tokens) >= 2:
-        pattern = r_tokens[1]
-        for line in text.splitlines():
-            if pattern in line:
-                print(line)
-        print()
-        return True
-    printk.error(f"管道右端仅支持 grep <pattern>，got: {right}\n")
-    return True
-
-
-# --------------------------------------------------------------------------
 # 主分发
 # --------------------------------------------------------------------------
 
 def _invoke_builtin(meta, args: str):
-    """按签名决定是否传参。
+    """按签名决定是否传参，返回退出码（只认精确 int）。
 
     不用 try/except TypeError 判断——那会把命令内部真正的 TypeError
     误报成“缺参数”，掩盖真实 bug。
@@ -354,18 +260,16 @@ def _invoke_builtin(meta, args: str):
     except (TypeError, ValueError):
         required, accepts_one = [], False
     if not accepts_one:
-        fn()
-        return
+        ret = fn()
+        return ret if type(ret) is int else 0
     if required:
         if not args:
             printk.error(f"用法: {meta.usage or meta.name}\n")
-            return
-        fn(args)
-        return
-    if args:
-        fn(args)
-    else:
-        fn()
+            return 1
+        ret = fn(args)
+        return ret if type(ret) is int else 0
+    ret = fn(args) if args else fn()
+    return ret if type(ret) is int else 0
 
 
 def handle_command(prompt) -> str:
@@ -373,56 +277,4 @@ def handle_command(prompt) -> str:
     if not prompt:
         return
     _cmd_history.append(prompt)
-
-    if _run_with_redirect(prompt):
-        return
-    if _run_with_pipe(prompt):
-        return
-
-    # 后台符号：cmd &
-    background = False
-    if prompt.endswith("&") and not prompt.endswith("&&"):
-        prompt = prompt[:-1].strip()
-        background = True
-        if not prompt:
-            return
-
-    try:
-        tokens = shlex.split(prompt)
-    except ValueError:
-        tokens = prompt.split()
-    if not tokens:
-        return
-    name, args = tokens[0], " ".join(tokens[1:])
-
-    # help 支持带参数
-    real = cmd_registry._ALIASES.get(name, name)
-
-    # 1) builtin
-    meta = cmd_registry.get_meta(real)
-    if meta is not None and meta.fn is not None:
-        _invoke_builtin(meta, args)
-        return
-
-    # 2) 外部命令（apps/）
-    if cmd_registry.resolve_external(real):
-        try:
-            _fork_external(real, args, background)
-        except Exception as e:
-            printk.error(f"运行 {name} 失败: {e}\n")
-        return
-
-    package_target = cmd_registry.resolve_package_command(real, main.root_dir)
-    if package_target is not None:
-        _fork_package(package_target, args, background)
-        return
-
-    # 宿主 Linux 程序：fork+exec 直系回退（vt100/全屏程序可跑）
-    try:
-        if hostexec.run(tokens, background):
-            return
-    except Exception as e:
-        printk.error(f"运行 {name} 失败: {e}\n")
-        return
-
-    print(f"{name}: 未找到命令（help 查看内置命令；外部程序按 PATH 查找）\n")
+    shexec.run_line(prompt)

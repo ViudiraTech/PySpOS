@@ -112,22 +112,45 @@ def test_parent_sigint_handler_restored():
 
 
 @needs_posix
-def test_child_preexec_resets_signals():
-    saved = {}
-    for name in ("SIGINT", "SIGQUIT", "SIGPIPE"):
-        num = getattr(signal, name, None)
-        if num is not None:
-            saved[num] = signal.getsignal(num)
+def test_make_catchable_roundtrip():
+    old = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        hostexec._child_preexec()
-        assert signal.getsignal(signal.SIGINT) == signal.SIG_DFL
+        saved = hostexec._make_catchable((signal.SIGINT,))
+        assert saved == {signal.SIGINT: signal.SIG_IGN}
+        assert signal.getsignal(signal.SIGINT) not in (
+            signal.SIG_IGN, signal.SIG_DFL)
+        hostexec._restore_signals(saved)
+        assert signal.getsignal(signal.SIGINT) is signal.SIG_IGN
     finally:
-        for num, handler in saved.items():
-            try:
-                signal.signal(num, handler)
-            except Exception:
-                pass
+        signal.signal(signal.SIGINT, old)
+
+
+@needs_posix
+def test_spawned_child_gets_default_sigint():
+    old = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        prog = [sys.executable, "-c",
+                ("import signal;"
+                 "print(signal.getsignal(signal.SIGINT) is signal.SIG_IGN)")]
+        r, w = os.pipe()
+        hostexec.set_override(w)
+        try:
+            assert hostexec.run(prog, False) is True
+        finally:
+            hostexec.clear_override()
+            os.close(w)
+        data = b""
+        while True:
+            chunk = os.read(r, 65536)
+            if not chunk:
+                break
+            data += chunk
+        os.close(r)
+        assert data.strip() == b"False"
+    finally:
+        signal.signal(signal.SIGINT, old)
 
 
 # ---------- 分发：内置优先、127 保留 ----------

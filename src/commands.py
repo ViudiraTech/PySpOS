@@ -20,6 +20,7 @@ from typing import Callable, Dict, List, Optional
 GROUPS = [
     ("system", "系统"),
     ("file", "文件"),
+    ("text", "文本处理"),
     ("process", "进程与作业"),
     ("run", "程序与执行"),
     ("config", "配置与空间"),

@@ -46,8 +46,26 @@ def cmd_help(args: str = ""):
     print(_reg.render_help())
 
 # 打印指定字符串
-def cmd_echo(text: str):
-    print(f"{text}\n")
+def cmd_echo(text: str = ""):
+    import shlex
+    try:
+        tokens = shlex.split(text) if text else []
+    except ValueError:
+        tokens = text.split() if text else []
+    newline, interpret = True, False
+    while tokens and tokens[0] in ("-n", "-e", "-en", "-ne"):
+        if "n" in tokens[0]:
+            newline = False
+        if "e" in tokens[0]:
+            interpret = True
+        tokens = tokens[1:]
+    out = " ".join(tokens)
+    if interpret:
+        out = out.encode("utf-8").decode("unicode_escape")
+    if newline:
+        print(f"{out}\n")
+    else:
+        print(out, end="")
 
 # 显示PySpOS版本
 def cmd_osver():
@@ -287,13 +305,17 @@ def cmd_whoami():
         printk.error(f"whoami: {e}\n")
 
 
-def cmd_cat(args: str):
+def cmd_cat(args: str = ""):
     import shlex
     try:
         tokens = shlex.split(args) if args else []
     except ValueError:
         tokens = args.split() if args else []
     if not tokens:
+        import sys as _sys
+        if not _sys.stdin.isatty():
+            print(_sys.stdin.read(), end="")
+            return
         printk.error("用法: cat <文件>\n")
         return
     for name in tokens:
@@ -308,33 +330,65 @@ def cmd_cat(args: str):
     print()
 
 
-def cmd_grep(args: str):
+def cmd_grep(args: str = ""):
     import shlex
     try:
         tokens = shlex.split(args) if args else []
     except ValueError:
         tokens = args.split() if args else []
+    flags = set()
+    while tokens and tokens[0].startswith("-") and len(tokens[0]) > 1 \
+            and set(tokens[0][1:]) <= set("ivncq"):
+        flags.update(tokens[0][1:])
+        tokens = tokens[1:]
     if not tokens:
-        printk.error("用法: grep <pattern> [file]\n")
-        return
+        printk.error("用法: grep [-ivncq] <模式> [文件]\n")
+        return 1
     pattern = tokens[0]
+    if "i" in flags:
+        lowered = pattern.lower()
+        match = lambda line: lowered in line.lower()
+    else:
+        match = lambda line: pattern in line
     if len(tokens) > 1:
+        texts = []
         for name in tokens[1:]:
             text = fs.cat_file(name)
             if text is None:
                 printk.error(f"grep: 未找到文件: {name}\n")
                 continue
-            for line in text.splitlines():
-                if pattern in line:
-                    print(line)
+            texts.append((name, text))
     else:
-        # 无文件时从 stdin 读（主要服务于管道）
         import sys as _sys
         data = _sys.stdin.read() if not _sys.stdin.isatty() else ""
-        for line in data.splitlines():
-            if pattern in line:
-                print(line)
-    print()
+        texts = [(None, data)]
+    hits = 0
+    multi = len(texts) > 1
+    for name, text in texts:
+        for number, line in enumerate(text.splitlines(), 1):
+            ok = match(line)
+            if "v" in flags:
+                ok = not ok
+            if not ok:
+                continue
+            hits += 1
+            if "q" in flags:
+                return 0
+            if "c" in flags:
+                continue
+            prefix = ""
+            if multi and name:
+                prefix += f"{name}:"
+            if "n" in flags:
+                prefix += f"{number}:"
+            print(prefix + line if prefix else line)
+    if "c" in flags and "q" not in flags:
+        print(hits)
+        print()
+        return 0 if hits else 1
+    if "q" not in flags:
+        print()
+    return 0 if hits else 1
 
 
 def cmd_mkdir(args: str):
