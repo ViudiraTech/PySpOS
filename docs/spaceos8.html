@@ -45,7 +45,7 @@
     <div class="wrap page-head">
       <span class="eyebrow">SpaceOS 8 · 公开测试 · 第二版 slim 镜像</span>
       <h1>第二束光，来了。</h1>
-      <p class="lede">第一束光停在 SpaceOS 7 的半路。我们没有换方向，只是又点了一次——这次不为点亮屏幕，是为了让 USB 键鼠、Java、DOOM 都在上面好好工作。第二版 slim 抢先体验镜像已开放下载。</p>
+      <p class="lede">第一束光是第一版尝鲜镜像：能启动，但 USB 键鼠是坏的，插上去没反应。方向一个字没改，我们又点了一次——第二版 slim 镜像修好了 xHCI USB HID，键鼠真的能用了。已开放下载。</p>
       <div class="actions">
         <a class="btn btn-primary" href="spaceos8-download.html">下载第二版镜像</a>
         <a class="btn btn-secondary" href="spaceos8-download.html#usage">先读使用声明</a>
@@ -262,7 +262,7 @@
             <p class="notice-title">实验性系统，不要拿重要数据冒险</p>
             <div class="notice-body">
               <p>已跑通：内核在实体服务器上启动；能引导 Alpine Linux 并拉起图形桌面（Weston/Wayland 与 Xfce 两条路径都验证过），终端可用；SPUI 桌面与自研用户态在同一套内核上运行；X11 兼容层能跑 DOOM 这类真实图形程序；真实 JVM（OpenJDK）已经能跑。</p>
-              <p>第二版更新：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可用——这是「第二束光」里最靠近日常的一小步。第一版镜像继续保留，详情与校验值见下载页版本记录。</p>
+              <p>第二版更新：修复 xHCI 控制器上的 USB HID，USB 键盘与鼠标可用——第一版插上没反应的那两样，现在真的能用了。第一版镜像继续保留，详情与校验值见下载页版本记录。</p>
               <p>仍在补：GPU 驱动、虚拟化设备、音频，以及 Linux ABI 的相当一部分。PS/2 输入路径、evdev 消费者、poll/epoll 唤醒与 EEVDF 调度器都在验证阶段。systemd 只是初步跑通，离生产可用还有距离。NTFS 写入驱动尚未被认为可以信任，请用可抛弃的机器与测试盘。</p>
               <p>内核版本串为 <code>Uinxed 1.0.0-alpha.1</code>，已在 Dell PowerEdge R410 等实体服务器上验证。</p>
             </div>
