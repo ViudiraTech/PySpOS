@@ -150,11 +150,17 @@ def test_background_builtin_runs_and_returns(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     marker = tmp_path / "bg.txt"
     run("echo done > bg.txt &")
+    # 文件在重定向 open 的瞬间就存在，内容要等后台线程真跑完才落盘，
+    # 所以等的是内容而不是存在——否则就是抢跑。
     deadline = time.time() + 10
-    while time.time() < deadline and not marker.exists():
+    text = ""
+    while time.time() < deadline:
+        if marker.exists():
+            text = marker.read_text(encoding="utf-8")
+            if "done" in text:
+                break
         time.sleep(0.05)
-    assert marker.exists()
-    assert "done" in marker.read_text(encoding="utf-8")
+    assert "done" in text
 
 
 @needs_posix
