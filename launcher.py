@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import sys
 import time
@@ -42,7 +43,13 @@ def _load_terminal_helper(system_path):
         return None
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="PySpOS 启动器：验签选槽并启动（--slot 强制指定槽位）")
+    parser.add_argument("--slot", choices=("slot_a", "slot_b"),
+                        help="强制从指定槽位启动（仍须通过验签，否则拒绝启动）")
+    args = parser.parse_args(argv)
+
     boot_time = get_boot_time()
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = script_dir
@@ -57,12 +64,19 @@ def main():
         locked = secure_boot.read_locked(root_dir)
         secure_boot.configure_runtime_keys(root_dir, locked)
         selection = secure_boot.prepare_boot(
-            root_dir, locked, legacy_slot=_read_legacy_slot(root_dir))
+            root_dir, locked, legacy_slot=_read_legacy_slot(root_dir),
+            preferred_slot=args.slot)
     except secure_boot.BootVerificationError as exc:
         _log(f"启动被拒绝: {exc}")
         return 1
     except Exception as exc:
         _log(f"启动验证失败: {exc}")
+        return 1
+
+    if args.slot is not None and (selection is None or selection["slot"] != args.slot):
+        # 用户明确点了槽位：验签不过就拒绝，不静默换槽（静默换槽会让人
+        # 以为进的是 A 版，实际跑的是 B 版——A/B 槽最忌讳这个）。
+        _log(f"启动被拒绝: 槽位 {args.slot} 未通过验证")
         return 1
 
     if selection is None:
@@ -102,6 +116,20 @@ def main():
     os.environ["PYSPOS_BOOT_VERIFIED"] = "1" if selection and selection.get("manifest") else "0"
     os.environ["PYSPOS_BOOT_LOCKED"] = "1" if locked else "0"
     sys._launcher_detected = True
+
+    if args.slot is not None:
+        # 显式点槽是维护性单次启动：直调槽位自己的 main.main()，
+        # 不套热重启环境（热重启只认当前槽位，会拒绝非当前槽）。
+        _log(f"已指定槽位 {args.slot}，直接启动...")
+        try:
+            import main as slot_main
+            slot_main.main()
+        except Exception as exc:
+            _log(f"直接启动失败: {exc}")
+            import traceback
+            traceback.print_exc()
+            return 1
+        return 0
 
     try:
         _log("启动热重启环境...")

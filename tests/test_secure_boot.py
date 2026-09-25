@@ -59,6 +59,29 @@ def test_tampered_image_fails_closed(tmp_path):
                                  legacy_slot="slot_a")
 
 
+def test_preferred_slot_wins_over_default_order(tmp_path):
+    for slot in ("slot_a", "slot_b"):
+        d = tmp_path / slot
+        d.mkdir(exist_ok=True)
+        (d / "main.py").write_text("print('dev')\n", encoding="utf-8")
+    sel = secure_boot.prepare_boot(str(tmp_path), False, keys={},
+                                   legacy_slot="slot_a",
+                                   preferred_slot="slot_b")
+    assert sel["slot"] == "slot_b"
+    sel = secure_boot.prepare_boot(str(tmp_path), False, keys={},
+                                   legacy_slot="slot_a")
+    assert sel["slot"] == "slot_a"
+
+
+def test_preferred_slot_missing_falls_through(tmp_path):
+    d = tmp_path / "slot_a"
+    d.mkdir(exist_ok=True)
+    (d / "main.py").write_text("print('dev')\n", encoding="utf-8")
+    sel = secure_boot.prepare_boot(str(tmp_path), False, keys={},
+                                   preferred_slot="slot_b")
+    assert sel["slot"] == "slot_a"
+
+
 def test_unsigned_image_is_rejected_only_when_locked(tmp_path):
     slot = tmp_path / "slot_a"
     slot.mkdir(exist_ok=True)

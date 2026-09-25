@@ -764,21 +764,22 @@ def _manifest_from_slot(root_dir, slot, keys, floor):
     return manifest
 
 
-def _choose_candidates(root_dir, state, legacy_slot):
+def _choose_candidates(root_dir, state, legacy_slot, preferred_slot=None):
     candidates = []
-    for slot in (state.get("pending_slot"), state.get("active_slot"),
+    for slot in (preferred_slot, state.get("pending_slot"), state.get("active_slot"),
                  legacy_slot, "slot_a", "slot_b"):
         if slot in SLOTS and slot not in candidates:
             candidates.append(slot)
     return candidates
 
 
-def prepare_boot(root_dir, locked, keys=None, legacy_slot=None):
+def prepare_boot(root_dir, locked, keys=None, legacy_slot=None,
+                   preferred_slot=None):
     if locked and keys is None:
         _RUNTIME_TRUSTED_KEYS.clear()
     state = load_state(root_dir)
     floor = max(state["rollback_index"], policy_rollback_index(root_dir, keys))
-    candidates = _choose_candidates(root_dir, state, legacy_slot)
+    candidates = _choose_candidates(root_dir, state, legacy_slot, preferred_slot)
     for slot in candidates:
         try:
             path = _slot_path(root_dir, slot)
