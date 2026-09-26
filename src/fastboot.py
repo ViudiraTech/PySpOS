@@ -153,6 +153,17 @@ def slot_version(slot: str) -> str:
         return "unknown"
 
 
+# Report the slot marked for the next boot, or an empty string when the
+# current one stays active. A staged slot is only promoted once it boots.
+def pending_slot():
+    try:
+        state = secure_boot.load_state(main.root_dir)
+    except Exception:
+        return None
+    slot = state.get("pending_slot")
+    return slot if slot in (ota.SLOT_A, ota.SLOT_B) else None
+
+
 # Build the variable table exposed through "getvar". Values must stay short
 # because the protocol has no continuation for long replies.
 def collect_variables() -> dict:
@@ -167,6 +178,7 @@ def collect_variables() -> dict:
     locked = is_locked()
     return {
         "version": PROTOCOL_VERSION,
+        "pending-slot": pending_slot() or "",
         "product": "PySpOS",
         "unlocked": "no" if locked else "yes",
         "secure": "yes" if locked else "no",
@@ -344,18 +356,19 @@ def perform_lock() -> tuple:
     return True, "Bootloader 已锁定"
 
 
-# Stage the downloaded image for the verified installer. It deliberately does
-# not write into a slot: the signed manifest covers every file in the slot
-# tree, so an extra unsigned file would make the slot fail verification and
-# the device would no longer boot.
+# Install the downloaded image into the named slot.
+# The bytes are staged in the OTA package area and handed to the verified
+# installer, which checks the signature and the rollback floor and swaps the
+# slot through a staging directory. Writing the file into the slot directly
+# would be both slower to reason about and unsafe: a signed manifest covers
+# every file in the slot, so one extra unsigned file makes the slot fail
+# verification and the device stops booting.
 def perform_flash(partition: str) -> tuple:
     data = staged_bytes()
     if not data:
         return False, "没有已下载的镜像"
     if partition not in (ota.SLOT_A, ota.SLOT_B):
         return False, f"没有名为 {partition} 的分区"
-    if is_locked():
-        return False, "Bootloader 已锁定，拒绝刷写未签名镜像"
     path = staging_path()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -363,18 +376,46 @@ def perform_flash(partition: str) -> tuple:
             handle.write(data)
     except OSError as exc:
         return False, f"写入镜像失败: {exc}"
-    return True, f"镜像已暂存（{len(data)} 字节），等待验签安装到 {partition}"
+    # A locked device keeps the strict version comparison; an unlocked dev
+    # device may install the same or an older build. The security floor is
+    # enforced either way, because it comes from the signature check inside
+    # the installer rather than from this flag.
+    allow_downgrade = not is_locked()
+    try:
+        ok = ota.install_package_to_slot(path, partition, allow_downgrade)
+    except Exception as exc:
+        return False, f"安装失败: {exc}"
+    if not ok:
+        return False, "安装失败：镜像未通过验签或版本检查，详见设备日志"
+    try:
+        current = ota.get_current_slot()
+    except Exception:
+        current = None
+    switched = ""
+    if current and current != partition:
+        # Flashing the inactive slot is pointless unless the next boot is
+        # pointed at it. stage_slot is the AVB style way to do that: the
+        # bootloader prefers a pending slot and only promotes it to active
+        # once the boot succeeds. Writing the legacy current_slot file is not
+        # enough, because get_current_slot prefers the verified boot state.
+        try:
+            secure_boot.stage_slot(main.root_dir, partition)
+            state = secure_boot.load_state(main.root_dir)
+            if state.get("pending_slot") == partition:
+                switched = f"，已标记下次启动使用 {partition}"
+            else:
+                switched = f"，但启动槽位标记未生效（仍为 {current}）"
+        except Exception as exc:
+            switched = f"，但标记启动槽位失败: {exc}"
+    return True, f"已安装到 {partition}（{len(data)} 字节）{switched}"
 
 
-# Stage the staged image as the next boot target, mirroring "boot". The image
-# stays in the OTA staging area: nothing installs it automatically at boot, so
-# the verified installer still has to run before it reaches a slot.
+# Boot the system now. The image is already installed in its slot by the flash
+# step, so this only has to drop any fastboot request and restart.
 def perform_boot() -> tuple:
-    if not staged_bytes():
-        return False, "没有已下载的镜像"
     bootmode.clear_mode(main.root_dir)
     set_pending_boot("system")
-    return True, "已安排启动系统，镜像保留在暂存区等待验签安装"
+    return True, "正在重启进入系统"
 
 
 # Hand control back to the running system, mirroring "continue".
@@ -382,11 +423,89 @@ def perform_continue() -> tuple:
     set_pending_boot("system")
     return True, "继续启动系统"
 
+# ---------------------------------------------------------------------------
+# Process table entries
+# ---------------------------------------------------------------------------
+
+# PIDs of the tasks registered for the mode itself, so the process panel shows
+# the work that is actually running instead of only the three boot tasks.
+_server_pid = None
+_session_pid = None
+
+
+# Return the shell PID, so the entries are parented to something real.
+def _shell_pid():
+    try:
+        return proc._table().current_shell_pid()
+    except Exception:
+        return 0
+
+
+# Register a parked service task. enqueue_rq stays off and the task is blocked
+# right away, so the scheduler never picks it up: these entries describe work
+# waiting on the socket, not work that needs a timeslice.
+def _register_service(comm, note, ppid=0):
+    try:
+        pcb = proc.spawn(comm, kind="service", note=note, ppid=ppid,
+                         enqueue_rq=False)
+    except Exception as exc:
+        logk.printl("fastboot", f"注册服务进程失败: {exc}", main.boot_time)
+        return None
+    proc.block(pcb.pid)
+    return pcb.pid
+
+
+# Retire a registered service task. The entry is reaped rather than left as a
+# zombie, because these are bookkeeping rows for work that already ended and
+# nothing waits to reap them the way init does for real children.
+def _unregister_service(pid):
+    if not pid:
+        return
+    try:
+        proc.exit_task(pid)
+        proc._table().reap(pid)
+    except Exception:
+        pass
+
+
+# Register the protocol server for the duration of the mode.
+def _register_server():
+    global _server_pid
+    _unregister_service(_server_pid)
+    _server_pid = _register_service("fastbootd", "fastboot 协议服务端",
+                                    ppid=_shell_pid())
+
+
+# Register the live host session while a client is attached.
+def _register_session(peer):
+    global _session_pid
+    _unregister_service(_session_pid)
+    _session_pid = _register_service("fastboot-cli", f"host 客户端 {peer}",
+                                     ppid=_server_pid or 0)
+
+
+# Drop the host session entry.
+def _unregister_session():
+    global _session_pid
+    _unregister_service(_session_pid)
+    _session_pid = None
+
+
+# Retire every entry this module registered.
+def _unregister_all():
+    global _server_pid
+    _unregister_session()
+    _unregister_service(_server_pid)
+    _server_pid = None
+
+
 # Build the process table shown by the host client. The rows are joined with
 # ";" because the protocol is strictly one reply line per request.
 def process_listing() -> str:
     try:
-        rows = proc.list_procs(include_done=True)
+        # Live tasks only, the same set "ps" shows by default. The mode's own
+        # service rows are reaped when they end, so nothing stale is listed.
+        rows = proc.list_procs(include_done=False)
     except Exception as exc:
         return f"读取进程表失败: {exc}"
     if not rows:
@@ -443,13 +562,15 @@ def handle_command(command: str) -> str:
             return "FAILtoo large"
         return f"DATA{size:08x}"
     if command.startswith("flash:"):
-        if _locked():
-            return "FAILdevice is locked"
+        # No trust check here on purpose. A locked device must still be able to
+        # flash a properly signed image, which is the whole point of signing
+        # one; the verified installer is the single place that decides, and it
+        # enforces the signature, the rollback floor and the version check.
         ok, message = perform_flash(command[6:].strip())
         return f"OKAY{message}" if ok else f"FAIL{message}"
     if command.startswith("erase:"):
-        if _locked():
-            return "FAILdevice is locked"
+        # Erasing only wipes user data or the staged image, never a signed
+        # slot, so there is no trust decision to make here either.
         ok, message = perform_erase(command[6:].strip())
         return f"OKAY{message}" if ok else f"FAIL{message}"
     if command == "boot":
@@ -510,9 +631,8 @@ def _handle_oem(rest: str) -> str:
 # Erase the staged image or wipe user data, depending on the target. The A/B
 # slots are never erased: they carry the signed system images.
 def perform_erase(partition: str) -> tuple:
-    if partition in (ota.SLOT_A, ota.SLOT_B):
-        return _wipe_user_data()
-    if partition in ("cache", "data", "userdata"):
+    if partition in (ota.SLOT_A, ota.SLOT_B) or \
+            partition in ("cache", "data", "userdata"):
         return _wipe_user_data()
     staged = staging_path()
     if os.path.isfile(staged):
@@ -528,6 +648,7 @@ def perform_erase(partition: str) -> tuple:
 def serve_client(conn: socket.socket, address) -> None:
     host = f"{address[0]}:{address[1]}" if address else "unknown"
     logk.printl("fastboot", f"客户端已连接 {host}", main.boot_time)
+    _register_session(host)
     try:
         conn.settimeout(CLIENT_TIMEOUT)
         buffer = b""
@@ -591,6 +712,7 @@ def serve_client(conn: socket.socket, address) -> None:
             conn.close()
         except OSError:
             pass
+        _unregister_session()
         logk.printl("fastboot", f"客户端断开 {host}", main.boot_time)
 
 
@@ -617,6 +739,7 @@ def _bind_server(port, attempts=10, delay=0.5):
 # Run the fastboot server until a client asks the device to leave the mode.
 def fastboot_main(jumpinfo: str = "kernel_jump", port: int = DEFAULT_PORT) -> str:
     reset_state()
+    _register_server()
     kernel.screen_clear()
     logk.printl("fastboot", f"跳入 fastboot，jumpinfo={jumpinfo}", main.boot_time)
     printk.info(f"< PySpOS > fastboot v{PROTOCOL_VERSION}")
@@ -629,6 +752,7 @@ def fastboot_main(jumpinfo: str = "kernel_jump", port: int = DEFAULT_PORT) -> st
         printk.error("端口可能已被另一个 PySpOS 实例占用：请关掉那个实例，"
                      "或用 fastboot --port <其他端口> 换一个端口。\n")
         logk.printl("fastboot", f"监听失败: {error}", main.boot_time)
+        _unregister_all()
         return "reboot"
     server.listen(1)
     try:
@@ -648,6 +772,7 @@ def fastboot_main(jumpinfo: str = "kernel_jump", port: int = DEFAULT_PORT) -> st
             server.close()
         except OSError:
             pass
+        _unregister_all()
         reset_state()
     return "reboot"
 

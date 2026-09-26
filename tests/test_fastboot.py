@@ -121,12 +121,24 @@ def test_flash_unknown_partition_fails():
     assert reply.startswith("FAIL")
 
 
-def test_locked_device_refuses_flash_and_erase(monkeypatch):
+def test_locked_device_reaches_the_installer_instead_of_a_blanket_refusal(
+        monkeypatch, tmp_path):
+    # Refusing every flash on a locked device would make signing pointless: a
+    # locked device has to be able to install a signed image. The installer is
+    # the single place that decides, so flash must reach it.
+    root = str(tmp_path)
+    for name in ("slot_a", "slot_b"):
+        os.makedirs(os.path.join(root, name), exist_ok=True)
+    monkeypatch.setattr(fastboot.main, "root_dir", root)
     monkeypatch.setattr(fastboot, "is_locked", lambda: True)
+    called = []
+    monkeypatch.setattr(fastboot.ota, "install_package_to_slot",
+                        lambda *_a, **_k: called.append(True) or True)
+    monkeypatch.setattr(fastboot.ota, "get_current_slot", lambda: "slot_b")
     fastboot.reset_state()
     fastboot.stage_bytes(b"payload")
-    assert ask("flash:slot_a").startswith("FAIL")
-    assert ask("erase:slot_a").startswith("FAIL")
+    assert ask("flash:slot_b").startswith("OKAY")
+    assert called == [True]
 
 
 def test_erase_unknown_partition_fails(monkeypatch):
@@ -134,9 +146,12 @@ def test_erase_unknown_partition_fails(monkeypatch):
     assert ask("erase:not-a-slot").startswith("FAIL")
 
 
-def test_boot_without_download_fails():
+def test_boot_restarts_the_system():
+    # The image is installed by the flash step now, so "boot" only has to
+    # drop the fastboot request and restart.
     fastboot.reset_state()
-    assert ask("boot").startswith("FAIL")
+    assert ask("boot").startswith("OKAY")
+    assert fastboot.take_pending_boot() == "system"
 
 
 def test_boot_with_download_targets_system():
@@ -323,34 +338,74 @@ def secure_boot_read_locked(root):
     return secure_boot.read_locked(root, fastboot._device_trusted_keys())
 
 
-def test_locked_device_refuses_flash_by_default(monkeypatch, tmp_path):
+def test_locked_device_keeps_the_strict_version_check(monkeypatch, tmp_path):
     root = str(tmp_path)
     for name in ("slot_a", "slot_b"):
         os.makedirs(os.path.join(root, name), exist_ok=True)
     monkeypatch.setattr(fastboot.main, "root_dir", root)
-    seed_locked_policy(root)
+    monkeypatch.setattr(fastboot, "is_locked", lambda: True)
+    seen = {}
+
+    def fake_install(_path, _slot, allow_downgrade=False):
+        seen["allow"] = allow_downgrade
+        return True
+
+    monkeypatch.setattr(fastboot.ota, "install_package_to_slot", fake_install)
+    monkeypatch.setattr(fastboot.ota, "get_current_slot", lambda: "slot_b")
     fastboot.reset_state()
     fastboot.stage_bytes(b"payload")
-    assert fastboot.handle_command("flash:slot_a").startswith("FAILdevice is locked")
+    fastboot.handle_command("flash:slot_b")
+    assert seen.get("allow") is False
 
 
-def test_flash_writes_staged_bytes_when_unlocked(monkeypatch, tmp_path):
+def test_flash_installs_through_the_verified_installer(monkeypatch, tmp_path):
     root = str(tmp_path)
     for name in ("slot_a", "slot_b"):
         os.makedirs(os.path.join(root, name), exist_ok=True)
     monkeypatch.setattr(fastboot.main, "root_dir", root)
     monkeypatch.setattr(fastboot, "is_locked", lambda: False)
+    seen = {}
+
+    def fake_install(path, slot, allow_downgrade=False):
+        seen["path"], seen["slot"] = path, slot
+        seen["allow_downgrade"] = allow_downgrade
+        return True
+
+    monkeypatch.setattr(fastboot.ota, "install_package_to_slot", fake_install)
+    monkeypatch.setattr(fastboot.ota, "get_current_slot", lambda: "slot_a")
+    staged = []
+    monkeypatch.setattr(fastboot.secure_boot, "stage_slot",
+                        lambda _root, slot: staged.append(slot))
+    monkeypatch.setattr(fastboot.secure_boot, "load_state",
+                        lambda _root: {"pending_slot": staged[-1] if staged else None})
     fastboot.reset_state()
     fastboot.stage_bytes(b"IMAGE-DATA")
     reply = fastboot.handle_command("flash:slot_b")
-    assert reply.startswith("OKAY")
-    # The image must land in the OTA staging area, never inside a slot: the
-    # signed manifest covers every slot file and an extra one would brick it.
-    staged = fastboot.staging_path()
-    assert os.path.isfile(staged)
-    with open(staged, "rb") as handle:
-        assert handle.read() == b"IMAGE-DATA"
+    assert reply.startswith("OKAY"), reply
+    # The bytes go through the OTA package area and into the verified
+    # installer, never straight into the signed slot tree.
+    assert seen["slot"] == "slot_b"
+    assert os.path.isfile(seen["path"])
     assert not os.path.exists(os.path.join(root, "slot_b", "update.zip"))
+    # Flashing the inactive slot has to mark it for the next boot, or the
+    # freshly installed image would never be used.
+    assert staged == ["slot_b"]
+
+
+def test_flash_failure_is_reported(monkeypatch, tmp_path):
+    root = str(tmp_path)
+    for name in ("slot_a", "slot_b"):
+        os.makedirs(os.path.join(root, name), exist_ok=True)
+    monkeypatch.setattr(fastboot.main, "root_dir", root)
+    monkeypatch.setattr(fastboot, "is_locked", lambda: False)
+    monkeypatch.setattr(fastboot.ota, "install_package_to_slot",
+                        lambda *_a, **_k: False)
+    fastboot.reset_state()
+    fastboot.stage_bytes(b"IMAGE-DATA")
+    reply = fastboot.handle_command("flash:slot_b")
+    assert reply.startswith("FAIL")
+    assert "验签" in reply
+
 
 
 def test_erase_never_deletes_a_slot(monkeypatch, tmp_path):

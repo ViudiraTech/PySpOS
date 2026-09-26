@@ -20,6 +20,7 @@ import threading
 import pytest
 
 import fastboot
+import fastboot_gui as gui
 from fastboot_gui import FastbootClient, SIGNALS
 
 # A scripted device: it answers from a table instead of running real firmware.
@@ -119,9 +120,8 @@ def test_getvar_returns_the_value(device):
 
 
 def test_all_variables_reads_every_field(device):
-    names = ("version", "product", "unlocked", "secure", "current-slot",
-             "slot-count", "version-bootloader", "rollback-index",
-             "max-download-size", "is-userspace", "super-partition-name")
+    # Driven by VARIABLE_ROWS so a new row cannot be forgotten here.
+    names = [name for name, _caption in gui.VARIABLE_ROWS]
     dev = device({f"getvar:{n}": f"OKAYvalue-{n}" for n in names})
     client = connect(dev)
     client.connect()
