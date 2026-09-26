@@ -18,6 +18,7 @@
 import os
 import socket
 import threading
+import time
 
 import bootmode
 import kernel
@@ -583,6 +584,26 @@ def serve_client(conn: socket.socket, address) -> None:
         logk.printl("fastboot", f"客户端断开 {host}", main.boot_time)
 
 
+# Bind the server socket, retrying briefly while a previous instance lets go.
+# A leftover device from an earlier session holds the port for a moment, and
+# failing straight away would drop the caller back into the system with only
+# one scrolled-past error line to explain it.
+def _bind_server(port, attempts=10, delay=0.5):
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    last = None
+    for attempt in range(attempts):
+        try:
+            server.bind((BIND_HOST, port))
+            return server, None
+        except OSError as exc:
+            last = exc
+            if attempt + 1 < attempts:
+                time.sleep(delay)
+    server.close()
+    return None, last
+
+
 # Run the fastboot server until a client asks the device to leave the mode.
 def fastboot_main(jumpinfo: str = "kernel_jump", port: int = DEFAULT_PORT) -> str:
     reset_state()
@@ -592,16 +613,12 @@ def fastboot_main(jumpinfo: str = "kernel_jump", port: int = DEFAULT_PORT) -> st
     printk.info(f"product: PySpOS / version: {ota.get_current_version()}")
     printk.info(f"unlocked: {'no' if is_locked() else 'yes'}")
     printk.info(f"等待 host 客户端连接 {BIND_HOST}:{port} ...\n")
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        server.bind((BIND_HOST, port))
-    except OSError as exc:
-        printk.error(f"无法监听 {BIND_HOST}:{port}: {exc}\n")
-        try:
-            server.close()
-        except OSError:
-            pass
+    server, error = _bind_server(port)
+    if server is None:
+        printk.error(f"无法监听 {BIND_HOST}:{port}: {error}\n")
+        printk.error("端口可能已被另一个 PySpOS 实例占用：请关掉那个实例，"
+                     "或用 fastboot --port <其他端口> 换一个端口。\n")
+        logk.printl("fastboot", f"监听失败: {error}", main.boot_time)
         return "reboot"
     server.listen(1)
     try:

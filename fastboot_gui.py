@@ -45,26 +45,34 @@ class FastbootClient:
         self.timeout = timeout
         self.sock = None
         self.buffer = b""
+        # Every request runs on a worker thread while the UI thread may close
+        # the socket, so socket use is serialized. Without this, clicking a
+        # reboot button could null the socket between the worker's send and
+        # its read, which surfaced as "'NoneType' object has no attribute
+        # 'recv'".
+        self._lock = threading.RLock()
 
     # Open the socket, reporting the failure instead of raising.
     def connect(self):
         self.close()
         try:
-            self.sock = socket.create_connection((self.host, self.port), self.timeout)
+            sock = socket.create_connection((self.host, self.port), self.timeout)
         except OSError as exc:
-            self.sock = None
             return False, f"无法连接 {self.host}:{self.port}：{exc}"
-        self.buffer = b""
+        with self._lock:
+            self.sock = sock
+            self.buffer = b""
         return True, f"已连接 {self.host}:{self.port}"
 
     # Drop the socket, ignoring an already closed one.
     def close(self):
-        if self.sock is not None:
+        with self._lock:
+            sock, self.sock = self.sock, None
+        if sock is not None:
             try:
-                self.sock.close()
+                sock.close()
             except OSError:
                 pass
-        self.sock = None
 
     # Read one newline-terminated reply from the device.
     def _readline(self):
@@ -78,10 +86,11 @@ class FastbootClient:
 
     # Send one command and return the raw reply line.
     def request(self, command):
-        if self.sock is None:
-            raise OSError("尚未连接设备")
-        self.sock.sendall((command + "\n").encode("utf-8"))
-        return self._readline()
+        with self._lock:
+            if self.sock is None:
+                raise OSError("尚未连接设备")
+            self.sock.sendall((command + "\n").encode("utf-8"))
+            return self._readline()
 
     # Run a command that must succeed, raising OSError on a FAIL reply.
     def command(self, command):
@@ -90,21 +99,19 @@ class FastbootClient:
             raise OSError(reply[4:] or "设备拒绝了该请求")
         return reply
 
-    # Read one getvar value, reporting the raw reply for unknown names.
-    def getvar(self, name):
-        return self.request(f"getvar:{name}")
-
     # Download a file into the device, then return the flash reply.
     def flash(self, partition, path):
         with open(path, "rb") as handle:
             data = handle.read()
-        reply = self.request(f"download:{len(data):08x}")
-        if not reply.startswith("DATA"):
-            raise OSError(reply[4:] or "设备拒绝下载")
-        self.sock.sendall(data)
-        # The device acknowledges the payload with its own OKAY line.
-        self._readline()
-        return self.command(f"flash:{partition}")
+        with self._lock:
+            reply = self.request(f"download:{len(data):08x}")
+            if not reply.startswith("DATA"):
+                raise OSError(reply[4:] or "设备拒绝下载")
+            self.sock.sendall(data)
+            # The device acknowledges the payload with its own OKAY line.
+            self._readline()
+            reply = self.command(f"flash:{partition}")
+        return reply
 
     # Ask the device to erase one partition.
     def erase(self, partition):
@@ -114,13 +121,21 @@ class FastbootClient:
     def flashing(self, option):
         return self.command(f"flashing {option}")
 
-    # Ask the device to reboot, reboot to the bootloader or power off.
+    # Send a command and then hang up. The device reboots, so the connection
+    # is finished either way; closing here keeps the UI thread from racing the
+    # worker that is still talking to the device.
     def reboot(self, target=""):
-        return self.command(f"reboot{target}")
+        try:
+            return self.command(f"reboot{target}")
+        finally:
+            self.close()
 
-    # Ask the device to power off.
+    # Ask the device to power off, then hang up.
     def powerdown(self):
-        return self.command("powerdown")
+        try:
+            return self.command("powerdown")
+        finally:
+            self.close()
 
     # Read every bootloader variable the device exposes.
     def all_variables(self):
@@ -298,20 +313,17 @@ class FastbootGui:
             return
         self._run(f"flashing {option}", lambda: self.client.flashing(option)[4:])
 
-    # Reboot the device.
+    # Reboot the device. The client hangs up itself once the request is sent.
     def _on_reboot(self):
         self._run("reboot", lambda: self.client.reboot()[4:])
-        self.client.close()
 
     # Reboot back into fastboot.
     def _on_reboot_bl(self):
         self._run("reboot-bootloader", lambda: self.client.reboot("-bootloader")[4:])
-        self.client.close()
 
     # Power the device off.
     def _on_poweroff(self):
         self._run("powerdown", lambda: self.client.powerdown()[4:])
-        self.client.close()
 
     # Ask the device for the process list over the OEM extension.
     def _refresh_ps(self):

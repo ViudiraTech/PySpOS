@@ -369,3 +369,39 @@ def test_erase_unknown_target_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(fastboot.main, "root_dir", str(tmp_path))
     ok, _message = fastboot.perform_erase("not-a-partition")
     assert ok is False
+
+
+def test_bind_server_succeeds_on_a_free_port():
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    server, error = fastboot._bind_server(port, attempts=1, delay=0)
+    assert error is None
+    assert server is not None
+    server.close()
+
+
+def test_bind_server_reports_an_occupied_port():
+    # An occupied port is the reason a previous run appears to skip fastboot,
+    # so the failure has to surface instead of silently returning to the shell.
+    holder = socket.socket()
+    holder.bind(("127.0.0.1", 0))
+    holder.listen(1)
+    port = holder.getsockname()[1]
+    try:
+        server, error = fastboot._bind_server(port, attempts=2, delay=0)
+        assert server is None
+        assert isinstance(error, OSError)
+    finally:
+        holder.close()
+
+
+def test_fastboot_main_reports_a_bind_failure(monkeypatch, capsys):
+    monkeypatch.setattr(fastboot.kernel, "screen_clear", lambda: None)
+    monkeypatch.setattr(fastboot, "is_locked", lambda: False)
+    monkeypatch.setattr(fastboot, "_bind_server", lambda *a, **k: (None, OSError("busy")))
+    assert fastboot.fastboot_main("test") == "reboot"
+    out = capsys.readouterr().out
+    assert "已被另一个 PySpOS 实例占用" in out
+    assert "fastboot --port" in out
