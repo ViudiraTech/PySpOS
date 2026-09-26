@@ -465,11 +465,14 @@ def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
         stdout_fd = fds.add(_open_out(out[1], out[2]))
     elif out[0] == "fd":
         stdout_fd = out[1]
-    else:
-        # out is a memory buffer: the child needs a real pipe, otherwise it would
-        # inherit the parent's stdout and write straight past the capture.
+    elif out[0] == "buf":
+        # A memory buffer needs a real pipe: inheriting the parent's stdout
+        # would write straight past the capture.
         capture_read, capture_write = os.pipe()
         stdout_fd = capture_write
+    else:
+        # Terminal output inherits the parent's stdout.
+        stdout_fd = None
     stderr_fd = None
     merge = err[0] == "merge"
     if err[0] == "file":
