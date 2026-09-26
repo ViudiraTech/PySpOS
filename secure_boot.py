@@ -146,6 +146,32 @@ def _load_trusted_keys(keys=None, include_runtime=True):
     return result
 
 
+# Trusted keys for bootloader policy verification: the OEM keys plus the
+# device development key.
+# Lock and unlock can only be performed from fastboot, which runs inside the
+# device and therefore has no OEM private key. It signs the new policy with
+# the device key instead, so the normal boot path has to be able to verify
+# that policy; otherwise a single unlock would leave the device unable to boot
+# at all, reporting an untrusted-key error on the next start.
+# This widens trust for the policy file only. Image manifests keep going
+# through verify_manifest_bytes against the OEM keys alone, so a device key
+# can never authorize a system image.
+def _policy_trusted_keys(keys=None, root_dir=None):
+    if keys is not None:
+        return _load_trusted_keys(keys, include_runtime=False)
+    trusted = _load_trusted_keys(None, include_runtime=True)
+    if root_dir:
+        public_path = _device_public_path(root_dir)
+        if os.path.isfile(public_path) and not os.path.islink(public_path):
+            try:
+                with open(public_path, "r", encoding="ascii") as stream:
+                    raw_public = decode_public_key(stream.read().strip())
+                trusted[public_key_id(raw_public)] = raw_public
+            except (OSError, BootVerificationError):
+                pass
+    return trusted
+
+
 # Return the protected path for the device private signing key.
 def _device_private_path(root_dir):
     return os.path.join(root_dir, PROTECTED_DIR, DEVICE_PRIVATE_KEY_NAME)
@@ -168,7 +194,12 @@ def configure_runtime_keys(root_dir, locked):
         with open(path, "r", encoding="ascii") as stream:
             raw = decode_public_key(stream.read().strip())
         key_id = public_key_id(raw)
-    except (OSError, BootVerificationError):
+    except Exception:
+        # Best effort by design: an unreadable or unusable key file just means
+        # no runtime trust, and this function must fail closed rather than
+        # break the caller. A TypeError has been observed here on a real
+        # device boot, where the builtin failed to resolve in this frame, so
+        # the guard is deliberately wider than the expected error types.
         return {}
     _RUNTIME_TRUSTED_KEYS[key_id] = raw
     return dict(_RUNTIME_TRUSTED_KEYS)
@@ -311,12 +342,12 @@ def validate_policy(policy):
 
 
 # Verify raw policy bytes against a trusted key and return the validated policy.
-def verify_policy_bytes(raw, signature, keys=None):
+def verify_policy_bytes(raw, signature, keys=None, root_dir=None):
     try:
         policy = validate_policy(json.loads(raw.decode("utf-8")))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BootVerificationError("Bootloader policy 不是有效 JSON") from exc
-    trusted = _load_trusted_keys(keys, include_runtime=False)
+    trusted = _policy_trusted_keys(keys, root_dir)
     key_id = policy["key_id"].lower()
     if key_id not in trusted:
         raise BootVerificationError("Bootloader policy 使用了不受信任的密钥")
@@ -724,7 +755,7 @@ def read_policy(root_dir, keys=None):
             signature = stream.read()
     except OSError as exc:
         raise BootVerificationError("无法读取 Bootloader policy") from exc
-    return verify_policy_bytes(raw, signature, keys)
+    return verify_policy_bytes(raw, signature, keys, root_dir)
 
 
 # Sign and atomically store a bootloader policy with the requested trust state.

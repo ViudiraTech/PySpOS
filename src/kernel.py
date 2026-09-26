@@ -13,6 +13,7 @@ import printk
 import os
 import sys
 import subprocess
+import bootmode
 import main
 import time
 import shutil
@@ -126,12 +127,39 @@ def screen_clear():
     else:
         os.system("clear")    
 
+
+# Serve fastboot instead of the shell, then act on how the client left.
+# Returns only when fastboot is done; the caller restarts or shuts down, so a
+# "reboot bootloader" from the client comes straight back into this function.
+def _fastboot_boot():
+    import fastboot
+    import hotreset_env
+    logk.printl("kernel", "启动请求指向 fastboot，跳过 OOBE 与 shell", main.boot_time)
+    fastboot.fastboot_main("boot")
+    # fastboot_main only returns for a leave request. A plain reboot keeps no
+    # pending request, so the next boot lands in the system; "reboot
+    # bootloader" left the request in place and we would come back here.
+    if bootmode.wants_fastboot(main.root_dir):
+        logk.printl("kernel", "fastboot 请求仍在，重启后继续 fastboot", main.boot_time)
+    else:
+        logk.printl("kernel", "fastboot 已结束，重启进入系统", main.boot_time)
+    if os.environ.get("PYSPOS_HOTRESET_SUPERVISED") == "1":
+        hotreset_env.trigger()
+    raise SystemExit(0)
+
+
 # The main command loop: OOBE, boot commit, logo,
 # OTA init, then read and run until EOF or Ctrl-C.
 def loop():
     from syslocale import _
     import oobe
     import main as _main_mod
+
+    # A pending fastboot request outranks the wizard and the shell: that is
+    # the whole point of "reboot bootloader", and how a locked device is
+    # reached at all.
+    if bootmode.wants_fastboot(_main_mod.root_dir):
+        _fastboot_boot()
 
     # First-boot wizard: a missing etc/.oobe_done means run it (a factory reset deletes it).
     # It lives in kernel.loop, not main.main(): the hotreset_env boot path enters

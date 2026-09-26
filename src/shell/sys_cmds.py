@@ -12,6 +12,7 @@
 import os
 import platform
 import printk
+import bootmode
 import fastboot
 import fs
 import kernel
@@ -111,16 +112,10 @@ def cmd_recovery():
         return
     recovery.recovery_main("kernel_jump")
 
-# Enter fastboot mode, asking for ROOT when the boot is locked. The mode has
-# no local UI on purpose: it only serves the protocol, so every privileged
-# action has to come from the host-side graphical client.
+# Enter fastboot mode in place, without restarting. AOSP parity: the mode is
+# the bootloader surface, so it stays reachable on a locked device, while every
+# destructive action inside it is refused by the trust domain.
 def cmd_fastboot(args: str = ""):
-    try:
-        if main.boot_locked:
-            main.require_root("fastboot")
-    except PermissionError as exc:
-        printk.error(f"{exc}\n")
-        return
     port = fastboot.DEFAULT_PORT
     text = (args or "").strip()
     if text:
@@ -133,19 +128,22 @@ def cmd_fastboot(args: str = ""):
             return
     fastboot.fastboot_main("kernel_jump", port)
 
-# Reboot the device, or jump into fastboot with "reboot bootloader".
+# Reboot the device, or come back into fastboot with "reboot bootloader".
 def cmd_reboot(args: str = ""):
     target = (args or "").strip() or "system"
-    if target == "bootloader":
-        fastboot.fastboot_main("reboot_bootloader")
-        return
-    if target not in ("system", "poweroff"):
+    if target not in ("system", "poweroff", "bootloader"):
         printk.error("用法：reboot [bootloader|system|poweroff]\n")
         return
     if target == "poweroff":
         kernel.exit()
         return
-    printk.info("正在重启 PySpOS...\n")
+    if target == "bootloader":
+        # A real restart that lands in fastboot, not an in-place jump, so the
+        # kernel boot path is exercised exactly like a cold boot.
+        if not bootmode.request_mode(main.root_dir, bootmode.MODE_FASTBOOT):
+            printk.error("无法写入 fastboot 启动请求\n")
+            return
+        printk.info("正在重启到 fastboot 模式...\n")
     import hotreset_env
     hotreset_env.trigger()
 

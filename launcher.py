@@ -65,6 +65,8 @@ def main(argv=None):
         description="PySpOS 启动器：验签选槽并启动（--slot 强制指定槽位）")
     parser.add_argument("--slot", choices=("slot_a", "slot_b"),
                         help="强制从指定槽位启动（仍须通过验签，否则拒绝启动）")
+    parser.add_argument("--fastboot", action="store_true",
+                        help="开机直接进入 fastboot 模式（不跑 OOBE 与 shell）")
     args = parser.parse_args(argv)
 
     boot_time = get_boot_time()
@@ -132,6 +134,15 @@ def main(argv=None):
     os.environ["PYSPOS_BOOT_VERIFIED"] = "1" if selection and selection.get("manifest") else "0"
     os.environ["PYSPOS_BOOT_LOCKED"] = "1" if locked else "0"
     sys._launcher_detected = True
+
+    if args.fastboot:
+        # Record the request before the kernel starts: kernel.loop() reads it
+        # and enters fastboot instead of the shell.
+        import bootmode
+        if bootmode.request_mode(root_dir, bootmode.MODE_FASTBOOT):
+            _log("已请求开机直接进入 fastboot 模式")
+        else:
+            _log("警告: 无法写入 fastboot 启动请求，将正常启动")
 
     if args.slot is not None:
         # Pin the requested slot while retaining supervision for hot resets.

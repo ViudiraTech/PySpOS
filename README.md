@@ -93,13 +93,27 @@ UNLOCKED 开发槽位需要同步源码时，直接运行 `python3 force_sync.py
 # 设备端：进入 fastboot（锁定状态下需要 ROOT）
 fastboot            # 或 reboot bootloader
 
+# 开机就直接进 fastboot，跳过 OOBE 与 shell
+python3 launcher.py --fastboot
+#   也可以在 shell 里：reboot bootloader
+
 # host 侧：打开图形客户端连接 127.0.0.1:5555
 python3 fastboot_gui.py
 ```
 
+`reboot bootloader` 与客户端的 `reboot-bootloader` 都会写一条启动请求
+（`.pyspos_boot/boot_mode`，相当于 AOSP 的 BCB `boot-fastboot`），所以重启后
+仍然停在 fastboot；普通 `reboot` / `continue` 会清掉它，下一次开机回系统。
+
 客户端实现了 `getvar` / `download` / `flash` / `erase` / `boot` / `continue` /
 `reboot` / `flashing unlock|lock`，外加两条 OEM 扩展用于列出进程和发信号。
-和真机一样，**解锁会清空两个槽位的数据**；锁定状态下刷写一律被拒绝。
+
+几条和真机一致的行为：
+
+- **解锁会清空用户数据**，但保留已签名的系统镜像（槽位是不可变的安装目标）
+- 锁定状态下 `flash` / `erase` 一律被拒绝
+- 当前启动槽位没有签名镜像时**拒绝锁定**，否则设备会再也起不来
+- `flash` 只把镜像暂存到 `ota/`，由既有的验签安装流程落盘
 
 > [!NOTE]
 > 开机若出现「按 Enter 疯狂刷 `^M`」，是上一次会话异常退出把终端留在了
@@ -120,6 +134,7 @@ python3 fastboot_gui.py
 | `bootloader_status` / `bl_status` | ROOT 查看 Bootloader 信任域、验签和防回滚状态 |
 | `oobe` | 手动重跑首次开机向导 |
 | `fastboot` / `reboot bootloader` | 进入 fastboot 模式（只跑协议，无本地界面） |
+| `launcher.py --fastboot` | 开机直接进 fastboot，跳过 OOBE 与 shell |
 | `python3 fastboot_gui.py` | fastboot 图形客户端：刷写、擦除、解锁 BL、向进程发信号 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |
@@ -171,6 +186,8 @@ PySpOS/
 │   ├── syslocale.py      # 时区（zoneinfo + TZ）与 i18n
 │   ├── spc.py            # SpaceConfig v2
 │   ├── ota.py            # OTA + A/B 槽
+│   ├── fastboot.py       # fastboot 协议服务端（设备端）
+│   ├── bootmode.py       # 启动模式请求（相当于 BCB boot-fastboot）
 │   ├── btcfg.py          # Bootloader 配置与校验
 │   ├── commands.py       # 命令注册表 / 补全 / PATH 解析
 │   ├── elf_loader/       # ELF 解析、Unicorn 引擎、自研模拟器

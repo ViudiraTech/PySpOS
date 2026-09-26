@@ -139,11 +139,13 @@ def test_boot_without_download_fails():
     assert ask("boot").startswith("FAIL")
 
 
-def test_boot_with_download_sets_pending():
+def test_boot_with_download_targets_system():
     fastboot.reset_state()
     fastboot.stage_bytes(b"payload")
     assert ask("boot").startswith("OKAY")
-    assert fastboot.take_pending_boot() == "staged"
+    # The image is never executed from fastboot: it stays staged, so the boot
+    # goes to the system and the verified installer still has to run.
+    assert fastboot.take_pending_boot() == "system"
 
 
 def test_continue_sets_pending_system():
@@ -295,6 +297,22 @@ def test_unlock_then_lock_round_trip(monkeypatch, tmp_path):
     assert os.path.isdir(os.path.join(root, "slot_b"))
     assert not os.path.isdir(os.path.join(root, "etc"))
 
+    ok, message = fastboot.perform_lock()
+    # Locking needs a signed active slot: an unsigned dev slot would leave the
+    # device unable to boot, exactly like locking a phone after flashing
+    # unsigned images.
+    assert ok is False
+    assert "签名" in message
+
+
+def test_lock_allowed_when_active_slot_is_signed(monkeypatch, tmp_path):
+    root = str(tmp_path)
+    for name in ("slot_a", "slot_b"):
+        os.makedirs(os.path.join(root, name), exist_ok=True)
+    monkeypatch.setattr(fastboot.main, "root_dir", root)
+    monkeypatch.setattr(fastboot, "is_locked", lambda: secure_boot_read_locked(root))
+    seed_locked_policy(root)
+    monkeypatch.setattr(fastboot, "active_slot_is_signed", lambda: True)
     ok, message = fastboot.perform_lock()
     assert ok, message
     assert fastboot.is_locked() is True
