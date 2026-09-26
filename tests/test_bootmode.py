@@ -33,6 +33,13 @@ def test_request_fastboot(root):
     assert bootmode.read_mode(root) == bootmode.MODE_FASTBOOT
 
 
+def test_only_one_shot_mode_exists(root):
+    # A sticky variant was deliberately not added: every request is consumed
+    # by the boot that honours it, and asking again just writes it again.
+    assert bootmode.VALID_MODES == (bootmode.MODE_NORMAL, bootmode.MODE_FASTBOOT)
+    assert not hasattr(bootmode, "MODE_FASTBOOT_ONCE")
+
+
 def test_request_lives_in_protected_dir(root):
     import secure_boot
     path = bootmode.request_path(root)
@@ -132,6 +139,23 @@ def test_boot_clears_request_and_targets_system(root, monkeypatch):
     assert fastboot.handle_command("boot").startswith("OKAY")
     assert bootmode.wants_fastboot(root) is False
     assert fastboot.take_pending_boot() == "system"
+
+
+def test_kernel_boot_path_consumes_the_request(monkeypatch, tmp_path):
+    import kernel
+    import main as main_mod
+    root = str(tmp_path)
+    bootmode.request_mode(root, bootmode.MODE_FASTBOOT)
+    monkeypatch.setattr(main_mod, "root_dir", root)
+
+    def fake_fastboot_boot():
+        raise SystemExit(0)
+
+    monkeypatch.setattr(kernel, "_fastboot_boot", fake_fastboot_boot)
+    with pytest.raises(SystemExit):
+        kernel.loop()
+    # Honoured once and gone, so the next plain boot reaches the system.
+    assert bootmode.wants_fastboot(root) is False
 
 
 def test_kernel_boot_path_prefers_fastboot(monkeypatch):

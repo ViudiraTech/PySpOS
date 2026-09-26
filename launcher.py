@@ -136,11 +136,12 @@ def main(argv=None):
     sys._launcher_detected = True
 
     if args.fastboot:
-        # Record the request before the kernel starts: kernel.loop() reads it
-        # and enters fastboot instead of the shell.
+        # Record the request before the kernel starts: kernel.loop() reads it,
+        # enters fastboot instead of the shell, and consumes it, so this only
+        # affects the boot that is starting now.
         import bootmode
         if bootmode.request_mode(root_dir, bootmode.MODE_FASTBOOT):
-            _log("已请求开机直接进入 fastboot 模式")
+            _log("已请求本次开机直接进入 fastboot 模式")
         else:
             _log("警告: 无法写入 fastboot 启动请求，将正常启动")
 

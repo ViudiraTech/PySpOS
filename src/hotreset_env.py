@@ -78,13 +78,15 @@ def _set_comm(name):
 # /proc/<pid>/cmdline was a whole pile of source code and tools reading the
 # parent printed that source as the shell name. The argv is now PySpOS shell -u
 # hotreset_env.py --kernel, short and already meaningful.
+# Nothing is purged from sys.modules here any more. The supervisor already
+# starts every restart through subprocess.Popen, so each boot is a brand new
+# interpreter and stale modules cannot survive it. Wiping sys.modules in a
+# live interpreter only forced the import machinery to rebuild modules from
+# half-initialized state, which corrupted name resolution: builtins such as
+# open came back as None inside already-imported modules, and secure_boot
+# verification then died with "TypeError: 'NoneType' object is not callable".
 def _boot_kernel():
     _set_comm(SHELL_ARGV0)
-    keep = ('sys', 'builtins', '__builtin__', 'importlib', 'types')
-    for name in list(sys.modules.keys()):
-        if name.startswith('_') or name.startswith('os') or name in keep:
-            continue
-        del sys.modules[name]
     sys._launcher_detected = True
     import kernel
     kernel.loop()
