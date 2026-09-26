@@ -94,6 +94,12 @@ class SyscallInterrupt(CPUException):
         super().__init__(f"Syscall {number} with args {args}")
 
 
+# Raised for an integer divide error (#DE): division by zero or a quotient
+# that does not fit the destination. The runner turns it into signal 8.
+class DivideError(CPUException):
+    pass
+
+
 # Byte-level guest memory access layered on the loader's regions.
 class MemoryController:
 # Bind to the loader whose regions hold the guest image.
@@ -212,7 +218,7 @@ class InstructionDecoder:
         0x88: ('MOV', 'Eb', 'Gb'), 0x89: ('MOV', 'Ev', 'Gv'),
         0x8A: ('MOV', 'Gb', 'Eb'), 0x8B: ('MOV', 'Gv', 'Ev'),
         0x8D: ('LEA', 'Gv', 'M'),
-        0x90: ('NOP',), 0xC3: ('RET',), 0xC9: ('LEAVE',),
+        0x90: ('NOP',), 0xF3: ('PAUSE',), 0xC3: ('RET',), 0xC9: ('LEAVE',),
         0xB0: ('MOV', 'AL', 'Ib'), 0xB8: ('MOV', 'rAX', 'Iv'),
         0xB9: ('MOV', 'rCX', 'Iv'), 0xBA: ('MOV', 'rDX', 'Iv'),
         0xBB: ('MOV', 'rBX', 'Iv'), 0xBC: ('MOV', 'rSP', 'Iv'),
@@ -225,7 +231,9 @@ class InstructionDecoder:
     }
     
     OPCODES_0F = {
-        0x05: ('SYSCALL',), 0x1F: ('NOP', 'M'),
+        0x05: ('SYSCALL',), 0x1F: ('NOP', 'M'), 0xA2: ('CPUID',),
+        0x31: ('RDTSC',), 0x01: ('XGETBV_RDMSR',),
+        0xAE: ('FENCE_GROUP',),
         0xB6: ('MOVZBL', 'Eb', 'Gv'),
         0x40: ('CMOVO', 'Gv', 'Ev'), 0x41: ('CMOVNO', 'Gv', 'Ev'),
         0x42: ('CMOVB', 'Gv', 'Ev'), 0x43: ('CMOVNB', 'Gv', 'Ev'),
@@ -283,7 +291,15 @@ class InstructionDecoder:
         while opcode in (0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65):
             opcode = memory.read_byte(ip + length)
             length += 1
-        
+
+        if opcode == 0xF3:
+# PAUSE is a prefix on some instructions; on its own it is a spin hint.
+            nxt = memory.read_byte(ip + length)
+            if nxt == 0x90:
+                length += 1
+                return ('PAUSE', length, [])
+            return ('NOP', 1, [])
+
         if opcode == 0x0F:
             return self._decode_0f(memory, ip, length)
         
@@ -389,6 +405,31 @@ class InstructionDecoder:
         
         if name == 'SYSCALL':
             return (name, length, operands)
+        elif name == 'XGETBV_RDMSR':
+# 0x0F 0x01 is a modrm group: /4 is RDTSCP (EDX:EAX = TSC), /2 is
+# LGDT, /3 is LIDT, the rest are privileged system instructions we refuse.
+            last_modrm, length = self._read_modrm(memory, ip, length, operands)
+            if last_modrm.reg == 4:
+                return ('RDTSCP', length, [])
+            if last_modrm.reg in (2, 3):
+                return ('NOP', length, [])
+            raise InvalidInstruction(
+                f"Privileged 0F 01/{last_modrm.reg} at 0x{ip:08x}")
+        elif name == 'FENCE_GROUP':
+# 0x0F 0xAE is another modrm group: /5 LFENCE, /6 MFENCE, /7 SFENCE,
+# /7 with a register operand is CLFLUSH, the rest are privileged.
+            last_modrm, length = self._read_modrm(memory, ip, length, operands)
+            if last_modrm.reg == 5:
+                return ('LFENCE', length, [])
+            if last_modrm.reg == 6:
+                return ('MFENCE', length, [])
+            if last_modrm.reg == 7:
+                if last_modrm.mod == 3:
+                    raise InvalidInstruction(
+                        f"CLFLUSH needs a memory operand at 0x{ip:08x}")
+                return ('SFENCE', length, [])
+            raise InvalidInstruction(
+                f"Privileged 0F AE/{last_modrm.reg} at 0x{ip:08x}")
         elif name == 'NOP':
             if len(info) > 1:
                 _, length = self._read_modrm(memory, ip, length, operands)
@@ -732,11 +773,58 @@ class CPUEmulator:
             self._exec_movzbl(operands)
         elif name.startswith('CMOV'):
             self._exec_cmov(name, operands)
+        elif name in ('CPUID', 'RDTSC', 'RDTSCP', 'XGETBV',
+                      'XGETBV_RDMSR', 'RDMSR_RDTSC',
+                      'PAUSE', 'LFENCE', 'MFENCE', 'SFENCE', 'CPUID_LEAF',
+                      'FENCE_GROUP'):
+            self._exec_feature_probe(name)
+        elif name == 'RDMSR':
+            raise InvalidInstruction("RDMSR is privileged and not emulated")
         else:
             logger.warning(f"Unimplemented instruction: {name}")
-        
+
         self._set_ip(self.next_ip)
         return None
+
+# Answer CPU feature probes with a fixed, honest capability set.
+# IFUNC resolvers ask the CPU which code path to take; without an answer
+# they run on stale flags, so report a small stable feature set instead of
+# skipping the probe in silence.
+    def _exec_feature_probe(self, name: str) -> None:
+        leaf = self._get_reg(0) & 0xffffffff
+        if name in ('RDTSC', 'RDTSCP'):
+            stamp = self.instruction_count & 0xffffffffffffffff
+            self._set_reg(0, stamp & 0xffffffff)
+            self._set_reg(2, (stamp >> 32) & 0xffffffff)
+            return
+        if name == 'XGETBV':
+            self._set_reg(0, 0x7)
+            self._set_reg(2, 0)
+            return
+        if name in ('PAUSE', 'LFENCE', 'MFENCE', 'SFENCE'):
+            return
+        if leaf == 0:
+            self._set_reg(0, 0x16)
+            self._set_reg(1, 0x756e6547)
+            self._set_reg(2, 0x6c65746e)
+            self._set_reg(3, 0x49656e69)
+            return
+        if leaf == 1:
+            self._set_reg(0, 0x000306a9)
+            self._set_reg(1, 0x02100800)
+            self._set_reg(2, 0x7ffafbff)
+            self._set_reg(3, 0xbfebfbff)
+            return
+        if leaf == 7 and (self._get_reg(2) & 0xffffffff) == 0:
+            self._set_reg(1, 0x00000000)
+            self._set_reg(2, 0x00000000)
+            self._set_reg(3, 0x00000000)
+            self._set_reg(2, 0x00000000)
+            return
+        self._set_reg(0, 0)
+        self._set_reg(1, 0)
+        self._set_reg(2, 0)
+        self._set_reg(3, 0)
     
 # Return the linear address a modrm memory operand refers to.
     def _calc_effective_address(self, operand: DecodedOperand) -> int:
@@ -815,28 +903,38 @@ class CPUEmulator:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
         src_val = self._get_operand_value(src)
-        result = dst_val + src_val
+        size = self._get_operand_size(dst)
+        result = self._update_flags_arith(dst_val, src_val, size, False)
         self._set_operand_value(dst, result)
-        self._update_flags(result, self._get_operand_size(dst))
-    
+
 # Add with carry and update the flags.
     def _exec_adc(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
         src_val = self._get_operand_value(src)
         cf = 1 if self._get_flags() & (1 << EFlags.CF) else 0
-        result = dst_val + src_val + cf
+        size = self._get_operand_size(dst)
+        result = self._update_flags_arith(dst_val, src_val, size, False, cf)
         self._set_operand_value(dst, result)
-        self._update_flags(result, self._get_operand_size(dst))
-    
+
 # Subtract the operands and update the flags.
     def _exec_sub(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
         src_val = self._get_operand_value(src)
-        result = dst_val - src_val
+        size = self._get_operand_size(dst)
+        result = self._update_flags_arith(dst_val, src_val, size, True)
         self._set_operand_value(dst, result)
-        self._update_flags(result, self._get_operand_size(dst))
+
+# Subtract with borrow and update the flags.
+    def _exec_sbb(self, operands: List[Any]) -> None:
+        dst, src = operands
+        dst_val = self._get_operand_value(dst)
+        src_val = self._get_operand_value(src)
+        cf = 1 if self._get_flags() & (1 << EFlags.CF) else 0
+        size = self._get_operand_size(dst)
+        result = self._update_flags_arith(dst_val, src_val, size, True, cf)
+        self._set_operand_value(dst, result)
     
 # Exclusive-or the operands and update the flags.
     def _exec_xor(self, operands: List[Any]) -> None:
@@ -941,26 +1039,13 @@ class CPUEmulator:
         result = val1 & val2
         self._update_flags(result, self._get_operand_size(op1))
     
-# Subtract without storing, setting ZF, SF and CF.
+# Subtract without storing, setting the compare flags for Jcc.
     def _exec_cmp(self, operands: List[Any]) -> None:
         op1, op2 = operands
         val1 = self._get_operand_value(op1)
         val2 = self._get_operand_value(op2)
-        size = self._get_operand_size(op1)
-        mask = (1 << size) - 1
-        result = (val1 - val2) & mask
-        
-        flags = self._get_flags()
-        flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF) | (1 << EFlags.CF) | (1 << EFlags.OF))
-        
-        if result == 0:
-            flags |= (1 << EFlags.ZF)
-        if result & (1 << (size - 1)):
-            flags |= (1 << EFlags.SF)
-        if val1 < val2:
-            flags |= (1 << EFlags.CF)
-        
-        self._set_flags(flags)
+        self._update_flags_arith(val1, val2, self._get_operand_size(op1),
+                                 True)
     
 # Run the 0x80/0x81/0x83 group, the ALU operations picked by /digit.
     def _exec_grp1(self, operands: List[Any]) -> None:
@@ -986,24 +1071,27 @@ class CPUEmulator:
         mask = (1 << dst_size) - 1
         
         if grp_op == 0:
-            result = (dst_val + src_val) & mask
+            result = self._update_flags_arith(dst_val, src_val, dst_size,
+                                              False)
         elif grp_op == 1:
             result = (dst_val | src_val) & mask
         elif grp_op == 2:
             cf = 1 if self._get_flags() & (1 << EFlags.CF) else 0
-            result = (dst_val + src_val + cf) & mask
+            result = self._update_flags_arith(dst_val, src_val, dst_size,
+                                              False, cf)
         elif grp_op == 3:
             cf = 1 if self._get_flags() & (1 << EFlags.CF) else 0
-            result = (dst_val - src_val - cf) & mask
+            result = self._update_flags_arith(dst_val, src_val, dst_size,
+                                              True, cf)
         elif grp_op == 4:
             result = (dst_val & src_val) & mask
         elif grp_op == 5:
-            result = (dst_val - src_val) & mask
+            result = self._update_flags_arith(dst_val, src_val, dst_size,
+                                              True)
         elif grp_op == 6:
             result = (dst_val ^ src_val) & mask
         elif grp_op == 7:
-            result = (dst_val - src_val) & mask
-            self._update_flags(result, dst_size)
+            self._update_flags_arith(dst_val, src_val, dst_size, True)
             return
         
         self._set_operand_value(dst, result)
@@ -1026,47 +1114,91 @@ class CPUEmulator:
         elif grp_op == 3:  # NEG
             result = (-dst_val) & mask
             self._set_operand_value(dst, result)
-            self._update_flags(result, dst_size)
+            sign = 1 << (dst_size - 1)
+            flags = self._get_flags()
+            flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF)
+                       | (1 << EFlags.CF) | (1 << EFlags.OF)
+                       | (1 << EFlags.PF))
+            if result == 0:
+                flags |= (1 << EFlags.ZF)
+            if result & sign:
+                flags |= (1 << EFlags.SF)
+            if dst_val & mask:
+                flags |= (1 << EFlags.CF)
+            if (dst_val & mask) == sign:
+                flags |= (1 << EFlags.OF)
+            if bin(result & 0xff).count("1") % 2 == 0:
+                flags |= (1 << EFlags.PF)
+            self._set_flags(flags)
         elif grp_op == 4:  # MUL
             rax = self._get_reg(0)
-            result = (rax * dst_val) & mask
-            self._set_reg(0, result)
+            full = rax * dst_val
+            self._set_reg(0, full & mask)
+            high = (full >> dst_size) & mask
+            if dst_size == 8:
+                self._set_reg(0, (self._get_reg(0) & ~0xff00) | (high << 8), 16)
+            elif dst_size == 16:
+                self._set_reg(2, high)
+            else:
+                self._set_reg(2, high)
+            flags = self._get_flags()
+            flags &= ~((1 << EFlags.CF) | (1 << EFlags.OF))
+            if high:
+                flags |= (1 << EFlags.CF) | (1 << EFlags.OF)
+            self._set_flags(flags)
         elif grp_op == 5:  # IMUL
             rax = self._get_reg(0)
-            if dst_val & (1 << (dst_size - 1)):
-                dst_val = dst_val - (1 << dst_size)
-            if rax & (1 << (dst_size - 1)):
-                rax = rax - (1 << dst_size)
-            result = (rax * dst_val) & mask
-            self._set_reg(0, result)
+            sign_bit = 1 << (dst_size - 1)
+            a = rax - (1 << dst_size) if rax & sign_bit else rax
+            b = dst_val - (1 << dst_size) if dst_val & sign_bit else dst_val
+            full = a * b
+            self._set_reg(0, full & mask)
+            fits = -(1 << (dst_size - 1)) <= full < (1 << (dst_size - 1))
+            if dst_size > 8:
+                high = (full >> dst_size) & mask
+                self._set_reg(2, high)
+            flags = self._get_flags()
+            flags &= ~((1 << EFlags.CF) | (1 << EFlags.OF))
+            if not fits:
+                flags |= (1 << EFlags.CF) | (1 << EFlags.OF)
+            self._set_flags(flags)
         elif grp_op == 6:  # DIV
             rax = self._get_reg(0)
             rdx = self._get_reg(2)
-            if dst_val != 0:
-                dividend = (rdx << dst_size) | rax
-                quotient = dividend // dst_val
-                remainder = dividend % dst_val
-                self._set_reg(0, quotient & mask)
-                self._set_reg(2, remainder & mask)
+            if dst_val == 0:
+                raise DivideError("division by zero")
+            dividend = (rdx << dst_size) | rax
+            quotient = dividend // dst_val
+            if quotient >= (1 << dst_size):
+                raise DivideError("quotient does not fit")
+            remainder = dividend % dst_val
+            self._set_reg(0, quotient & mask)
+            self._set_reg(2, remainder & mask)
         elif grp_op == 7:  # IDIV
             rax = self._get_reg(0)
             rdx = self._get_reg(2)
             sign_bit = 1 << (dst_size - 1)
             sign_ext = 1 << dst_size
-            
+
             if dst_val & sign_bit:
                 dst_val = dst_val - sign_ext
-            if dst_val != 0:
-                dividend = (rdx << dst_size) | rax
-                sign_bit2 = 1 << (dst_size * 2 - 1)
-                if dividend & sign_bit2:
-                    dividend = dividend - (1 << (dst_size * 2))
-                
-                quotient = int(dividend / dst_val)
-                remainder = dividend - quotient * dst_val
-                
-                self._set_reg(0, quotient & mask)
-                self._set_reg(2, remainder & mask)
+            if dst_val == 0:
+                raise DivideError("division by zero")
+            dividend = (rdx << dst_size) | rax
+            sign_bit2 = 1 << (dst_size * 2 - 1)
+            if dividend & sign_bit2:
+                dividend = dividend - (1 << (dst_size * 2))
+
+            quotient = abs(dividend) // abs(dst_val)
+            if dividend < 0 < dst_val or (dividend > 0 > dst_val):
+                quotient = -quotient
+            limit = 1 << (dst_size - 1)
+            if not (-limit <= quotient < limit):
+                raise DivideError("quotient does not fit")
+            remainder = dividend - quotient * dst_val
+
+            self._set_reg(0, quotient & mask)
+            self._set_reg(2, remainder & mask)
     
 # Run the 0xFF group: INC, DEC and the indirect control transfers.
     def _exec_grp5(self, operands: List[Any]) -> None:
@@ -1078,21 +1210,37 @@ class CPUEmulator:
         dst_val = self._get_operand_value(dst)
         
         if grp_op == 0:  # INC
-            result = (dst_val + 1) & ((1 << self._get_operand_size(dst)) - 1)
+            size = self._get_operand_size(dst)
+            saved_cf = self._get_flags() & (1 << EFlags.CF)
+            result = self._update_flags_arith(dst_val, 1, size, False)
+            if saved_cf:
+                self._set_flags(self._get_flags() | (1 << EFlags.CF))
             self._set_operand_value(dst, result)
         elif grp_op == 1:  # DEC
-            result = (dst_val - 1) & ((1 << self._get_operand_size(dst)) - 1)
+            size = self._get_operand_size(dst)
+            saved_cf = self._get_flags() & (1 << EFlags.CF)
+            result = self._update_flags_arith(dst_val, 1, size, True)
+            if saved_cf:
+                self._set_flags(self._get_flags() | (1 << EFlags.CF))
             self._set_operand_value(dst, result)
         elif grp_op == 2:  # CALL Ev
-            sp = self._get_sp() - 8
-            self.memory.write_qword(sp, self.next_ip)
+            width = 8 if self.is_64bit else 4
+            sp = self._get_sp() - width
+            if width == 8:
+                self.memory.write_qword(sp, self.next_ip)
+            else:
+                self.memory.write_dword(sp, self.next_ip)
             self._set_sp(sp)
             self.next_ip = dst_val
         elif grp_op == 4:  # JMP Ev
             self.next_ip = dst_val
         elif grp_op == 6:  # PUSH
-            sp = self._get_sp() - 8
-            self.memory.write_qword(sp, dst_val)
+            width = 8 if self.is_64bit else 4
+            sp = self._get_sp() - width
+            if width == 8:
+                self.memory.write_qword(sp, dst_val)
+            else:
+                self.memory.write_dword(sp, dst_val)
             self._set_sp(sp)
     
 # Sign-extend a 32-bit source into a 64-bit register.
@@ -1217,16 +1365,52 @@ class CPUEmulator:
     
 # Set ZF and SF from a result; PF, AF and OF are not modelled.
     def _update_flags(self, result: int, size: int) -> None:
+# Logical-operation flags: ZF, SF and PF from the result, CF and OF cleared.
         flags = self._get_flags()
-        flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF) | (1 << EFlags.CF) | (1 << EFlags.OF))
-        
+        flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF) | (1 << EFlags.CF)
+                   | (1 << EFlags.OF) | (1 << EFlags.PF))
+
         mask = (1 << size) - 1
-        if (result & mask) == 0:
+        value = result & mask
+        if value == 0:
             flags |= (1 << EFlags.ZF)
-        if result & (1 << (size - 1)):
+        if value & (1 << (size - 1)):
             flags |= (1 << EFlags.SF)
-        
+        if bin(value & 0xff).count("1") % 2 == 0:
+            flags |= (1 << EFlags.PF)
+
         self._set_flags(flags)
+
+    def _update_flags_arith(self, op1: int, op2: int, size: int,
+                            is_sub: bool, carry: int = 0) -> int:
+# Full ADD/SUB flags: ZF, SF, CF, OF and PF. Returns the masked result.
+        mask = (1 << size) - 1
+        sign = 1 << (size - 1)
+        a, b = op1 & mask, op2 & mask
+        if is_sub:
+            full = a - b - carry
+            cf = a < (b + carry)
+            of = bool(((a ^ b) & (a ^ full)) & sign)
+        else:
+            full = a + b + carry
+            cf = full > mask
+            of = bool((~(a ^ b) & (a ^ full)) & sign)
+        result = full & mask
+        flags = self._get_flags()
+        flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF) | (1 << EFlags.CF)
+                   | (1 << EFlags.OF) | (1 << EFlags.PF))
+        if result == 0:
+            flags |= (1 << EFlags.ZF)
+        if result & sign:
+            flags |= (1 << EFlags.SF)
+        if cf:
+            flags |= (1 << EFlags.CF)
+        if of:
+            flags |= (1 << EFlags.OF)
+        if bin(result & 0xff).count("1") % 2 == 0:
+            flags |= (1 << EFlags.PF)
+        self._set_flags(flags)
+        return result
     
 # Return the instruction count, the registers and the current width.
     def get_state(self) -> Dict[str, Any]:

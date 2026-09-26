@@ -20,7 +20,7 @@ from .elf_loader import (
     ELFLoader, LoadedSegment, MemoryRegion,
     ELFLoaderError, MemoryAccessError
 )
-from .cpu_emulator import CPUEmulator, SyscallInterrupt
+from .cpu_emulator import CPUEmulator, SyscallInterrupt, DivideError
 from .syscall_emulator import SyscallEmulator
 
 logger = logging.getLogger(__name__)
@@ -233,6 +233,10 @@ class ELFRunner:
             logger.error(f"Memory access error: {e}")
             exit_code = -11
             signal = 11
+        except DivideError as e:
+            logger.error(f"Integer divide error: {e}")
+            exit_code = -8
+            signal = 8
         except SyscallInterrupt as e:
             result = self._handle_syscall(e.number, *e.syscall_args)
             self.cpu._set_reg(0, result)

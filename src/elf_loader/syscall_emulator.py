@@ -814,6 +814,41 @@ class FileDescriptor:
     is_open: bool = True
 
 
+# Open host handles the guest can keep using after a rename or unlink.
+# POSIX says an open file description survives them; reopening by path does not.
+class _HostHandles:
+    def __init__(self):
+        self._files = {}
+
+    def acquire(self, fd_num, path, flags):
+        key = (fd_num, path, flags)
+        handle = self._files.get(key)
+        if handle is not None and not handle.closed:
+            return handle
+        mode = _host_mode(flags)
+        handle = open(path, mode)
+        self._files[key] = handle
+        return handle
+
+    def release(self, fd_num):
+        for key in [k for k in self._files if k[0] == fd_num]:
+            handle = self._files.pop(key)
+            try:
+                handle.close()
+            except OSError:
+                pass
+
+
+def _host_mode(flags):
+    access = flags & 0o3
+    append = bool(flags & OpenFlags.O_APPEND)
+    if access == OpenFlags.O_RDWR:
+        return "r+b" if not append else "a+b"
+    if access == OpenFlags.O_WRONLY:
+        return "ab" if append else "r+b"
+    return "rb"
+
+
 # Answer guest syscalls by calling the host on the program's behalf.
 class SyscallEmulator:
     
@@ -849,6 +884,7 @@ class SyscallEmulator:
     
 # Reserve fds 0 to 2 and create the output capture buffers.
     def _init_stdio(self):
+        self._handles = _HostHandles()
         self.fd_table[0] = FileDescriptor(0, "<stdin>", OpenFlags.O_RDONLY)
         self.fd_table[1] = FileDescriptor(1, "<stdout>", OpenFlags.O_WRONLY)
         self.fd_table[2] = FileDescriptor(2, "<stderr>", OpenFlags.O_WRONLY)
@@ -1062,14 +1098,14 @@ class SyscallEmulator:
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
-        
+
         try:
-            with open(fd_obj.path, 'rb') as f:
-                f.seek(fd_obj.position)
-                data = f.read(count)
-                self._write_buffer(buf, data)
-                fd_obj.position += len(data)
-                return len(data)
+            handle = self._handles.acquire(fd, fd_obj.path, fd_obj.flags)
+            handle.seek(fd_obj.position)
+            data = handle.read(count)
+            self._write_buffer(buf, data)
+            fd_obj.position += len(data)
+            return len(data)
         except OSError as e:
             return -e.errno
     
@@ -1092,15 +1128,15 @@ class SyscallEmulator:
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
-        
+
         try:
-            mode = 'ab' if fd_obj.flags & OpenFlags.O_APPEND else 'r+b'
-            with open(fd_obj.path, mode) as f:
-                if not (fd_obj.flags & OpenFlags.O_APPEND):
-                    f.seek(fd_obj.position)
-                f.write(data)
-                fd_obj.position += len(data)
-            return count
+            handle = self._handles.acquire(fd, fd_obj.path, fd_obj.flags)
+            if not (fd_obj.flags & OpenFlags.O_APPEND):
+                handle.seek(fd_obj.position)
+            handle.write(data)
+            handle.flush()
+            fd_obj.position += len(data)
+            return len(data)
         except OSError as e:
             return -e.errno
     
@@ -1152,13 +1188,14 @@ class SyscallEmulator:
     def sys_close(self, fd: int) -> int:
         if fd in (0, 1, 2):
             return 0  # the standard descriptors cannot be closed
-        
+
         fd_obj = self.fd_table.get(fd)
         if not fd_obj:
             return -errno.EBADF
-        
+
         fd_obj.is_open = False
         del self.fd_table[fd]
+        self._handles.release(fd)
         return 0
     
 # Move the file position and return the new one.

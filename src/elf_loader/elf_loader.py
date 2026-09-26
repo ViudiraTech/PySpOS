@@ -321,6 +321,7 @@ class ELFLoader:
         self.plt_entries: Dict[int, PLTEntry] = {}
         self.plt_by_name: Dict[str, int] = {}
         self.got_entries: Dict[int, int] = {}
+        self.got_names: Dict[str, int] = {}
         self.got_plt_base: int = 0
         
         self.relocations_done = False
@@ -1109,15 +1110,24 @@ class ELFLoader:
             logger.debug(f"Unhandled i386 relocation type: {rel_type}")
             return None
     
-# Return the GOT slot holding sym_value, recycling a free slot when there is one.
+# Return the GOT slot holding sym_value, reusing a slot already assigned
+# to this symbol. A zero-valued slot belongs to nobody yet; only the slot
+# created for this symbol may be reused, otherwise two symbols would share
+# one address.
     def _get_got_entry(self, sym_name: str, sym_value: int) -> int:
+        known = self.got_names.get(sym_name)
+        if known is not None:
+            self.got_entries[known] = sym_value
+            return known
         for got_addr, value in self.got_entries.items():
-            if value == sym_value or value == 0:
+            if value == 0:
                 self.got_entries[got_addr] = sym_value
+                self.got_names[sym_name] = got_addr
                 return got_addr
-        
+
         got_addr = self._allocate_got_entry()
         self.got_entries[got_addr] = sym_value
+        self.got_names[sym_name] = got_addr
         return got_addr
     
 # Hand out an unused GOT slot, skipping the three reserved entries.
