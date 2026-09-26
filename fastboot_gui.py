@@ -137,6 +137,10 @@ class FastbootClient:
         finally:
             self.close()
 
+    # Read one getvar value, reporting the raw reply for unknown names.
+    def getvar(self, name):
+        return self.request(f"getvar:{name}")
+
     # Read every bootloader variable the device exposes.
     def all_variables(self):
         names = ("version", "product", "unlocked", "secure", "current-slot",
@@ -270,7 +274,22 @@ class FastbootGui:
             self._log("FAIL 端口必须是数字")
             return
         self.client.host, self.client.port = host, port
-        self._run("连接", lambda: (self.client.connect()[1], self._refresh_vars())[0])
+
+        def job():
+            ok, message = self.client.connect()
+            if not ok:
+                raise OSError(message)
+            # Read the variables as part of connecting, but keep the connect
+            # message even if a later variable read fails.
+            try:
+                read = self._refresh_vars()
+            except Exception as exc:
+                self._log(f"WARN 读取变量失败: {exc}")
+            else:
+                self._log(read)
+            return message
+
+        self._run("连接", job)
 
     # Close the socket and forget the device.
     def _on_disconnect(self):

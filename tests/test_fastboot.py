@@ -405,3 +405,67 @@ def test_fastboot_main_reports_a_bind_failure(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "已被另一个 PySpOS 实例占用" in out
     assert "fastboot --port" in out
+
+
+def test_leave_boot_mode_reboots_for_real(monkeypatch):
+    # The client's reboot button used to do nothing visible: fastboot_main's
+    # return value was dropped, so the device fell back to the shell prompt.
+    from shell import sys_cmds
+    triggered = []
+    monkeypatch.setenv("PYSPOS_HOTRESET_SUPERVISED", "1")
+    monkeypatch.setattr("hotreset_env.trigger", lambda: triggered.append(True))
+    sys_cmds._leave_boot_mode("reboot")
+    assert triggered == [True]
+
+
+def test_leave_boot_mode_powers_off(monkeypatch):
+    from shell import sys_cmds
+    called = []
+    monkeypatch.setattr(sys_cmds.kernel, "exit", lambda: called.append(True))
+    sys_cmds._leave_boot_mode("poweroff")
+    assert called == [True]
+
+
+def test_leave_boot_mode_without_supervisor_warns(monkeypatch, capsys):
+    from shell import sys_cmds
+    monkeypatch.delenv("PYSPOS_HOTRESET_SUPERVISED", raising=False)
+    monkeypatch.setattr("hotreset_env.trigger",
+                        lambda: pytest.fail("must not trigger"))
+    sys_cmds._leave_boot_mode("reboot")
+    assert "没有热重启监督进程" in capsys.readouterr().out
+
+
+def test_leave_boot_mode_ignores_unknown_action(monkeypatch):
+    from shell import sys_cmds
+    monkeypatch.setattr("hotreset_env.trigger",
+                        lambda: pytest.fail("must not trigger"))
+    sys_cmds._leave_boot_mode("something-else")
+
+
+def test_cmd_fastboot_honours_the_leave_action(monkeypatch):
+    # Entering fastboot from the shell must still honour what the client asked
+    # for. Dropping this return value is why reboot looked like a no-op.
+    from shell import sys_cmds
+    triggered = []
+    monkeypatch.setattr(fastboot, "fastboot_main", lambda *_a, **_k: "reboot")
+    monkeypatch.setenv("PYSPOS_HOTRESET_SUPERVISED", "1")
+    monkeypatch.setattr("hotreset_env.trigger", lambda: triggered.append(True))
+    sys_cmds.cmd_fastboot("")
+    assert triggered == [True]
+
+
+def test_cmd_fastboot_powers_off_on_request(monkeypatch):
+    from shell import sys_cmds
+    called = []
+    monkeypatch.setattr(fastboot, "fastboot_main", lambda *_a, **_k: "poweroff")
+    monkeypatch.setattr(sys_cmds.kernel, "exit", lambda: called.append(True))
+    sys_cmds.cmd_fastboot("")
+    assert called == [True]
+
+
+def test_cmd_fastboot_rejects_a_bad_port(monkeypatch, capsys):
+    from shell import sys_cmds
+    monkeypatch.setattr(fastboot, "fastboot_main",
+                        lambda *_a, **_k: pytest.fail("must not serve"))
+    sys_cmds.cmd_fastboot("--port not-a-number")
+    assert "用法：fastboot" in capsys.readouterr().out

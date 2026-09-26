@@ -126,7 +126,24 @@ def cmd_fastboot(args: str = ""):
         except ValueError:
             printk.error("用法：fastboot [--port 端口号]\n")
             return
-    fastboot.fastboot_main("kernel_jump", port)
+    action = fastboot.fastboot_main("kernel_jump", port)
+    _leave_boot_mode(action)
+
+# Act on how the client told fastboot to leave. Ignoring this return value is
+# what made the client's reboot button look broken: the device dropped straight
+# back to the shell prompt instead of restarting.
+def _leave_boot_mode(action):
+    if action == "poweroff":
+        kernel.exit()
+        return
+    if action != "reboot":
+        return
+    import hotreset_env
+    if os.environ.get(hotreset_env.SUPERVISED_ENV) != "1":
+        printk.warn("没有热重启监督进程，无法真正重启（请用 launcher.py 启动）\n")
+        return
+    printk.info("正在重启...\n")
+    hotreset_env.trigger()
 
 # Reboot the device, or come back into fastboot with "reboot bootloader".
 def cmd_reboot(args: str = ""):

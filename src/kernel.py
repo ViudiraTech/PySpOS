@@ -135,15 +135,17 @@ def _fastboot_boot():
     import fastboot
     import hotreset_env
     logk.printl("kernel", "启动请求指向 fastboot，跳过 OOBE 与 shell", main.boot_time)
+    # powerdown never comes back: fastboot_main shuts the system down itself.
     fastboot.fastboot_main("boot")
-    # fastboot_main only returns for a leave request. A plain reboot or
-    # continue drops the request, so the next boot reaches the system; a
+    # Otherwise the client only asked to leave. A plain reboot or continue
+    # drops the request, so the next boot reaches the system; a
     # reboot-bootloader writes a fresh one and comes straight back here.
     if bootmode.wants_fastboot(main.root_dir):
         logk.printl("kernel", "客户端要求重启回 fastboot", main.boot_time)
     else:
         logk.printl("kernel", "fastboot 已结束，重启进入系统", main.boot_time)
     if os.environ.get("PYSPOS_HOTRESET_SUPERVISED") == "1":
+        import hotreset_env
         hotreset_env.trigger()
     raise SystemExit(0)
 
