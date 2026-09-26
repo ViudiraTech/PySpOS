@@ -16,7 +16,7 @@ import printk
 import main
 
 from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
-from . import filter_cmds, hostexec, shexec
+from . import filter_cmds, hostexec, shexec, fastfetch_cmd
 
 # command history, used by the history command and by readline persistence
 _cmd_history = []
@@ -116,6 +116,7 @@ _REG = [
     ("whoami", sys_cmds.cmd_whoami, "打印当前用户", "whoami", "system", [], False),
     ("pwd", sys_cmds.cmd_pwd, "打印当前目录", "pwd", "file", [], False),
     ("shb", sys_cmds.cmd_shb, "彩蛋命令", "shb", "system", [], False),
+    ("fastfetch", fastfetch_cmd.cmd_fastfetch, "系统信息（PySpOS 标识）", "fastfetch [选项...]", "system", [], True),
     ("python", sys_cmds.cmd_python, "进入 Python 解释器", "python", "system", [], False),
     ("shutdown", sys_cmds.cmd_shutdown, "关闭 PySpOS", "shutdown", "system", [], False),
     ("history", sys_cmds.cmd_history, "查看命令历史", "history", "system", [], False),
