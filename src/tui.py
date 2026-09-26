@@ -1,12 +1,13 @@
-#
-#   tui.py
-#   Debian-Installer 风格的文本向导框体。双后端同签名：
-#     curses 后端（POSIX + tty）：居中对话框，方向键/Tab/回车/Esc，列表可滚动；
-#     line 后端（Windows / 无 tty / 强制）：d-i text 前端语义——输编号+回车、
-#       回车=默认、< =返回、! =留空。
-#   后端选择：curses 可用且双端 tty 且 PYSPOS_TUI 未强制 line → curses，否则 line。
-#   非交互 EOF 抛 TUIAbort，调用方按“中止”处理（OOBE 不写标记）。
-#
+'''
+ *
+ *      tui.py
+ *      Curses and line-mode terminal UI toolkit.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import re
@@ -24,23 +25,20 @@ from syslocale import _
 BACK = "<back>"
 LINE_BACKEND_MARK = "line"
 
-# 布局常量（对齐 whiptail/dialog 的成熟做法）
-PAD = 2            # 正文与边框之间的留白（whiptail 76/80 即两侧各留 2）
-MIN_W = 34         # 框体最小宽度（含边框）
-MIN_BODY_W = 24    # 正文最小可用宽度
-MIN_H = 7          # 框体最小高度
-BORDER_H = 2       # 上下边框
-BORDER_V = 2       # 左右边框
-BUTTON_ROWS = 2    # 按钮行 + 其上留白
+# Layout constants, following what whiptail and dialog settle on.
+PAD = 2            # padding between the text and the border, whiptail leaves 2 per side at 76/80
+MIN_W = 34         # smallest frame width, borders included
+MIN_BODY_W = 24    # smallest usable body width
+MIN_H = 7          # smallest frame height
+BORDER_H = 2       # top and bottom border rows
+BORDER_V = 2       # left and right border columns
+BUTTON_ROWS = 2    # button row plus the blank line above it
 
 
+# Return the display width of a string: CJK and fullwidth count 2 columns,
+# combining marks 0. This is what a CJK TUI has to measure, not len(): whiptail
+# uses _newt_wstrlen, and sizing a box with len() halves every Chinese line.
 def dwidth(s: str) -> int:
-    """显示宽度：CJK/全角算 2 列，组合字符算 0 列。
-
-    这是中文 TUI 可读性的关键——whiptail 用的就是 _newt_wstrlen（宽字符
-    长度）而不是 strlen。用 len() 量中文会得到真实宽度的一半，框体随之
-    缩一半，正文必然溢出错行。
-    """
     w = 0
     for ch in str(s):
         if _combining(ch):
@@ -49,36 +47,33 @@ def dwidth(s: str) -> int:
     return w
 
 
+# Report whether a character is East Asian wide or fullwidth, so it takes two columns.
 def _wide(ch: str) -> bool:
     import unicodedata
     return unicodedata.east_asian_width(ch) in ("W", "F")
 
 
+# Report whether a character is a combining mark, so it adds no column of its own.
 def _combining(ch: str) -> bool:
     import unicodedata
     return unicodedata.combining(ch) != 0
 
 
-# 允许的控制字符：仅换行。其它 C0/C1 一律净化。
+# Only the newline is allowed through, every other C0/C1 is sanitised
 _ALLOWED_CTRL = {"\n"}
 
-# 完整 ANSI/VT 转义序列：ESC [ ... final、ESC ] ... BEL/ST、ESC 单字符
+# Whole ANSI/VT escapes: CSI, OSC and single-character forms
 _ANSI_RE = re.compile(
-    r"\x1b\[[0-?]*[ -/]*[@-~]"       # CSI（颜色/光标）
-    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC（含标题设置）
-    r"|\x1b[@-Z\\-_]"                 # 其它单字符转义
+    r"\x1b\[[0-?]*[ -/]*[@-~]"       # CSI, colours and cursor moves
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC, which also sets the terminal title
+    r"|\x1b[@-Z\\-_]"                 # other single-character escapes
 )
 
 
+# Strip control characters and ANSI escapes so they cannot break the layout.
+# CRLF from Windows-edited files, piped text and log leftovers all reach us, and
+# curses addstr turns \r into a cursor jump and \t into a ragged column.
 def sanitize(text) -> str:
-    """净化控制字符，防止破坏 TUI 布局。
-
-    典型来源：文件里的 CRLF（Windows 编辑的 JSON/脚本）、管道进来的
-    带 \r 文本、日志行尾残留。curses 的 addstr 遇到 \r 会把光标移回行首、
-    遇到 \t 会跳到不规则列，表现为终端里出现 `^M` 或整段错位。
-    这里统一：先整段剥离 ANSI 转义序列（否则会残留可见的 `[31m`），
-    再把 \r\n 与孤立 \r 规整为 \n、\t 转空格、其余 C0/C1 丢弃。
-    """
     s = str(text)
     if not s:
         return ""
@@ -93,7 +88,7 @@ def sanitize(text) -> str:
         if o < 0x20 or o == 0x7F or 0x80 <= o <= 0x9F:
             if ch == "\t":
                 out.append(" ")
-            # 其它 C0/C1 直接丢弃
+            # Every other C0/C1 byte is dropped
             continue
         if o in (0x200B, 0x200C, 0x200D, 0xFEFF):
             continue
@@ -101,8 +96,8 @@ def sanitize(text) -> str:
     return "".join(out)
 
 
+# Truncate to a display width in columns, appending an ellipsis when anything was cut.
 def dtrunc(s: str, limit: int) -> str:
-    """按显示宽度截断（超出加省略号）。"""
     s = str(s)
     if dwidth(s) <= limit:
         return s
@@ -116,13 +111,13 @@ def dtrunc(s: str, limit: int) -> str:
     return "".join(out) + "…"
 
 
+# Pad on the right with spaces up to a display width in columns.
 def dpad(s: str, width: int) -> str:
-    """右侧补空格到指定显示宽度。"""
     return str(s) + " " * max(0, width - dwidth(s))
 
 
+# Wrap text to a display width, never splitting a wide character and never breaking a whole English word.
 def dwrap(text: str, width: int) -> list:
-    """按显示宽度折行；中英混排时不切碎宽字符，英文整词不拆。"""
     width = max(8, width)
     out = []
     for para in str(text).split("\n"):
@@ -134,13 +129,13 @@ def dwrap(text: str, width: int) -> list:
         for token in _tokens(para):
             tw = dwidth(token)
             if token == " ":
-                # 行尾空格不计入宽度（避免无谓提前折行）
+                # A trailing space does not count towards the width, so no line wraps early
                 if line:
                     pending_space = True
                 continue
             need = tw + (1 if pending_space else 0)
             if w + need > width and line:
-                if tw > width:                     # 超长单词硬切
+                if tw > width:                     # a token wider than the line is cut hard
                     out.append("".join(line).rstrip())
                     line, w, pending_space = [], 0, False
                     chunk, cw = [], 0
@@ -169,8 +164,8 @@ def dwrap(text: str, width: int) -> list:
     return out or [""]
 
 
+# Split text into tokens: runs of ASCII word characters stay whole, CJK splits per character.
 def _tokens(text):
-    """切分为词元：连续 ASCII 单词/空格为一元，CJK 逐字一元。"""
     toks, buf = [], ""
     for ch in str(text):
         if _wide(ch) or ch == " ":
@@ -185,10 +180,13 @@ def _tokens(text):
     return toks
 
 
+# Raised when a prompt cannot be answered: end of input or Ctrl-C at the prompt.
 class TUIAbort(Exception):
     pass
 
 
+# Return the backend in use, 'curses' or 'line'.
+# PYSPOS_TUI forces one; otherwise curses also needs a real tty on both ends.
 def backend():
     force = os.environ.get("PYSPOS_TUI", "").strip().lower()
     if force == LINE_BACKEND_MARK:
@@ -204,6 +202,7 @@ def backend():
     return LINE_BACKEND_MARK
 
 
+# Prefix a title with the wizard step counter, or leave it alone when i or n is None.
 def _step_prefix(i, n):
     if i is None or n is None:
         return ""
@@ -211,9 +210,10 @@ def _step_prefix(i, n):
 
 
 # --------------------------------------------------------------------------
-# line 后端
+# Line backend
 # --------------------------------------------------------------------------
 
+# Read one line, turning EOF and Ctrl-C into TUIAbort so callers treat both as 'quit'.
 def _line_input(prompt):
     try:
         return input(prompt)
@@ -223,6 +223,7 @@ def _line_input(prompt):
         raise TUIAbort("interrupt")
 
 
+# Show a message and wait for Enter; '<' returns BACK, anything else returns None.
 def _line_note(title, body, i=None, n=None):
     print(f"\n==== {_step_prefix(i, n)}{sanitize(title)} ====\n"
           f"{sanitize(body)}\n")
@@ -232,6 +233,7 @@ def _line_note(title, body, i=None, n=None):
     return None
 
 
+# Ask a yes/no question and retry until the answer is valid; empty input takes default, '<' returns BACK.
 def _line_confirm(title, body, question, default=True, i=None, n=None):
     d = "Y/n" if default else "y/N"
     print(f"\n==== {_step_prefix(i, n)}{sanitize(title)} ====\n{sanitize(body)}\n"
@@ -249,6 +251,7 @@ def _line_confirm(title, body, question, default=True, i=None, n=None):
         print(_("tui.invalid"))
 
 
+# Ask for one line of text; Enter keeps default, '!' forces empty, '<' returns BACK.
 def _line_text(title, body, question, default="", i=None, n=None):
     print(f"\n==== {_step_prefix(i, n)}{sanitize(title)} ====\n{sanitize(body)}\n"
           f"{sanitize(question)} {_('tui.default_hint')} "
@@ -266,8 +269,8 @@ def _line_text(title, body, question, default="", i=None, n=None):
         return s
 
 
+# Recovery style line menu: the user types an option number and Enter, empty input takes default_idx.
 def _line_menu(header, options, default_idx=0):
-    """行式菜单（d-i text 前端语义）：编号+回车，空输入=默认高亮项。"""
     print(sanitize(header))
     print()
     for idx, opt in enumerate(options):
@@ -283,6 +286,7 @@ def _line_menu(header, options, default_idx=0):
         print(_("tui.invalid"))
 
 
+# List the options numbered from 1 and retry until a valid number, '<' or an empty line; returns an index or BACK.
 def _line_select(title, body, options, default_idx=0, i=None, n=None):
     print(f"\n==== {_step_prefix(i, n)}{sanitize(title)} ====\n{sanitize(body)}")
     for idx, opt in enumerate(options, 1):
@@ -300,6 +304,7 @@ def _line_select(title, body, options, default_idx=0, i=None, n=None):
         print(_("tui.invalid"))
 
 
+# Print a text progress bar for frac (0.0 to 1.0); it never waits for input.
 def _line_progress(title, body, frac):
     bar = int(frac * 30)
     print(f"\n==== {sanitize(title)} ====\n{sanitize(body)}\n"
@@ -307,18 +312,15 @@ def _line_progress(title, body, frac):
 
 
 # --------------------------------------------------------------------------
-# curses 后端
+# Curses backend
 # --------------------------------------------------------------------------
 
+# Single-window renderer: draw on stdscr, refresh once, and read keys with
+# stdscr.getch(). No sub-windows, because curses wgetch auto-refreshes the
+# window it reads and would overwrite a sibling window's contents.
 class _CursesUI:
-    """单窗口渲染器。
 
-    刻意不使用 newwin 子窗口：curses 的 wgetch 在窗口被修改后会自动
-    wrefresh 自身，而读键发生在另一个窗口上时会把子窗口内容覆盖掉
-    （ncurses 已知陷阱，dialog/newt 等成熟实现一律单窗口绘制+读键）。
-    全部绘制到 stdscr，再统一 refresh，读键也用 stdscr.getch()，无冲突。
-    """
-
+# Bind the window, hide the cursor, enable keypad mode and cache the size and colour pairs.
     def __init__(self, stdscr):
         self.s = stdscr
         try:
@@ -329,6 +331,7 @@ class _CursesUI:
         self.h, self.w = self.s.getmaxyx()
         self._init_colors()
 
+# Fill the C_* colour attributes, falling back to plain text on a terminal without colour.
     def _init_colors(self):
         self.C_FRAME = 0
         self.C_TITLE = 0
@@ -343,12 +346,12 @@ class _CursesUI:
             _curses.start_color()
             _curses.use_default_colors()
             defs = [
-                (1, _curses.COLOR_CYAN),    # 框
-                (2, _curses.COLOR_BLACK),   # 标题底
-                (3, _curses.COLOR_WHITE),   # 正文
-                (4, _curses.COLOR_BLUE),    # 页脚
-                (5, _curses.COLOR_BLACK),   # 选中项（黄底）
-                (6, _curses.COLOR_GREEN),   # 提示
+                (1, _curses.COLOR_CYAN),    # frame
+                (2, _curses.COLOR_BLACK),   # title background
+                (3, _curses.COLOR_WHITE),   # body text
+                (4, _curses.COLOR_BLUE),    # footer
+                (5, _curses.COLOR_BLACK),   # selected row, yellow background
+                (6, _curses.COLOR_GREEN),   # hints
             ]
             for idx, color in defs:
                 _curses.init_pair(idx, color, -1)
@@ -363,19 +366,17 @@ class _CursesUI:
         except Exception:
             pass
 
+# Write text at (y, x) with an attribute, clipped to the screen and to the
+# last column. Last line of defence for control characters: even if a caller
+# skipped sanitize, \r, \t and ANSI escapes cannot reach the frame.
     def _put(self, y, x, text, attr=0):
-        """安全写字符：越界/触底自动截断，并净化控制字符。
-
-        这里是控制字符的最后一道防线——即使上层漏了 sanitize，
-        \r / \t / ANSI 转义也不会破坏框体布局。
-        """
         if not (0 <= y < self.h and 0 <= x < self.w):
             return
         text = sanitize(text).replace("\n", " ")
-        maxlen = self.w - x - 1          # 留出最后一格，避免 addstr 触底报错
+        maxlen = self.w - x - 1          # keep the last cell free so addstr cannot hit the bottom-right corner
         if maxlen <= 0:
             return
-        # 按显示宽度截断（不能直接切 len，否则宽字符会被切半）
+        # Truncate by display width, cutting by len would halve a wide character
         out, w = [], 0
         for ch in text:
             cw = 0 if _combining(ch) else (2 if _wide(ch) else 1)
@@ -388,9 +389,9 @@ class _CursesUI:
         except Exception:
             pass
 
+# Draw a centred frame around the already-wrapped body lines, measured by display width.
     def _frame(self, title, body, footer="", sel=None, buttons=None,
                min_content=0):
-        """按显示宽度测量后居中绘制。body 为已折行的列表。"""
         h, w = self.h, self.w
         self.s.erase()
 
@@ -398,13 +399,13 @@ class _CursesUI:
         body = [sanitize(l) for l in (body or [""])]
         footer = sanitize(footer) if footer else ""
         buttons = [sanitize(b) for b in buttons] if buttons else None
-        # 宽度：取标题/正文/页脚/按钮里最宽者 + 边框 + 两侧留白
+        # Width: the widest of title, body, footer and buttons, plus borders and padding
         need = max([dwidth(title)] + [dwidth(str(l)) for l in body]
                    + [dwidth(footer or "")] + [dwidth(b) for b in (buttons or [])]
                    + [min_content])
         bw = min(max(need + BORDER_V + PAD * 2, MIN_W), w - 2)
 
-        # 高度：正文 + 边框 + 按钮/页脚
+        # Height: body lines plus borders plus the button or footer row
         extra = BUTTON_ROWS if buttons else (1 if footer else 0)
         bh = min(len(body) + BORDER_H + extra, h - 1)
         max_body = max(1, bh - BORDER_H - extra)
@@ -413,8 +414,8 @@ class _CursesUI:
 
         y0 = max(0, (h - bh) // 2)
         x0 = max(0, (w - bw) // 2)
-        lx = x0 + 1 + PAD          # 正文左边界
-        rx = x0 + bw - 1 - PAD    # 正文右边界
+        lx = x0 + 1 + PAD          # left edge of the body
+        rx = x0 + bw - 1 - PAD    # right edge of the body
         span = max(1, rx - lx + 1)
 
         hline = getattr(_curses, "ACS_HLINE", "-")
@@ -424,15 +425,15 @@ class _CursesUI:
         if not isinstance(vline, str):
             vline = chr(vline & 0xFF)
 
-        # 上下边框画横线；中间行只画左右竖线，中间留空给正文。
-        # （早先版本给每行都铺横线再覆盖两列，导致内容行出现 `|--内容-|`。）
+        # Horizontal rules top and bottom; middle rows get only the two verticals, leaving the body clear
+        # (an earlier version filled every row with the horizontal rule and patched two columns, so text rows came out as |--text-|)
         self._put(y0, x0, hline * bw, self.C_FRAME)
         self._put(y0 + bh - 1, x0, hline * bw, self.C_FRAME)
         for y in range(y0 + 1, y0 + bh - 1):
             self._put(y, x0, vline, self.C_FRAME)
             self._put(y, x0 + bw - 1, vline, self.C_FRAME)
 
-        # 标题写在边框上（whiptail newtOpenWindow 的做法），而非占用正文行
+        # The title sits on the top border, as whiptail's newtOpenWindow does, instead of eating a body row
         cap = f" {dtrunc(title, bw - 6)} "
         self._put(y0, x0 + max(1, (bw - dwidth(cap)) // 2), cap, self.C_TITLE)
 
@@ -452,19 +453,10 @@ class _CursesUI:
 
         self.s.refresh()
 
+# Build the dialog line list: short explanation, blank line, context, then
+# the question last so it sits next to the buttons. Consecutive blanks collapse
+# to one and every line goes through sanitize.
     def _compose(self, body, question=None):
-        """成熟对话框结构（linuxboot UX 规范）：
-
-            <短说明>
-            <空行>
-            <上下文段落>
-            <空行>
-            <问题/提示>     ← 永远在最后，紧贴按钮
-
-        中间空行把「说明」与「要回答的问题」在视觉上分开，可读性关键。
-        连续空行合并为一行（早期版本每个元素前都插空行，1 个空行变成 3 个）。
-        所有文本先过 sanitize，CRLF/控制符不会带进布局。
-        """
         merged = []
         for p in sanitize(body).split("\n"):
             if not p.strip():
@@ -474,21 +466,19 @@ class _CursesUI:
             merged.append(p)
         while merged and merged[-1] == "":
             merged.pop()
-        lines = list(merged)          # merged 已是「段 + 空行」结构，直接用
+        lines = list(merged)          # merged is already shaped as paragraph plus blank line, use it as is
         if question:
             if lines:
                 lines.append("")
             lines.append(sanitize(question))
         return lines
 
+# Take the frame width from the natural width of the content, then wrap
+# inside it; wrapping to a fixed 76 columns first left the box half empty.
+# Returns the wrapped lines and the width used.
     def _layout(self, body, question=None):
-        """先按内容自然宽度定框，再在该宽度内折行。
-
-        早期版本先按最大宽度(76)折行再定框，导致内容只占半框、右侧大片
-        空白，可读性很差。成熟做法是「内容定宽 → 框内折行」。
-        """
         raw = self._compose(body, question)
-        # 自然宽度：最长未折行段落，但不超过舒适阅读上限
+        # Natural width: the longest unwrapped paragraph, capped at a comfortable line length
         cap = max(MIN_BODY_W, min(self.w - 2, 76) - BORDER_V - PAD * 2)
         natural = max((dwidth(p) for p in raw if p), default=0)
         width = max(MIN_BODY_W, min(natural, cap))
@@ -497,10 +487,11 @@ class _CursesUI:
             lines.extend(dwrap(p, width) if p else [""])
         return lines, width
 
+# Show a message with a single Continue button; Esc returns BACK, Enter returns None.
     def note(self, title, body, i=None, n=None):
         title = _titled(title, i, n)
-        # 注意：不要用 `lines, _ = ...` 接收宽度——`_` 是模块级的翻译函数，
-        # 局部遮蔽后 `_("tui.cont")` 会变成 "int object is not callable"。
+        # Note: never take the width as `lines, _ = ...`, because `_` is the module-level translation function
+        # shadowing it makes the translation call fail with 'int object is not callable'
         lines = self._layout(body)[0]
         while True:
             self._frame(title, lines, buttons=[_("tui.cont")])
@@ -510,6 +501,7 @@ class _CursesUI:
             if c in (10, 13, _curses.KEY_ENTER):
                 return None
 
+# Show a yes/no dialog with Continue and Back buttons; Tab or the arrows move focus, Enter takes the focused button, Esc means no.
     def confirm(self, title, body, question, default=True, i=None, n=None):
         title = _titled(title, i, n)
         lines = self._layout(body, question)[0]
@@ -529,6 +521,7 @@ class _CursesUI:
             elif c in (ord("n"), ord("N")):
                 return False
 
+# Edit a one-line answer in place with a caret; Enter returns it, Esc returns BACK.
     def text(self, title, body, question, default="", i=None, n=None):
         title = _titled(title, i, n)
         lines, width = self._layout(body, question)
@@ -551,6 +544,8 @@ class _CursesUI:
                 if ch.isprintable() and dwidth("".join(buf)) < width:
                     buf.append(ch)
 
+# Show a scrollable option list and return the chosen index; Esc returns BACK.
+# Typing a letter jumps to the first option that starts with it.
     def select(self, title, body, options, default_idx=0, i=None, n=None):
         title = _titled(title, i, n)
         head, width = self._layout(body)
@@ -599,12 +594,10 @@ class _CursesUI:
                         idx, top = j, j
                         break
 
+# AOSP Recovery style full-screen text menu: no frame, '>' plus reverse
+# video for the selection, scrolling to keep it visible. Arrows wrap, Home/End
+# jump to the ends, Enter confirms, Esc returns BACK.
     def menu(self, header, options, default_idx=0):
-        """AOSP Recovery 式全屏文本菜单：无对话框框体，`>` + 反白表高亮。
-
-        ↑↓（循环）移动，回车确认，Esc 返回 BACK，Home/End 跳首尾。
-        条目多于一屏时滚动，选中行永远可见。
-        """
         head = [sanitize(l) for l in str(header).split("\n")]
         opts = [sanitize(str(o)) for o in options]
         idx = max(0, min(default_idx, len(opts) - 1))
@@ -617,7 +610,7 @@ class _CursesUI:
                 self._put(y, 2, l, self.C_TEXT)
                 y += 1
             y += 1
-            page = max(1, h - y - 1)      # 末行留给页脚提示
+            page = max(1, h - y - 1)      # the last row is left for the footer hint
             if idx < top:
                 top = idx
             if idx >= top + page:
@@ -643,6 +636,7 @@ class _CursesUI:
             elif c in (10, 13, _curses.KEY_ENTER):
                 return idx
 
+# Draw a progress bar for frac (0.0 to 1.0) and hold the screen for a quarter second.
     def progress(self, title, body, frac):
         lines, width = self._layout(body)
         filled = int(width * max(0.0, min(1.0, frac)))
@@ -653,6 +647,7 @@ class _CursesUI:
 
 
 
+# Prefix the title with the step counter when the caller passed both i and n.
 def _titled(title, i, n):
     if i is None or n is None:
         return title
@@ -660,26 +655,18 @@ def _titled(title, i, n):
     return f"{_t('oobe.step', i=i, n=n)} {title}"
 
 
+# Write a diagnostic to stderr when PYSPOS_TUI_DEBUG is set, because a downgrade reason must stay visible.
 def _debug(msg):
-    """降级原因必须可见——之前静默 fallback 把 curses 崩溃藏了两次。"""
     if os.environ.get("PYSPOS_TUI_DEBUG"):
         import sys as _s
         _s.stderr.write(f"[tui] {msg}\n")
         _s.stderr.flush()
 
 
+# Best-effort terminal restore after a curses session; atexit and finally
+# both call it. curses.wrapper skips endwin() when a child os._exit()s, on
+# SIGKILL or when an exception escapes it, leaving icrnl off: Enter echoes as ^M.
 def _restore_terminal():
-    """curses 会话后的终端兜底恢复。
-
-    `curses.wrapper` 正常路径会 endwin，但以下情况会跳过它：
-      - 子进程走 `os._exit()`（forkexec 的 _child_main 就是）——共享同一个
-        tty，子进程退出时 tty 仍留在 cbreak 模式；
-      - SIGKILL / 段错误；
-      - 异常在 wrapper 之外逃逸。
-    结果是 tty 的 icrnl 被关掉：回车发出的 \\r 不再翻译成 \\n，终端把它
-    当普通字符回显成 `^M`，之后所有 input() 读到非空垃圾 → 无限重试。
-    这就是「按 enter 疯狂出 ^M」的成因。atexit + finally 双保险清掉它。
-    """
     try:
         if _curses is not None and _curses.isendwin() is False:
             _curses.endwin()
@@ -692,16 +679,19 @@ def _restore_terminal():
         pass
 
 
+# Run the named _CursesUI method inside curses.wrapper, falling back to the
+# matching _line_* function on failure. TUIAbort is re-raised unchanged.
 def _with_curses(fn, *args, **kwargs):
     holder = {}
     import atexit
-    # 幂等：多次注册靠 atexit 的取消机制避免堆积
+    # Idempotent: unregister first so repeated calls do not pile up handlers
     try:
         atexit.unregister(_restore_terminal)
     except Exception:
         pass
     atexit.register(_restore_terminal)
 
+# Build a UI on stdscr, call the named method and stash its result for the caller.
     def _run(stdscr):
         ui = _CursesUI(stdscr)
         holder["ret"] = getattr(ui, fn)(*args, **kwargs)
@@ -711,26 +701,28 @@ def _with_curses(fn, *args, **kwargs):
     except TUIAbort:
         raise
     except Exception as e:
-        # curses 初始化/渲染失败（无 TERM、终端过小、绘制异常…）→ 降级行式，
-        # 保证永不崩；但把原因打出来，避免「界面全空」这种问题被掩盖。
+        # Curses init or draw failed (no TERM, terminal too small, draw error): fall back to line mode so it never crashes,
+        # but print the reason, otherwise an empty screen hides the cause
         _debug(f"curses 后端失败({fn})，降级 line：{type(e).__name__}: {e}")
         return globals()[f"_line_{fn}"](*args, **kwargs)
     finally:
-        # TUIAbort 也必须恢复：向导中途 Ctrl-C 后要回到可正常输入的 shell
+        # Restore even on TUIAbort: Ctrl-C mid-wizard must land back in a shell that accepts input
         _restore_terminal()
     return holder.get("ret")
 
 
 # --------------------------------------------------------------------------
-# 统一入口（调用方只用这六个）
+# Unified entry points, the only six functions callers use
 # --------------------------------------------------------------------------
 
+# Show a message and wait for the user, through whichever backend is active.
 def note(title, body, i=None, n=None):
     if backend() == "curses":
         return _with_curses("note", title, body, i, n)
     return _line_note(title, body, i, n)
 
 
+# Ask a yes/no question; returns a bool, and the curses backend never returns None.
 def confirm(title, body, question, default=True, i=None, n=None):
     if backend() == "curses":
         r = _with_curses("confirm", title, body, question, default, i, n)
@@ -738,26 +730,28 @@ def confirm(title, body, question, default=True, i=None, n=None):
     return _line_confirm(title, body, question, default, i, n)
 
 
+# Ask for one line of text; returns the answer or BACK.
 def ask_text(title, body, question, default="", i=None, n=None):
     if backend() == "curses":
         return _with_curses("text", title, body, question, default, i, n)
     return _line_text(title, body, question, default, i, n)
 
 
+# Pick one option; returns the index or BACK.
 def ask_select(title, body, options, default_idx=0, i=None, n=None):
     if backend() == "curses":
         return _with_curses("select", title, body, options, default_idx, i, n)
     return _line_select(title, body, options, default_idx, i, n)
 
 
+# Full-screen Recovery style menu: arrows and Enter under curses, a typed number otherwise. Esc returns BACK; EOF or an interrupt raises TUIAbort.
 def ask_menu(header, options, default_idx=0):
-    """全屏菜单（Recovery 风格）。curses 下方向键+回车，否则编号+回车。
-    Esc 返回 BACK；EOF/中断抛 TUIAbort，调用方按「离开」处理。"""
     if backend() == "curses":
         return _with_curses("menu", header, options, default_idx)
     return _line_menu(header, options, default_idx)
 
 
+# Show a progress bar for frac (0.0 to 1.0) without waiting for a key.
 def progress(title, body, frac):
     if backend() == "curses":
         try:

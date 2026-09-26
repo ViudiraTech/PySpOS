@@ -1,22 +1,13 @@
-#
-#   shell/shexec.py
-#   shell 执行器：跑 shparser 产出的管线与条件链。
-#
-
-"""全管道架构：段与段之间一律真管道，宿主段和 builtin 段都直接写 fd。
-
-之前的做法是把 builtin 输出先收进 StringIO 再喂下去，于是
-`yes | head -2` 这种「上游不结束、下游提前收手」必然死锁：上游等
-读端、读端等上游。现在每段边界的写端由写者用完即关、读端由读者用完
-即关（读者提前退出会让上游拿到 SIGPIPE），并发度和 bash 一致。
-
-- 连续宿主段仍合并成一条真 fd 链并发执行；
-- builtin 段把 sys.stdout 换成包着管道写端的 TextIOWrapper，print
-  直接落进管道，所以不缓冲、没有 64K 死锁、没有大输出撑爆内存；
-- 后台：纯宿主/应用管线真 detach；含 builtin 的在工作线程里跑，
-  输出直接写终端，stdin 用 stdinctx 线程局部标记为空——绝不换
-  sys.stdin，主循环的 input() 正在用它。
-"""
+'''
+ *
+ *      shexec.py
+ *      Shell pipeline executor: runs the pipelines and condition chains shparser produces.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import io
 import os
@@ -36,8 +27,8 @@ _ENCODING = (sys.stdout.encoding or "utf-8")
 _DEBUG = os.environ.get("PYSPOS_SHELL_DEBUG") == "1"
 
 
+# Stage-level trace on stderr; enabled with PYSPOS_SHELL_DEBUG=1 so it never pollutes a pipeline.
 def _dbg(message):
-    """阶段级调试日志。设 PYSPOS_SHELL_DEBUG=1 打开，走 stderr 不污染管道。"""
     if _DEBUG:
         try:
             import time
@@ -47,35 +38,40 @@ def _dbg(message):
             pass
 
 
+# Clear the shell variable table and last exit status.
 def reset_state():
     global _LAST
     _LAST = 0
     _VARS.clear()
 
 
+# Return the exit status of the last command line, which is what $? expands to.
 def last_status():
     return _LAST
 
 
 # --------------------------------------------------------------------------
-# fd 记账
+# fd bookkeeping
 # --------------------------------------------------------------------------
 
+# Registry of every descriptor one command line opened, so the finally path can close them all.
 class _Fds:
-    """统一登记本条命令用到的 fd，退出时兜底关掉。"""
-
+    # Start with an empty owned-descriptor list.
     def __init__(self):
         self._owned = []
 
+    # Take ownership of a descriptor and return it, so calls can be chained.
     def add(self, fd):
         if isinstance(fd, int):
             self._owned.append(fd)
         return fd
 
+    # Give up ownership of a descriptor that the code closed itself.
     def discard(self, fd):
         if fd in self._owned:
             self._owned.remove(fd)
 
+    # Close every descriptor still owned, ignoring the ones already gone.
     def close_all(self):
         while self._owned:
             fd = self._owned.pop()
@@ -85,12 +81,15 @@ class _Fds:
                 pass
 
 
+# One pipeline boundary, a real os.pipe whose two ends are owned by _Fds.
 class _Pipe:
+    # Create the pipe and register both ends with the descriptor registry.
     def __init__(self, fds):
         read_fd, write_fd = os.pipe()
         self.read = fds.add(read_fd)
         self.write = fds.add(write_fd)
 
+    # Close the read end once, letting a writer upstream see EOF or SIGPIPE.
     def close_read(self):
         if self.read is not None:
             try:
@@ -99,6 +98,7 @@ class _Pipe:
                 pass
             self.read = None
 
+    # Close the write end once, so the reader downstream stops waiting.
     def close_write(self):
         if self.write is not None:
             try:
@@ -108,6 +108,7 @@ class _Pipe:
             self.write = None
 
 
+# Write every byte to a descriptor, retrying on a full pipe; False means the reader is gone.
 def _write_fd(fd, data):
     view = memoryview(data)
     while view:
@@ -123,11 +124,13 @@ def _write_fd(fd, data):
     return True
 
 
+# Open a redirection target for writing, truncating unless appending.
 def _open_out(path, append):
     flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC)
     return os.open(path, flags, 0o644)
 
 
+# Write data to a path, truncating or appending as asked.
 def _write_file(path, data, append):
     fd = _open_out(path, append)
     try:
@@ -139,6 +142,7 @@ def _write_file(path, data, append):
             pass
 
 
+# Push literal bytes into a pipe from a helper thread and always close the write end.
 def _feed_and_close(write_fd, data, fds):
     try:
         _write_fd(write_fd, data)
@@ -150,10 +154,12 @@ def _feed_and_close(write_fd, data, fds):
             pass
 
 
+# Open /dev/null for reading, the stdin of a command that must see nothing.
 def _devnull_in():
     return os.open(os.devnull, os.O_RDONLY)
 
 
+# Render an stdin or output spec compactly for the debug log.
 def _fmt_spec(spec):
     if spec is None:
         return "term"
@@ -169,9 +175,10 @@ def _fmt_spec(spec):
 
 
 # --------------------------------------------------------------------------
-# 展开与分类
+# expansion and classification
 # --------------------------------------------------------------------------
 
+# Build the expansion context: variables, last status, depth and the $() runner.
 def _ctx(depth):
     return {"vars": _VARS, "last": _LAST, "depth": depth,
             "run_capture": lambda line, d: run_line(
@@ -179,6 +186,7 @@ def _ctx(depth):
                     _ENCODING, errors="replace")}
 
 
+# Expand every word of a command into its final argument list.
 def _expand_argv(cmd, depth):
     ctx = _ctx(depth)
     out = []
@@ -187,6 +195,7 @@ def _expand_argv(cmd, depth):
     return out
 
 
+# Expand a redirection target, which must yield exactly one word.
 def _expand_one(spans, depth):
     words = shparser.expand_word(spans, _ctx(depth))
     if len(words) != 1:
@@ -194,6 +203,7 @@ def _expand_one(spans, depth):
     return words[0]
 
 
+# Apply a NAME=value prefix, reporting the error itself; False means the stage must stop.
 def _apply_assign(cmd, depth):
     for name, value_spans in cmd["assign"]:
         try:
@@ -205,6 +215,7 @@ def _apply_assign(cmd, depth):
     return True
 
 
+# Decide how a command runs: builtin, app, package, host or missing.
 def _classify(argv):
     import commands as cmd_registry
     name = argv[0]
@@ -226,25 +237,21 @@ def _classify(argv):
     return "missing", real, None
 
 
+# Rebuild argv[1:] as one string that shlex.split restores exactly.
+# A plain join would lose quote boundaries, so grep "a b" would turn into pattern=a file=b;
+# shlex.join restores arguments containing spaces, quotes or newlines.
 def _builtin_args(argv):
-    """把 argv[1:] 拼回一条能被 shlex.split 精确还原的串。
-
-    直接 " ".join 会丢引号边界：grep "a b" 会被拆成 pattern=a file=b。
-    shlex.join 负责补引号，带空格/引号/换行的参数都原样还原。
-    """
     return shlex.join(argv[1:])
 
 
 # --------------------------------------------------------------------------
-# 重定向解析
+# redirect resolution
 # --------------------------------------------------------------------------
 
+# Apply N>&M so descriptor N follows descriptor M.
+# It works whatever the target is, terminal, file or another descriptor, but a memory
+# buffer is not a descriptor and cannot be duped.
 def _apply_dup(out, err, src, marker):
-    """N>&M：让 fd N 跟 fd M 走同一个去向。
-
-    目标已经在终端/文件/另一个 fd 上都能跟；只在目标是内存缓冲时报错
-    （缓冲不是 fd，没法 dup）。
-    """
     target = marker[1]
     current = err if target == 2 else out
     if not isinstance(current, tuple):
@@ -258,12 +265,10 @@ def _apply_dup(out, err, src, marker):
     return out, err, f"重定向 {src}>&{target}：只支持 fd 1/2"
 
 
+# Fold the redirects of one command into (stdin, out, err).
+# stdin is None (inherit or empty), ("bytes", b"...") or ("file", path);
+# out and err are ("term",), ("buf",), ("file", path, append) or ("fd", n).
 def _resolve_redirects(cmd, depth, fds, base_stdin, base_out):
-    """把 cmd 上的重定向折进 (stdin, out, err)。
-
-    stdin 形态：None（继承/空）| ("bytes", b"...") | ("file", 路径)
-    out/err 形态：("term",) | ("buf",) | ("file", 路径, append) | ("fd", n)
-    """
     stdin, out, err = base_stdin, base_out, ("term",)
     err_msg = None
     for fd, mode, target in cmd["redirects"]:
@@ -302,16 +307,12 @@ def _resolve_redirects(cmd, depth, fds, base_stdin, base_out):
 
 
 # --------------------------------------------------------------------------
-# 各段执行
+# running the stages
 # --------------------------------------------------------------------------
 
+# Run one builtin on this thread and return (exit code, captured stdout or None).
+# SystemExit is re-raised unchanged because hotreset and shutdown use it to leave the process.
 def _invoke_builtin(argv, real, stdin_stream, out, err):
-    """在当前线程跑一个 builtin。
-
-    out/err 形态：("term",) | ("fd", n) | ("buf",) | ("file", 路径, append)
-    返回 (退出码, 截获的 stdout 字节|None)。SystemExit 原样抛出
-    （hotreset/shutdown 靠它退出进程）。
-    """
     import commands as cmd_registry
     from . import dispatch as _dispatch
     meta = cmd_registry.get_meta(real)
@@ -372,8 +373,8 @@ def _invoke_builtin(argv, real, stdin_stream, out, err):
     return status, captured
 
 
+# Start one host stage and return (Popen, PCB, stdin fd) or None on failure.
 def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
-    """起一个宿主段。返回 (Popen, PCB, stdin_fd) 或 None。"""
     stdin_fd = None
     owned_stdin = False
     if isinstance(stdin_spec, tuple) and stdin_spec[0] == "fd":
@@ -433,8 +434,8 @@ def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
     return popen_obj, pcb, stdin_fd
 
 
+# Wait for every host stage already started and return the status of the last one.
 def _wait_all(pending):
-    """等所有已起的宿主段结束，返回最后一段的退出码。"""
     status = 0
     for popen_obj, pcb in pending:
         try:
@@ -445,14 +446,12 @@ def _wait_all(pending):
 
 
 # --------------------------------------------------------------------------
-# 管线
+# pipelines
 # --------------------------------------------------------------------------
 
+# Build a readable stdin object for a builtin stage.
+# spec is None (keep the terminal), ("fd", n), ("bytes", b"...") or ("file", path).
 def _stdin_stream(spec, fds):
-    """给 builtin 段造一个可读的 stdin 对象。
-
-    spec 形态：None（沿用终端）| ("fd", n) | ("bytes", b"...") | ("file", 路径)
-    """
     if spec is None:
         return None
     if isinstance(spec, tuple) and spec[0] == "fd":
@@ -478,18 +477,15 @@ def _stdin_stream(spec, fds):
 _REAL_KINDS = ("host", "app", "package")
 
 
+# Run every stage of one pipeline in order.
+# How a boundary transfers data depends on whether a real process sits on it.
+# When either side is a real process the boundary is a true pipe: a host consumer is spawned
+# first so someone is draining it while the producer writes, and a builtin consumer reads the
+# pipe descriptor as a stream, so an early exit such as head or grep -q gives the producer
+# SIGPIPE. Between a builtin and a builtin or group the boundary is a memory buffer, because
+# two builtins share one sys.stdout and cannot write concurrently; running them in sequence on
+# one thread would let the producer fill the pipe and lock itself, so buffering is required.
 def _run_stages(stages, stdin_spec, out, background, depth, fds):
-    """按管线跑各段。
-
-    段边界的传输方式按「有没有真进程」选：
-
-    - 边界两侧涉及真进程 → 真管道。消费者若是宿主段就先 spawn，
-      于是生产者写管道时有人在读，不会写满死锁；消费者若是 builtin
-      就直接从管道 fd 流式读，head/grep -q 提前收手时上游拿到 SIGPIPE。
-    - builtin → builtin/group → 内存缓冲。builtin 共用同一个
-      sys.stdout，两个 builtin 无法并发写；同线程顺序跑时生产者会
-      把管道写满把自己锁死，所以这里必须缓冲。
-    """
     total = len(stages)
     pipes = [_Pipe(fds) for _ in range(max(total - 1, 0))]
     spawned = []
@@ -597,6 +593,7 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
                                if out[0] == "buf" else None)
 
 
+# Run a parenthesised group as one stage, applying its assignments first.
 def _run_group_stage(stage, seg_stdin, seg_out, background, depth, fds):
     if not _apply_assign(stage["cmd"], depth):
         return 1
@@ -606,6 +603,7 @@ def _run_group_stage(stage, seg_stdin, seg_out, background, depth, fds):
     return status, produced
 
 
+# Start an app or package stage, reporting a launch failure itself.
 def _run_app(stage, background):
     from . import dispatch as _dispatch
     args = _builtin_args(stage["argv"])
@@ -620,8 +618,8 @@ def _run_app(stage, background):
     return 0
 
 
+# Expand one pipeline into its stages and return (stages, error status).
 def _prepare_stages(cmds, depth):
-    """展开一条管线的各段。返回 (stages, err_status)。"""
     stages = []
     for cmd in cmds:
         if not _apply_assign(cmd, depth):
@@ -647,8 +645,8 @@ def _prepare_stages(cmds, depth):
     return stages, 0
 
 
+# Handle a redirect with no command word by creating or truncating the target.
 def _touch_redirect(cmd, depth):
-    """纯重定向（没命令）：把目标文件建/截断出来。"""
     for fd, mode, target in cmd["redirects"]:
         if mode not in (">", ">>"):
             continue
@@ -670,6 +668,7 @@ def _touch_redirect(cmd, depth):
     return True
 
 
+# Run one pipeline, owning every descriptor it opens for its whole lifetime.
 def _run_pipeline(cmds, stdin_spec, out, background, depth):
     fds = _Fds()
     try:
@@ -708,8 +707,9 @@ def _run_pipeline(cmds, stdin_spec, out, background, depth):
         fds.close_all()
 
 
+# Report whether a background stage is a builtin, whose stdin must look empty
+# so it does not steal the terminal.
 def _needs_stdin_guard(stages):
-    """后台 builtin 段：stdin 视为空，免得它去抢终端。"""
     for stage in stages:
         if stage["kind"] in ("builtin", "group"):
             return True
@@ -717,9 +717,10 @@ def _needs_stdin_guard(stages):
 
 
 # --------------------------------------------------------------------------
-# 语句层
+# statement level
 # --------------------------------------------------------------------------
 
+# Run a list of statements, honouring the && and || conditions between them.
 def _run_program(program, stdin_spec, out, depth, capture):
     global _LAST
     produced, status, acc = None, 0, None
@@ -737,7 +738,7 @@ def _run_program(program, stdin_spec, out, depth, capture):
             stmt["cmds"], stdin_spec, out, False, depth)
         _LAST = status
         if isinstance(out, tuple) and out[0] == "buf":
-            # 缓冲目标下 `;` / 括号里的多条命令要拼成一份输出
+            # with a buffered target, several commands joined by `;` or parentheses must merge into one output
             acc = (acc or b"") + (
                 produced if isinstance(produced, bytes) else b"")
         if not capture and isinstance(out, tuple) and out[0] == "term":
@@ -747,6 +748,7 @@ def _run_program(program, stdin_spec, out, depth, capture):
     return status, None
 
 
+# Run one background statement, detaching it or using a worker thread.
 def _run_background_stmt(stmt, depth):
     cmds = stmt["cmds"]
     if _pipeline_has_builtin(cmds, depth):
@@ -762,10 +764,12 @@ def _run_background_stmt(stmt, depth):
         fds.close_all()
 
 
+# Background work containing a builtin: run it in a worker thread, write straight
+# to the terminal and let stdin look empty.
 def _run_bg_thread(cmds, depth):
-    """后台含 builtin：工作线程里跑，输出直接写终端，stdin 视为空。"""
     import stdinctx
 
+    # Body of the daemon thread that runs the background pipeline.
     def worker():
         stdinctx.suppress()
         try:
@@ -778,6 +782,7 @@ def _run_bg_thread(cmds, depth):
     threading.Thread(target=worker, daemon=True).start()
 
 
+# Report whether any command of the pipeline is a builtin or a group.
 def _pipeline_has_builtin(cmds, depth):
     for cmd in cmds:
         if cmd.get("program") is not None:
@@ -793,8 +798,8 @@ def _pipeline_has_builtin(cmds, depth):
     return False
 
 
+# Echo where the last stage redirected to, keeping the older behaviour.
 def _redirect_notice(cmds, depth):
-    """最后一段落了 `>`/`>>` 文件就回显一句（沿旧行为）。"""
     for cmd in reversed(cmds):
         if cmd.get("program") is not None or not cmd["argv"]:
             continue
@@ -810,8 +815,8 @@ def _redirect_notice(cmds, depth):
         return
 
 
+# Run one input line and return (status, captured bytes); capture=True intercepts terminal output.
 def run_line(line, stdin_bytes=None, capture=False, depth=0):
-    """跑一行。返回 (status, 截获字节)。capture=True 时终端输出被截获。"""
     global _LAST
     try:
         program = shparser.parse(line)

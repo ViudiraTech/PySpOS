@@ -1,13 +1,13 @@
-#
-#   recovery.py
-#   PySpOS 恢复模式：外观对标 AOSP 原生 Recovery。
-#
-#   流程（和真机一致）：清屏 → "No command." 待机屏 → 按回车进菜单 →
-#   curses 下 ↑↓ 移动高亮、回车执行、Esc 返回；无 curses 时输编号。
-#   出厂重置走二次确认且默认停在 No。
-#   底部的 Run recovery command 是旧命令循环入口，文档里的
-#   recovery > ota_rollback 步骤继续有效。
-#
+'''
+ *
+ *      recovery.py
+ *      Recovery mode: standby screen, menu and actions.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import main
 import kernel
@@ -22,24 +22,23 @@ import ota
 import sys
 import subprocess
 
-# 获取根目录
-# 统一走 common.paths，失败时回退到历史逻辑。
+# Go through common.paths; fall back to the historical layout if that fails.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 try:
     from common.paths import get_root_dir as _get_root_dir
     root_dir = _get_root_dir(script_dir)
 except Exception:
     if os.path.basename(script_dir) == 'src':
-        # 在src目录中，根目录是src的父目录
+        # Running from src, the root is src's parent directory.
         root_dir = os.path.dirname(script_dir)
     elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-        # 在槽位目录中，根目录是槽位的父目录
+        # Running from a slot directory, the root is the slot's parent.
         root_dir = os.path.dirname(script_dir)
     else:
-        # 其他情况，使用当前目录作为根目录
+        # Any other layout: the script directory itself is the root.
         root_dir = script_dir
 
-# 确保在根目录下运行
+# Put src and the slots on the module path, then chdir to the root.
 def ensure_root_directory():
     for path in (os.path.join(root_dir, "src"),
                  os.path.join(root_dir, "slot_a"),
@@ -53,6 +52,8 @@ def ensure_root_directory():
         logk.printl("recovery", f"当前目录已切换到: {os.getcwd()}", main.boot_time)
 
 
+# Run a root-requiring step, printing the refusal instead of raising; True
+# when allowed.
 def _require_root(operation):
     try:
         main.require_root(operation)
@@ -61,10 +62,10 @@ def _require_root(operation):
         printk.error(str(exc))
         return False
 
-# 查找并终止 main 进程
+# Find and kill a main.py left running by the system we came from.
 def check_and_terminate_main_process():
     try:
-        # 使用系统命令查找可能正在运行的 main.py 进程
+        # Ask the OS which python processes exist (tasklist on Windows, ps elsewhere).
         if os.name == 'nt':  # Windows
             result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV'], 
                                   capture_output=True, text=True, cwd=root_dir)
@@ -72,13 +73,13 @@ def check_and_terminate_main_process():
                 lines = result.stdout.strip().split('\n')
                 current_pid = str(os.getpid())
                 
-                for line in lines[1:]:  # 跳过标题行
+                for line in lines[1:]:  # skip the header line
                     if line:
                         parts = line.split(',')
                         if len(parts) >= 2:
                             pid = parts[1].strip('"')
                             
-                            # 获取进程命令行
+                            # read that process's command line
                             cmd_result = subprocess.run(['wmic', 'process', 'where', f'ProcessId={pid}', 'get', 'CommandLine'], 
                                                       capture_output=True, text=True)
                             if cmd_result.returncode == 0 and 'main.py' in cmd_result.stdout and pid != current_pid:
@@ -91,7 +92,7 @@ def check_and_terminate_main_process():
                 lines = result.stdout.strip().split('\n')
                 current_pid = str(os.getpid())
                 
-                for line in lines[1:]:  # 跳过标题行
+                for line in lines[1:]:  # skip the header line
                     if line and 'main.py' in line and current_pid not in line:
                         parts = line.split()
                         if len(parts) >= 2:
@@ -102,15 +103,13 @@ def check_and_terminate_main_process():
     except Exception as e:
         logk.printl("recovery", f"检查进程时出错: {e}", main.boot_time)
 
-# 主程序
+# Enter recovery from the running system; returns reboot so the caller restarts.
 def recovery_main(jumpinfo) -> str:
-    # 确保在根目录下运行
     ensure_root_directory()
 
-    # 检查并终止可能存在的 main 进程
     check_and_terminate_main_process()
 
-    kernel.screen_clear()  # 清屏
+    kernel.screen_clear()
     logk.printl("recovery", f"跳入到recovery, jumpinfo={jumpinfo}", main.boot_time)
     _no_command_screen()
     _menu_loop()
@@ -119,7 +118,7 @@ def recovery_main(jumpinfo) -> str:
 
 
 # ---------------------------------------------------------------------------
-# AOSP 式界面：待机屏 + 菜单
+# AOSP-style interface: standby screen plus menu
 # ---------------------------------------------------------------------------
 
 _DROID = r"""
@@ -135,8 +134,9 @@ _DROID = r"""
 """.rstrip("\n")
 
 
+# Read one line through ttyutil (normalised, with a retry limit), falling back to
+# input().
 def _read(prompt=""):
-    """终端输入统一走 ttyutil（归一化 + 重试上限），缺失时回退 input。"""
     try:
         import ttyutil
         return ttyutil.read_line(prompt)
@@ -147,12 +147,14 @@ def _read(prompt=""):
             return ""
 
 
+# Wait for Enter so the output stays on screen before the menu is drawn again.
 def _pause(msg="按回车返回菜单..."):
     _read(msg)
 
 
+# Build the version line at the top of the menu: real
+# slot and version where available, else unknown.
 def _build_id():
-    """菜单顶部的版本行：槽位/版本尽量取真实值，取不到就标 unknown。"""
     import pyspos
     slot = version = "unknown"
     try:
@@ -167,6 +169,7 @@ def _build_id():
             f"{pyspos.OS_VENDOR}")
 
 
+# Print the AOSP-style standby screen and wait for Enter.
 def _no_command_screen():
     print(_DROID)
     print("No command.")
@@ -174,6 +177,8 @@ def _no_command_screen():
     _read("按回车显示菜单...")
 
 
+# Run the menu until an action returns reboot or poweroff, or the user aborts
+# the input.
 def _menu_loop():
     items = [
         ("Reboot system now", _act_reboot),
@@ -192,8 +197,8 @@ def _menu_loop():
         try:
             idx = tui.ask_menu(_build_id(), titles)
         except (TUIAbort, EOFError, KeyboardInterrupt):
-            # 中止输入 = 离开 Recovery（旧行为是 EOF 上浮到 kernel.loop，
-            # 同样结束会话；这里显式回系统更干净）。
+            # Aborting the input means leaving recovery: the old code let EOF bubble up to
+            # kernel.loop(), which ended the session anyway; returning explicitly is cleaner.
             return
         if idx is BACK:
             continue
@@ -203,20 +208,23 @@ def _menu_loop():
 
 
 # ---------------------------------------------------------------------------
-# 菜单动作（命令循环复用同一批函数）
+# Menu actions; the command loop reuses the very same functions
 # ---------------------------------------------------------------------------
 
+# Menu action: hand control back to the system.
 def _act_reboot():
     print("正在返回系统...\n")
     return "reboot"
 
 
+# Menu action: shut the system down.
 def _act_poweroff():
     print("正在关机...\n")
     kernel.exit()
     return "poweroff"
 
 
+# Menu action: drop into the recovery command loop.
 def _act_shell():
     kernel.screen_clear()
     print("Recovery 命令行（输入 exit 返回菜单）。\n")
@@ -224,6 +232,7 @@ def _act_shell():
     return None
 
 
+# Menu action: factory reset, only after an explicit second confirmation.
 def _act_erase():
     if not _require_root("recovery erase"):
         _pause()
@@ -234,13 +243,13 @@ def _act_erase():
             ["No", "Factory reset"], 0)
     except (TUIAbort, EOFError, KeyboardInterrupt):
         return None
-    # 默认停在 No：Esc / 空输入 / 选 No 都视为拒绝（AOSP 同理）。
+    # Default to No: Esc, an empty answer and an explicit No all count as refuse, as in AOSP.
     if sel is BACK or sel != 1:
         print("操作已取消\n")
         _pause()
         return None
-    # 出厂重置：与测试共用 common.reset 工厂实现，保证无残留、
-    # 且下次启动必进 OOBE（etc/.oobe_done 随 etc/ 一起被删）。
+    # Factory reset: shares common.reset with the tests, so nothing is left behind
+    # and the next boot runs OOBE (etc/.oobe_done goes away together with etc/).
     from common.reset import factory_reset
     report = factory_reset(root_dir)
     for _name, (ok, msg) in report.items():
@@ -254,6 +263,7 @@ def _act_erase():
     return None
 
 
+# Menu action: ask the cloud whether a newer build exists.
 def _act_ota_check():
     logk.printl("recovery", "检查是否有可用的更新...", main.boot_time)
     update_info = ota.check_cloud_update()
@@ -274,6 +284,7 @@ def _act_ota_check():
     return None
 
 
+# Menu action: download and install the newest build; needs root.
 def _act_ota_update():
     if not _require_root("recovery OTA 更新"):
         _pause()
@@ -288,6 +299,7 @@ def _act_ota_update():
     return None
 
 
+# Menu action: print the slot, version and update status.
 def _act_ota_status():
     logk.printl("recovery", "查看OTA更新状态...", main.boot_time)
     status = ota.get_ota_status()
@@ -305,12 +317,11 @@ def _act_ota_status():
     return None
 
 
+# Menu action: pick a cloud version and a target slot, then install it.
+# The boot slot is not switched; the user is asked afterwards. A downgrade or
+# same-version install needs a second explicit confirmation, and the signature and
+# anti-rollback checks always run.
 def _act_install_version():
-    """从云端选版本、装到指定槽位（AOSP sideload 的云端版）。
-
-    不自动切换当前槽位；装完询问是否切换。降级/同级安装必须
-    经过第二次明确确认；签名验签与防回滚 floor 不可跳过。
-    """
     if not _require_root("recovery 指定版本安装"):
         _pause()
         return None
@@ -398,8 +409,9 @@ def _act_install_version():
     return None
 
 
+# Menu action: delete the downloaded update packages, mirroring AOSP wipe cache.
 def _act_ota_clean():
-    # 对标 AOSP 的 Wipe cache partition：相对无害，无需二次确认。
+    # Mirrors AOSP's wipe cache partition: harmless enough to skip the second confirmation.
     if not _require_root("recovery OTA 清理"):
         _pause()
         return None
@@ -411,9 +423,10 @@ def _act_ota_clean():
 
 
 # ---------------------------------------------------------------------------
-# 旧命令循环：菜单第 6 项进入，文档里的 recovery > ota_* 步骤走这里
+# Legacy command loop, entered from the last menu entry (the recovery > ota_* steps)
 # ---------------------------------------------------------------------------
 
+# The legacy recovery command loop, reached from the last menu entry.
 def recovery_shell():
     logk.printl("recovery", "欢迎使用PySpOS Recovery，输入help获取可用命令", main.boot_time)
     while 1:
@@ -447,7 +460,6 @@ def recovery_shell():
         elif prompt == "exit":
             break
         elif prompt == "optimize":
-            # 触发GC垃圾回收2次
             gc.collect()
             gc.collect(2)
             logk.printl("recovery", "GC垃圾回收执行完毕！\n", main.boot_time)

@@ -1,18 +1,25 @@
-#
-#   shell/proc_cmds.py
-#   进程/系统状态命令（由 main.py 拆分而来，行为保持不变）。
-#
+'''
+ *
+ *      proc_cmds.py
+ *      Built-in process and job control shell commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import sys
 import platform
 import printk
 import kernel
-import process as proc  # 进程管理以 process.py（PCB + EEVDF）为准，proc.py 仅为兼容垫片
+import process as proc  # process management lives in process.py (PCB + EEVDF); proc.py is only a compatibility shim
 import pyspos
 import ota
 import main
 
 
+# List the processes; -a also shows the retired ones.
 def cmd_ps(args: str = ""):
     show_all = (args or "").strip() in ("-a", "--all")
     rows = proc.list_procs(include_done=show_all)
@@ -28,8 +35,8 @@ def cmd_ps(args: str = ""):
     print()
 
 
+# Parse %1, %%, 1, %+ or %- into a job, or return None.
 def _parse_job_ref(text: str):
-    """支持 %1 / %% / 1 / %+ 形式，返回 Job 或 None。"""
     t = (text or "").strip()
     if not t:
         return None
@@ -49,6 +56,7 @@ def _parse_job_ref(text: str):
         return None
 
 
+# List the background jobs with their live PIDs and states.
 def cmd_jobs():
     jobs = proc.list_jobs()
     if not jobs:
@@ -64,6 +72,7 @@ def cmd_jobs():
     print()
 
 
+# Resume a job in the foreground with SIGCONT and wait for it.
 def cmd_fg(args: str = ""):
     job = _parse_job_ref(args)
     if job is None:
@@ -82,6 +91,7 @@ def cmd_fg(args: str = ""):
     proc.reap_children(proc.current_shell_pid())
 
 
+# Resume a stopped job in the background with SIGCONT.
 def cmd_bg(args: str = ""):
     job = _parse_job_ref(args)
     if job is None:
@@ -99,6 +109,7 @@ def cmd_bg(args: str = ""):
         printk.warn(f"作业 [{job.job_id}] 无处于暂停状态的进程\n")
 
 
+# Wait for one job, or for every job when given no argument, then reap zombies.
 def cmd_wait(args: str = ""):
     import forkexec
     ref = (args or "").strip()
@@ -117,6 +128,7 @@ def cmd_wait(args: str = ""):
     print()
 
 
+# Send SIGTERM to a PID.
 def cmd_kill(args: str):
     pid_s = (args or "").strip()
     if not pid_s:
@@ -131,6 +143,7 @@ def cmd_kill(args: str):
     (printk.ok if ok else printk.error)(msg + "\n")
 
 
+# Send a named signal to a PID.
 def cmd_signal(args: str):
     import shlex
     try:
@@ -153,6 +166,7 @@ def cmd_signal(args: str):
     (printk.ok if ok else printk.error)(msg + "\n")
 
 
+# Print a system overview: version, user, OTA slot, run queue and ps.
 def cmd_sysmon():
     import process as _p
     print(f"PySpOS {pyspos.OS_VERSION} ({pyspos.OS_DEVELOP_STAGE}) by {pyspos.OS_VENDOR}")

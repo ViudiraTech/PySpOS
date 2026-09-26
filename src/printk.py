@@ -1,33 +1,40 @@
-# printk.py - 打印信息模块
+'''
+ *
+ *      printk.py
+ *      Coloured console output helpers.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-# 颜色定义
 RED_COLOR = "\033[91m"
 GREEN_COLOR = "\033[92m"
 RESET_COLOR = "\033[0m"
 YELLOW_COLOR = "\033[93m"
 
-# 打印带有 [ OK ] 前缀的字符串
+# Print a message with a green [ OK ] prefix.
 def ok(message: str) -> None:
     print(f"[{GREEN_COLOR} OK {RESET_COLOR}] {message}")
 
-# 打印带有 [ ERROR ] 前缀的字符串
+# Print a message with a red [ ERROR ] prefix.
 def error(message: str) -> None:
     print(f"[{RED_COLOR} ERROR {RESET_COLOR}] {message}")
 
-# 打印带有 [ WARN ] 前缀的字符串
+# Print a message with a yellow [ WARN ] prefix.
 def warn(message: str) -> None:
     print(f"[{YELLOW_COLOR} WARN {RESET_COLOR}] {message}")
 
-# 打印带有 [ INFO ] 前缀的字符串
+# Print a message with a plain [ INFO ] prefix.
 def info(message: str) -> None:
     print(f"[ INFO ] {message}")
 
+# Ask a y/n question; an empty answer takes the default.
+# Too many invalid answers returns the default too, so a broken terminal cannot spin forever.
+# The default is False, the conservative reading of an unsure answer, and max_retries is 5.
+# Calling confirm(prompt) behaves as it always did; it only gained that ceiling.
 def confirm(prompt: str, default: bool = False, max_retries: int = 5) -> bool:
-    """y/n 确认。空输入取 default；连续无效达上限返回 default，避免坏终端死循环。
-
-    默认 default=False（保守语义：拿不准就当拒绝），max_retries=5。
-    历史调用 confirm(prompt) 行为不变，只是多了防呆上限。
-    """
     try:
         import ttyutil
     except ImportError:

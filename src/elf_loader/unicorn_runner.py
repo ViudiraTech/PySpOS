@@ -1,20 +1,13 @@
-#
-#   elf_loader/unicorn_runner.py
-#   基于 Unicorn Engine 的 ELF 运行器（默认引擎，自研 CPU 模拟器保留为兜底）。
-#
-#   设计：
-#   - 复用现有 ELFParser + ELFLoader 做解析、分段加载、栈/堆构建、argv/envp 排布；
-#   - 内存镜像进 Unicorn，CPU 执行由 Unicorn 承担（真 x86 语义）；
-#   - syscall（64 位 SYSCALL / 32 位 int 0x80）通过指令钩子转交给既有的
-#     SyscallEmulator；mmap/munmap/brk 引起的新映射通过 sync 回写 Unicorn；
-#   - 任何环节失败（无 unicorn 库 / 映射失败 / 执行异常）抛 UnicornRunError，
-#     上层自动降级到自研 CPU 模拟器。
-#
-#   已知限制（与自研引擎一致，不扩大承诺范围）：
-#   - 仅支持静态链接的 ET_EXEC / ET_DYN（不支持 INTERP 动态链接器）；
-#   - TLS（arch_prctl 设置 FS 基址）未透传给 Unicorn，用到 TLS 的二进制可能失败；
-#   - signals/多线程/clone 未实现，遇到直接返回 -ENOSYS 由程序侧处理。
-#
+'''
+ *
+ *      unicorn_runner.py
+ *      Runs ELF programs on the Unicorn engine.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import logging
 import struct
@@ -50,21 +43,24 @@ try:
     )
     _UNICORN_AVAILABLE = True
     _UNICORN_IMPORT_ERROR: Optional[Exception] = None
-except Exception as e:  # ImportError 等：无 unicorn 时模块仍可 import
+except Exception as e:  # ImportError and friends: the module must import even without unicorn
     _UNICORN_AVAILABLE = False
     _UNICORN_IMPORT_ERROR = e
 
 logger = logging.getLogger(__name__)
 
 
+# Report whether the unicorn library could be imported.
 def unicorn_available() -> bool:
     return _UNICORN_AVAILABLE
 
 
+# Raised when the Unicorn path cannot be used, so the caller can fall back.
 class UnicornRunError(Exception):
     pass
 
 
+# Translate the loader's protection bits into a UC_PROT_* mask.
 def _prot_to_uc(flags: int) -> int:
     prot = 0
     if flags & MemoryProtection.READ:
@@ -78,17 +74,14 @@ def _prot_to_uc(flags: int) -> int:
     return prot
 
 
+# Let SyscallEmulator run against Unicorn's memory instead of a bytearray.
+# self.memory is the loader's own dict, so what the mmap handlers add or drop is
+# visible on both sides at once. Unicorn owns the contents; the mirrored
+# bytearrays only supply the initial bytes for a fresh mapping, and new regions
+# reach the engine through sync_uc_mappings().
 class UnicornLoaderAdapter:
-    """让 SyscallEmulator 能在 Unicorn 内存上工作的 loader 兼容层。
 
-    关键约定：
-    - self.memory 与 ELFLoader.memory 是同一个 dict 对象，mmap 处理函数
-      的增删对双方立即可见；
-    - 内存内容以 Unicorn 为准（read_memory 直读 uc），镜像里的 bytearray
-      仅用于“新映射同步进 uc”时提供初始内容；
-    - brk/mmap 产生的新区域由 sync_uc_mappings() 统一映射进 uc。
-    """
-
+# Share the loader's memory dict with the engine; nothing is mapped yet.
     def __init__(self, uc: "Uc", parser, memory: Dict[int, MemoryRegion],
                  heap_start: int, brk: int):
         self.uc = uc
@@ -96,11 +89,12 @@ class UnicornLoaderAdapter:
         self.memory = memory
         self.heap_start = heap_start
         self.brk = brk
-        # uc 侧已映射的页对齐区间：start -> size
+# page-aligned ranges already mapped on the uc side: start to size
         self.uc_mapped: Dict[int, int] = {}
 
-    # -- 与 ELFLoader 同名的内存原语（SyscallEmulator 只认这几个）--
+# -- the memory primitives, named exactly as in ELFLoader because that is all SyscallEmulator calls --
 
+# Read straight out of Unicorn, turning UcError into MemoryAccessError.
     def read_memory(self, addr: int, size: int) -> bytes:
         try:
             return bytes(self.uc.mem_read(addr, size))
@@ -108,6 +102,7 @@ class UnicornLoaderAdapter:
             from .elf_loader import MemoryAccessError
             raise MemoryAccessError(f"unicorn read fault at 0x{addr:x}: {e}")
 
+# Write straight into Unicorn, turning UcError into MemoryAccessError.
     def write_memory(self, addr: int, data: bytes) -> None:
         try:
             self.uc.mem_write(addr, data)
@@ -115,6 +110,7 @@ class UnicornLoaderAdapter:
             from .elf_loader import MemoryAccessError
             raise MemoryAccessError(f"unicorn write fault at 0x{addr:x}: {e}")
 
+# Read a 1, 2, 4 or 8 byte little-endian integer.
     def read_int(self, addr: int, size: int, signed: bool = False) -> int:
         data = self.read_memory(addr, size)
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
@@ -123,12 +119,14 @@ class UnicornLoaderAdapter:
             fmt = fmt.lower()
         return struct.unpack('<' + fmt, data)[0]
 
+# Write a 1, 2, 4 or 8 byte little-endian integer.
     def write_int(self, addr: int, value: int, size: int) -> None:
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
         fmt = fmt_map.get(size, 'I')
         max_val = 1 << (size * 8)
         self.write_memory(addr, struct.pack('<' + fmt, value & (max_val - 1)))
 
+# Grow the heap, mapping the new pages into Unicorn first.
     def brk_extend(self, addr: int) -> int:
         if addr < self.heap_start:
             return self.brk
@@ -141,7 +139,7 @@ class UnicornLoaderAdapter:
             max_heap_size = 128 * 1024 * 1024
             if new_size > max_heap_size:
                 return self.brk
-            # 先映射新增页进 uc，再扩展镜像
+# map the new pages into uc first, then grow the mirror
             map_start = align_down(current_end, PAGE_SIZE)
             map_end = align_up(self.heap_start + new_size, PAGE_SIZE)
             if map_end > map_start:
@@ -152,18 +150,20 @@ class UnicornLoaderAdapter:
         self.brk = addr
         return self.brk
 
-    # -- uc 映射同步 --
+# -- uc mapping sync --
 
+# Map a page-aligned range, refusing to overlap an existing mapping.
     def _uc_map(self, start: int, size: int, prot: int) -> None:
         start = align_down(start, PAGE_SIZE)
         size = align_up(size, PAGE_SIZE)
-        # 与已有映射重叠则跳过（mmap 固定地址等场景由调用方保证不重叠）
+# skip anything overlapping an existing mapping; callers keep fixed-address mmap requests non-overlapping
         for ms, msz in self.uc_mapped.items():
             if start < ms + msz and start + size > ms:
                 return
         self.uc.mem_map(start, size, prot)
         self.uc_mapped[start] = size
 
+# Unmap a range that uc_mapped still records.
     def _uc_unmap(self, start: int, size: int) -> None:
         if start in self.uc_mapped:
             try:
@@ -172,33 +172,35 @@ class UnicornLoaderAdapter:
                 pass
             del self.uc_mapped[start]
 
+# Map one loader region into Unicorn and copy its bytes across.
     def map_region(self, region: MemoryRegion) -> None:
         start = region.page_aligned_start()
         size = region.page_aligned_end() - start
         self._uc_map(start, size, _prot_to_uc(region.flags))
-        # 回填文件内容（BSS 部分保持 uc 映射的零页）
+# write the file contents back; the BSS tail stays the zero pages uc mapped
         if len(region.data) > 0:
             try:
                 self.uc.mem_write(region.start, bytes(region.data))
             except UcError as e:
                 raise UnicornRunError(f"写入映射内容失败 0x{region.start:x}: {e}")
 
+# Map the regions Unicorn has not seen and unmap the ones the loader lost.
     def sync_uc_mappings(self) -> None:
-        """mmap/munmap 系统调用后调用：增删与 uc 侧保持一致。"""
-        # 新增 → 映射
+# added, so map it
         for start, region in list(self.memory.items()):
             rs = region.page_aligned_start()
             if rs not in self.uc_mapped:
                 self.map_region(region)
-        # 删除 → 解除映射
+# removed, so unmap it
         want = {r.page_aligned_start() for r in self.memory.values()}
         for ms in [k for k in self.uc_mapped if k not in want]:
             self._uc_unmap(ms, self.uc_mapped[ms])
 
 
+# Run an ELF program on Unicorn, with the same signature as ELFRunner.
 class UnicornRunner:
-    """与 ELFRunner 同签名的 Unicorn 驱动运行器。"""
 
+# Refuse to build without the unicorn library; no file is read yet.
     def __init__(self, elf_path: str, base_addr: Optional[int] = None,
                  enable_aslr: bool = False, strict_mode: bool = True):
         if not _UNICORN_AVAILABLE:
@@ -225,8 +227,9 @@ class UnicornRunner:
         self.fault_addr = 0
         self.fault_msg = ""
 
-    # -- 加载 --
+# -- loading --
 
+# Read, load and mirror the image into Unicorn, then install the hooks.
     def load(self) -> bool:
         try:
             with open(self.elf_path, 'rb') as f:
@@ -277,8 +280,9 @@ class UnicornRunner:
             logger.error(f"unicorn: 加载失败: {e}")
             return False
 
-    # -- 钩子 --
+# -- hooks --
 
+# Hook the syscall entry, the instruction count and the memory faults.
     def _install_hooks(self):
         assert self.uc is not None
         if self.is_64bit:
@@ -292,9 +296,11 @@ class UnicornRunner:
                          | UC_HOOK_MEM_FETCH_UNMAPPED,
                          self._hook_mem_invalid)
 
+# Count every instruction Unicorn executes.
     def _hook_code(self, uc, address, size, user_data):
         self.instruction_count += 1
 
+# Record the faulting access and stop the emulation.
     def _hook_mem_invalid(self, uc, access, address, size, value, user_data):
         self.fault_addr = address
         self.fault_msg = f"invalid memory access={access} at 0x{address:x}"
@@ -302,6 +308,7 @@ class UnicornRunner:
         uc.emu_stop()
         return False
 
+# Run one guest syscall and push any new mappings into Unicorn.
     def _do_syscall(self, number: int, args: List[int]) -> int:
         assert self.syscall_emulator is not None
         try:
@@ -310,7 +317,7 @@ class UnicornRunner:
             code = e.code if isinstance(e.code, int) else 0
             self.exit_code = code
             raise _GuestExit(code)
-        # mmap/munmap/brk 可能增删映射 → 同步进 uc
+# mmap, munmap and brk can add or drop mappings, so sync them into uc
         try:
             assert self.adapter is not None
             self.adapter.sync_uc_mappings()
@@ -318,10 +325,11 @@ class UnicornRunner:
             logger.error(f"unicorn: 同步映射失败: {e}")
         return ret
 
+# Handle the 64-bit SYSCALL instruction.
     def _hook_syscall(self, uc, user_data):
-        # unicorn 2.x INSN 钩子签名为 (uc, user_data)。
-        # 注意：QEMU 在钩子返回后仍会“执行” SYSCALL 本体并自行推进 RIP，
-        # 因此这里绝不能再手动 RIP+2（否则会跳过下一条指令）。实测验证。
+# the unicorn 2.x instruction hook signature is (uc, user_data).
+# Note that QEMU still executes the SYSCALL itself after the hook returns and advances RIP on its own,
+# so RIP must never be bumped by 2 here or the next instruction is skipped. Verified by experiment.
         rax = uc.reg_read(UC_X86_REG_RAX)
         args = [uc.reg_read(r) for r in (
             UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X86_REG_RDX,
@@ -333,8 +341,9 @@ class UnicornRunner:
             return
         uc.reg_write(UC_X86_REG_RAX, ret & 0xFFFFFFFFFFFFFFFF)
 
+# Handle the 32-bit int 0x80 syscall entry.
     def _hook_int80(self, uc, user_data):
-        # 同上：int 0x80 钩子返回后 QEMU 自行推进 EIP，不手动加。
+# Same for int 0x80: QEMU advances EIP after the hook returns, so do not add anything.
         eax = uc.reg_read(UC_X86_REG_EAX)
         args = [uc.reg_read(r) for r in (
             UC_X86_REG_EBX, UC_X86_REG_ECX, UC_X86_REG_EDX,
@@ -346,8 +355,9 @@ class UnicornRunner:
             return
         uc.reg_write(UC_X86_REG_EAX, ret & 0xFFFFFFFF)
 
-    # -- 运行 --
+# -- running --
 
+# Emulate to completion and report what the guest did.
     def run(self, argv=None, envp=None,
             max_instructions: Optional[int] = None) -> ExecutionResult:
         import os as _os
@@ -360,15 +370,15 @@ class UnicornRunner:
         if envp is None:
             envp = dict(_os.environ)
 
-        # 栈排布必须与自研 CPU（CPUEmulator._setup_argv_envp_64/32）逐字节一致，
-        # 否则 _start 读到的 argc/argv 全错位。刻意不用 loader.setup_argv_envp。
+# the stack layout must match the in-house CPU (CPUEmulator._setup_argv_envp_64/32) byte for byte,
+# otherwise _start reads a shifted argc and argv. loader.setup_argv_envp is deliberately not used.
         if self.is_64bit:
             sp = self._build_stack_64(argv, envp)
         else:
             sp = self._build_stack_32(argv, envp)
         self.stack_pointer = sp
 
-        # 初始寄存器（对齐 CPUEmulator._init_registers：RFLAGS=0x202）
+# initial registers, matching CPUEmulator._init_registers with RFLAGS=0x202
         if self.is_64bit:
             self.uc.reg_write(UC_X86_REG_RSP, sp)
             self.uc.reg_write(UC_X86_REG_RIP, self.entry_point)
@@ -384,12 +394,12 @@ class UnicornRunner:
         self.fault_msg = ""
         start = time.time()
         try:
-            # until=0（不会命中则靠 emu_stop/异常结束）+ 15s 超时 + 指令上限
+# until=0, so the run ends through emu_stop or a fault, plus a 15s timeout and an instruction cap
             self.uc.emu_start(self.entry_point, 0,
                               timeout=15 * 1000 * 1000,
                               count=max_instructions or 0)
         except UcError as e:
-            # syscall 钩子内已 emu_stop 属正常退出；其余按 fault 处理
+# an emu_stop from the syscall hook is a normal exit; anything else is a fault
             if self.fault_msg:
                 pass
             elif self.exit_code == 0 and "HOOK" not in str(e):
@@ -413,22 +423,25 @@ class UnicornRunner:
             execution_time=execution_time, memory_usage=mem_usage,
             signal=signal, fault_addr=self.fault_addr)
 
+# Return the stack top, held clear of the AT_RANDOM page.
     def _stack_top_clamped(self) -> int:
         top = self.loader.stack_top
         if top >= 0x7fff0000:
             top = 0x7ffefff0
         return top
 
+# Build the 64-bit startup stack exactly as the in-house CPU does.
     def _build_stack_64(self, argv, envp) -> int:
-        """复刻 CPUEmulator._setup_argv_envp_64 的压栈顺序与对齐。"""
         rsp = self._stack_top_clamped() & ~0xF
 
+# Push one 64-bit word into Unicorn memory and return the new stack pointer.
         def push_qword(value: int) -> int:
             nonlocal rsp
             rsp -= 8
             self.adapter.write_memory(rsp, struct.pack('<Q', value & 0xFFFFFFFFFFFFFFFF))
             return rsp
 
+# Push raw bytes into Unicorn memory and return the new stack pointer.
         def push_data(data: bytes) -> int:
             nonlocal rsp
             rsp -= len(data)
@@ -450,16 +463,18 @@ class UnicornRunner:
         push_qword(len(argv))
         return rsp
 
+# Build the 32-bit startup stack exactly as the in-house CPU does.
     def _build_stack_32(self, argv, envp) -> int:
-        """复刻 CPUEmulator._setup_argv_envp_32 的压栈顺序与对齐。"""
         esp = self._stack_top_clamped() & ~0x3
 
+# Push one 32-bit word into Unicorn memory and return the new stack pointer.
         def push_dword(value: int) -> int:
             nonlocal esp
             esp -= 4
             self.adapter.write_memory(esp, struct.pack('<I', value & 0xFFFFFFFF))
             return esp
 
+# Push raw bytes into Unicorn memory and return the new stack pointer.
         def push_data(data: bytes) -> int:
             nonlocal esp
             esp -= len(data)
@@ -481,22 +496,24 @@ class UnicornRunner:
         push_dword(len(argv))
         return esp
 
+# Return the instruction pointer for the current width.
     def _current_ip(self) -> int:
         assert self.uc is not None
         if self.is_64bit:
             return self.uc.reg_read(UC_X86_REG_RIP)
         return self.uc.reg_read(UC_X86_REG_EIP)
 
+# Install the smallest flat GDT a 32-bit guest will accept.
     def _setup_segments_32(self):
-        """32 位扁平段最小 GDT（教学实现，仅求简单 ELF 可跑）。"""
         assert self.uc is not None
-        # GDT: NULL + CODE(0x08) + DATA(0x10)，放在低地址空闲处
+# GDT: NULL plus CODE(0x08) plus DATA(0x10), placed in low free memory
         gdt_addr = 0x1000
         try:
             self.uc.mem_map(gdt_addr, PAGE_SIZE,
                             UC_PROT_READ | UC_PROT_WRITE)
         except UcError:
             pass
+# Pack one 8-byte GDT descriptor.
         def desc(base, limit, access, flags):
             return struct.pack('<IHHBB',
                                limit & 0xFFFF, base & 0xFFFF,
@@ -524,8 +541,9 @@ class UnicornRunner:
         except Exception as e:
             logger.warning(f"unicorn: 32 位段设置降级: {e}")
 
-    # -- 调试/观测 API（与 ELFRunner 对齐的子集）--
+# -- debugging and inspection API, the subset that matches ELFRunner --
 
+# Return (address, mnemonic, length, operands) for count instructions.
     def disassemble(self, addr=None, count: int = 10):
         from .cpu_emulator import MemoryController, InstructionDecoder
         if addr is None:
@@ -543,6 +561,7 @@ class UnicornRunner:
                 break
         return result
 
+# Return (start, size, name, rwx) per region, sorted by address.
     def get_memory_map(self):
         if not self.loader:
             return []
@@ -554,17 +573,21 @@ class UnicornRunner:
             result.append((start, region.size, region.name, perms))
         return sorted(result, key=lambda x: x[0])
 
+# Set the data the guest will read from stdin.
     def set_stdin(self, data: str) -> None:
         if self.syscall_emulator:
             self.syscall_emulator.stdin = data
 
 
+# Raised inside a hook so a guest exit can unwind out of Unicorn.
 class _GuestExit(Exception):
+# Carry the guest's exit code up to run().
     def __init__(self, code: int):
         super().__init__(f"guest exit {code}")
         self.code = code
 
 
+# Load and run an ELF file on Unicorn in one call.
 def run_elf_unicorn(elf_path: str, argv=None, envp=None,
                     max_instructions: Optional[int] = None) -> ExecutionResult:
     runner = UnicornRunner(elf_path)

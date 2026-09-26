@@ -1,1 +1,12 @@
-"""PySpOS shell 命令包：由 main.py 拆分而来，main.py 保留 facade 兼容层。"""
+'''
+ *
+ *      __init__.py
+ *      The PySpOS shell command package.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
+pass

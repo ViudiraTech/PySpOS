@@ -1,9 +1,13 @@
-#   
-#   kernel.py
-#   PySpOS 主程序
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      kernel.py
+ *      Boot sequence and the main command loop.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import printk
 import os
@@ -16,7 +20,7 @@ from fs import current_dir
 import logk
 import ota
 
-# PySpOS ASCII 艺术 Logo   
+# The PySpOS ASCII logo, printed once at boot.
 ascii_logo = r'''
  ____            ____             ___    ____      _____
 |  _ \   _   _  / ___|   _ __    / _ \  / ___|    |___ / 
@@ -29,12 +33,13 @@ PySpOS 模拟操作系统 版本 3
 @ 2022~2026 GoutouStdio（或狗头工作室）保留所有权利。                   
 '''
 
-# 逻辑核心计数
+# Logical CPU count reported at boot.
 cores = os.cpu_count()
 
-# 获取系统用户名（带缓存）
+# Cached host user name: the lookup below is not free.
 _cached_username = None
 
+# Host user name, cached: $USER, getlogin, whoami, then pwd or win32api.
 def get_system_username() -> str:
     global _cached_username
     if _cached_username is not None:
@@ -88,12 +93,13 @@ def get_system_username() -> str:
 
     raise RuntimeError("无法获取用户名")
 
-# 打印提示符
+# Print the two-line prompt and return the line the input call needs as its
+# argument.
 def print_prompt():
     import syslocale
-    # 实时获取当前工作目录
+    # Read the working directory live so that cd shows up at once.
     current_dir_name = os.path.basename(os.getcwd())
-    # OOBE 可设置显示名；缺省回退系统用户（bootcfg 缺键兼容旧配置）
+    # OOBE may set a display name; fall back to the system user (bootcfg may lack the key).
     username = main.bootcfg.get('display_name') or get_system_username()
     current_time = syslocale.now_str("%H:%M:%S")
 
@@ -113,22 +119,23 @@ def print_prompt():
     print(prompt_header)
     return prompt_line
 
-# 清屏
+# Clear the terminal on Windows and everywhere else alike.
 def screen_clear():
     if os.name == "nt":
         os.system("cls")
     else:
         os.system("clear")    
 
-# 内核主循环
+# The main command loop: OOBE, boot commit, logo,
+# OTA init, then read and run until EOF or Ctrl-C.
 def loop():
     from syslocale import _
     import oobe
     import main as _main_mod
 
-    # 首次开机向导：etc/.oobe_done 缺失即进入（出厂重置会删掉它）。
-    # 放在 kernel.loop 而不是 main.main()：hotreset_env 启动路径直接进
-    # kernel.loop()，放错位置会导致真实开机跳过 OOBE。
+    # First-boot wizard: a missing etc/.oobe_done means run it (a factory reset deletes it).
+    # It lives in kernel.loop, not main.main(): the hotreset_env boot path enters
+    # kernel.loop() directly, so the wrong place here would skip OOBE on a real boot.
     oobe_ok = oobe.maybe_run_oobe(_main_mod.root_dir)
     if oobe_ok and os.environ.get("PYSPOS_BOOT_VERIFIED") == "1":
         try:
@@ -160,7 +167,7 @@ def loop():
         except Exception as e:
             print(f"error: {e}")
 
-# 退出PySpOS
+# Drop the __pycache__ directories and shut the system down.
 def exit():
     if os.path.isdir("__pycache__"):
         try:

@@ -1,20 +1,13 @@
-#
-#   forkexec.py
-#   真子进程 fork 执行引擎：app 跑在独立 OS 进程里，PCB 映射模拟 PID。
-#
-#   分层（对齐 Linux）：
-#     parent：spawn() 建 PCB(remote=True，不进 EEVDF 虚拟就绪队)，
-#             multiprocessing.Process 承载 payload；
-#     pump 线程：只 poll 子进程存活/退出，把退出转 Zombie 并结算 CPU 时间，
-#             随后交给父进程 wait 回收（僵尸语义）；
-#     child：重定向 stdio → 建 syscall RPC 连接 → 跑 app 入口。
-#
-#   特权操作走 syscall RPC：子进程不能直接改父进程内存（与 Linux 隔离一致），
-#   api.* 的写操作改为向 parent 发请求，parent 在自己的地址空间里执行并回传。
-#
-#   stdio：前台作业继承父终端（等价 bash fork 后继承 fd）；
-#   后台作业 stdin 接 DEVNULL、stdout 中继到父 shell（等价 SIGTTIN 场景的安全简化）。
-#
+'''
+ *
+ *      forkexec.py
+ *      Real fork/exec of app children with stdio relay and RPC.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import multiprocessing as mp
 import base64
@@ -31,7 +24,7 @@ SYSCTL_ENV = "PYSPOS_SYSCTL_ADDR"
 AUTHKEY_ENV = "PYSPOS_SYSCTL_AUTHKEY"
 AUTHKEY = secrets.token_bytes(32)
 
-# POSIX 用 fork（真 fork 语义 + 免 pickle 传参）；Windows 用 spawn
+# POSIX uses fork (real fork semantics, no pickling of arguments); Windows uses spawn
 try:
     _CTX = mp.get_context("fork") if os.name == "posix" else mp.get_context("spawn")
 except ValueError:
@@ -43,19 +36,18 @@ _relay_threads = {}
 
 
 # --------------------------------------------------------------------------
-# child 侧
+# child side
 # --------------------------------------------------------------------------
 
+# Point the child's stdio at the relay pipes.
+# The relay has to be a bare os.pipe() and not multiprocessing.Pipe: the latter
+# is a framed send_bytes/recv_bytes protocol that does not fit the raw byte
+# stream used here. In the parent direction the length header would be fed to
+# the app as user input, and in the child direction a raw text blob would be read
+# as a length header, so the output thread dies silently and the output is lost.
 def _relay_child_stdio(out_fd, in_fd):
-    """把子进程的 stdio 接到中继管道上。
-
-    中继必须用裸 `os.pipe()` 而非 `multiprocessing.Pipe`：后者是
-    send_bytes/recv_bytes 的**消息帧协议**（4 字节长度头 + 负载），
-    和这里 `os.fdopen(...).print()` 的裸字节流语义不兼容——
-    父进程 recv_bytes 会把裸文本当成长度头，直接 EOF，
-    输出线程静默死掉、子进程输出全丢；反方向 stdin 也会把
-    长度头当成用户输入喂给 app。
-    """
+    # out_fd and in_fd are the child's ends of the bare os.pipe() relay; None keeps
+    # whatever this process inherited.
     out, inp = sys.stdout, sys.stdin
     try:
         if out_fd is not None:
@@ -70,6 +62,8 @@ def _relay_child_stdio(out_fd, in_fd):
     return out, inp
 
 
+# Import an app file as the module __exec__ and
+# run its entry point, without running it twice.
 def _run_app_module(target):
     import importlib.util
     if os.path.isabs(target):
@@ -81,11 +75,11 @@ def _run_app_module(target):
     mod_path = next((c for c in cands if os.path.isfile(c)), None)
     if mod_path is None:
         raise FileNotFoundError(f"app 不存在: {target}")
-    # 以 __exec__ 作为模块名：与历史 open 命令的 exec 语义一致。
-    # apps 的守卫有两种写法：
-    #   `if __name__ == "__exec__": main()`  → import 时即执行，不能再调 main()
-    #   `if __name__ == "__main__": ...`     → import 不执行，需要显式调 main()
-    # 因此按源码判断，避免重复执行。
+    # The module name is __exec__, matching the historic open command's exec semantics.
+    # Apps guard their entry point in two ways:
+    #   if __name__ == '__exec__': main()   runs on import, so main() must not be called again
+    #   if __name__ == '__main__': ...     does not run on import, so main() has to be called
+    # Hence the choice is made from the source, to avoid running the entry point twice.
     with open(mod_path, "r", encoding="utf-8") as f:
         source = f.read()
     os.environ["PYSPOS_APP_NAME"] = os.path.basename(mod_path)
@@ -104,23 +98,21 @@ def _run_app_module(target):
             main_fn()
 
 
+# Run a .spf application through parse_spf.
 def _run_spf_file(path):
     import parse_spf
     parse_spf.run_spf(path)
 
 
+# The real child process body; it may not touch any of the parent's memory
+# state.
+# parent_fds are the ends the parent holds: fork left this process with copies, so
+# they have to be closed first. This is a real bug found on 2026-09-24, the
+# parent closing in_w is not enough because the child still holds a write end
+# and its in_r never sees EOF, so a foreground interactive app hangs in input()
+# and never exits. Tests that feed a pty by hand hide this path, bypassing EOF.
 def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
                 parent_fds=()):
-    """真子进程主体。运行在独立进程，不得引用 parent 的任何内存状态。
-
-    parent_fds 是父进程持有的那几端（stdout 管的读端、stdin 管的写端），
-    本进程因为 fork 同样持有它们的副本，**必须先关掉**。
-
-    这是 2026-09-24 实测到的一个真 bug：父进程关掉自己的 in_w 并不够，
-    子进程自己手里还捏着一个写端，于是它的 in_r 永远等不到 EOF——前台
-    交互式 app 会一直挂在 input() 上不退出。pty 手动喂输入的测试会掩盖
-    这条路径，因为它绕过了 EOF。
-    """
     for fd in parent_fds:
         try:
             os.close(fd)
@@ -147,8 +139,8 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
     except SystemExit as e:
         code = e.code if isinstance(e.code, int) else 0
     except EOFError:
-        # 2026-09-24：stdin 关闭是正常终止路径，不该喷 traceback。
-        # apps 内部也已逐个处理 EOF；这里是子进程级的兜底防线。
+        # 2026-09-24: a closed stdin is a normal way to end, so no traceback is dumped.
+        # The apps already handle EOF one by one; this is the child-level backstop.
         try:
             sys.stdout.write("\n[输入已结束，程序退出]\n")
             sys.stdout.flush()
@@ -174,10 +166,10 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
             sys.stdout.flush()
         except Exception:
             pass
-        # 子进程与父进程共享同一个 tty。若 app 改过终端模式（尤其跑过
-        # curses/TUI），os._exit 会跳过 Python 的清理链，tty 就留在
-        # cbreak/icrnl-off 状态——回到父进程后回车就变成 `^M`。
-        # os._exit 不跑 atexit，所以这里必须显式恢复。
+        # The child shares the parent's tty. If the app changed the terminal mode (running
+        # curses or a TUI, for example), os._exit skips Python's cleanup chain and the tty is
+        # left in cbreak/icrnl-off, so Enter becomes ^M once we are back in the parent.
+        # os._exit runs no atexit handlers, so the terminal has to be restored by hand here.
         try:
             import ttyutil
             ttyutil.ensure_sane_tty()
@@ -187,9 +179,11 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
 
 
 # --------------------------------------------------------------------------
-# parent 侧 pump / syscall 服务
+# parent side: the pump and the syscall service
 # --------------------------------------------------------------------------
 
+# Poll every child handle, turn an exit into a zombie with its CPU time settled,
+# and leave the reaping to wait.
 def _pump_loop():
     while True:
         table = proc._table()
@@ -218,6 +212,7 @@ def _pump_loop():
         time.sleep(0.03)
 
 
+# Start the pump thread once, and start it again if it ever died.
 def _ensure_pump():
     global _pump_thread
     if _pump_thread is None or not _pump_thread.is_alive():
@@ -226,8 +221,9 @@ def _ensure_pump():
         _pump_thread.start()
 
 
+# Parent-side implementation of the privileged operations an app may request
+# over RPC.
 def _sysctl_handler(op, args, kwargs):
-    """parent 侧特权操作实现（RPC 目标）。"""
     import main
     import btcfg
     import kernel
@@ -309,6 +305,7 @@ def _sysctl_handler(op, args, kwargs):
     raise ValueError(f"未知系统调用: {op}")
 
 
+# Write one audit record, and never let auditing break the operation it records.
 def _audit(action, detail):
     try:
         import main
@@ -318,14 +315,15 @@ def _audit(action, detail):
         pass
 
 
+# Give the RPC reply time to leave before the system shuts down.
 def _delayed_exit():
     time.sleep(0.2)
     import main
     main.handle_command("shutdown")
 
 
+# Answer syscall requests for one child connection until it goes away.
 def _serve_client(conn):
-    """为一个子进程连接提供 syscall 应答循环。"""
     while True:
         try:
             msg = conn.recv()
@@ -349,6 +347,7 @@ def _serve_client(conn):
         pass
 
 
+# Accept syscall connections and give each one its own answering thread.
 def _sysctl_accept_loop():
     global _listener
     from multiprocessing.connection import Listener
@@ -365,6 +364,7 @@ def _sysctl_accept_loop():
         threading.Thread(target=_serve_client, args=(conn,), daemon=True).start()
 
 
+# Start the syscall listener once; a failed bind is not retried.
 def _ensure_listener():
     if _listener is None and not getattr(_ensure_listener, "_tried", False):
         _ensure_listener._tried = True
@@ -373,6 +373,8 @@ def _ensure_listener():
         time.sleep(0.05)
 
 
+# Deliver a fatal signal to the real child: SIGKILL
+# kills it, SIGTERM and SIGINT terminate it.
 def _signal_backend(pcb, signum):
     handle = proc._table().handles.get(pcb.pid)
     if handle is None:
@@ -390,15 +392,16 @@ def _signal_backend(pcb, signum):
 
 
 # --------------------------------------------------------------------------
-# 公共入口
+# public entry points
 # --------------------------------------------------------------------------
 
+# Relay stdin as raw bytes, pulled out so the log and tee paths can reuse it.
 def _pump_in_relay(in_w, background):
-    """stdin 中继（裸 os.pipe 字节流）。抽出来供 log/tee 路径复用。"""
     if in_w is None:
         return
     if background:
-        # 后台作业：不给 stdin，立刻关闭写端 → 子进程读到 EOF 正常退出
+        # Background job: no stdin, so close the write
+        # end at once and the child sees EOF and exits
         try:
             os.close(in_w)
         except (OSError, TypeError):
@@ -421,13 +424,14 @@ def _pump_in_relay(in_w, background):
             pass
 
 
+# Forward the child's stdout to the parent terminal and, for foreground work,
+# push the parent's stdin into the child.
+# out_r and in_w are bare os.pipe() descriptors, forwarded block by block. in_w
+# must be closed at once in background mode, otherwise the child blocks forever
+# waiting for input, which shows up as an app that never exits.
 def _relay_parent_side(out_r, in_w, background):
-    """把子进程 stdout 转发到父终端；前台作业额外把父 stdin 灌进子进程。
-
-    out_r / in_w 都是裸 os.pipe() 的 fd（整数），逐块 read/write 转发。
-    关键：in_w 必须在后台模式下**立刻关闭**，否则子进程读 stdin 会一直
-    阻塞等输入（表现成 zzlsb 之类交互 app 挂死不退）。
-    """
+    # One direction of the relay: child stdout to
+    # the parent terminal, then close the read end.
     def _pump_out():
         try:
             while True:
@@ -454,13 +458,12 @@ def _relay_parent_side(out_r, in_w, background):
     return output_thread
 
 
+# Run a payload in a real child and return its PCB, marked remote.
+# background=True hands the child /dev/null on stdin while its output is still
+# relayed to the terminal, so the shell is not blocked. log_path additionally
+# tees the output to a file.
 def fork_exec(payload, *, kind="app", background=False, nice=0,
               src_dir=None, apps_dir=None, env=None, log_path=None):
-    """在真子进程执行 payload，返回 PCB（remote=True）。
-
-    background=True → stdin 接 /dev/null，输出中继到当前终端（不阻塞 shell）。
-    log_path      → 额外把输出落盘（后台作业常用）。
-    """
     _ensure_pump()
     _ensure_listener()
     if src_dir is None:
@@ -475,32 +478,36 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
     pcb = proc.spawn(comm, kind=kind, nice=nice, remote=True,
                      note="real child process")
 
-    # 中继一律用裸 os.pipe()：stdin/stdout 是字节流，不能用 mp.Pipe 的
-    # 消息帧协议（详见 _relay_child_stdio 的注释）。
+    # Relays always use a bare os.pipe(): stdin and stdout are byte streams, and
+    # mp.Pipe's message framing cannot carry them (see the comment on
+    # _relay_child_stdio).
     #
-    # 2026-09-24 修复：原先 `use_relay = background or start=="spawn"`，
-    # 于是 Linux(fork) 下的**前台作业完全不走中继**，孙进程直接继承父进程
-    # 的 tty 与 Python 缓冲流。两个后果：
-    #   1. 子进程对终端模式/缓冲的任何改动会污染父进程 shell（^M 类故障）；
-    #   2. 输出与父进程提示交错、且无法落盘。
-    # 前台交互恰恰最需要中继——父 stdin 要能灌进子 stdin，所以恒为 True。
+    # 2026-09-24 fix: it used to be `use_relay = background or start=='spawn'`,
+    # which meant foreground jobs on Linux (fork) skipped the relay entirely, so
+    # grandchildren inherited the parent's tty and buffered streams. Two results:
+    #   1. any change the child made to the terminal mode or buffers leaked into
+    #      the parent shell (^M faults);
+    #   2. output interleaved with the parent's prompts and could not be logged.
+    # Foreground work is exactly the case that needs the relay, since the parent's
+    # stdin has to reach the child's, so it is always on.
     out_fd = in_fd = None
     out_r = out_w = in_r = in_w = None
-    # stdout：子进程写 → 父进程读
+    # stdout: the child writes, the parent reads
     out_r, out_w = os.pipe()
-    out_fd = out_w              # child 写 stdout
+    out_fd = out_w              # the child writes stdout here
     if background:
-        # 后台作业无终端 stdin：直接给 /dev/null，子进程立刻拿到 EOF，
-        # 不会卡在 input() 上（这正是 zzlsb 挂死不退的根因）。
+        # A background job has no terminal stdin: hand it /dev/null so the child
+        # gets EOF at once instead of blocking in input() (that was why zzlsb hung).
         in_fd = os.open(os.devnull, os.O_RDONLY)
     else:
-        # stdin ：父进程写 → 子进程读
+        # stdin: the parent writes, the child reads
         in_r, in_w = os.pipe()
-        in_fd = in_r              # child 读 stdin
+        in_fd = in_r              # the child reads stdin here
 
-    # 父进程持有的那两端要交给子进程去关掉：fork 会让子进程继承它们的副本，
-    # 子进程若自己捏着 stdin 管的写端，它的读端就永远等不到 EOF
-    # （前台交互式 app 挂在 input() 上退不掉的根因）。
+    # The ends the parent holds are handed to the child to close: fork leaves the
+    # child with copies, so a child still holding the write end of the stdin pipe
+    # never sees EOF on its read end, which is why a foreground interactive app hung
+    # in input() and would not exit.
     parent_fds = tuple(fd for fd in (out_r, in_w) if fd is not None)
 
     child_env = dict(env or {})
@@ -519,9 +526,10 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
         proc.finish(pcb.pid, 1, failed=True)
         print(f"fork_exec: 子进程启动失败: {e}")
         return pcb
-    # 父进程必须关掉自己那份「子进程用的端」，否则：
-    #   - out_w 不关 → 子进程退出后父进程读 stdout 永远等不到 EOF；
-    #   - in_r 不关 → 子进程读 stdin 永远等不到 EOF。
+    # The parent must close its own copy of the ends the child uses, otherwise:
+    #   - leaving out_w open means the parent's stdout read never sees EOF after the
+    #     child exits;
+    #   - leaving in_r open means the child never sees EOF on stdin.
     for fd in (out_w, in_r):
         if fd is not None:
             try:
@@ -530,8 +538,8 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
                 pass
     if out_r is not None:
         if log_path:
-            # 落盘 **同时** 继续输出到终端：后台作业 `cmd > log` 的语义是
-            # 「存一份副本」，不是「把终端输出吞掉」。
+            # Write to the log **and** keep printing to the terminal: for a background job,
+            # `cmd > log` means keep a copy, not swallow the terminal output.
             _log_relay(out_r, log_path, echo=not background)
             if not background and in_w is not None:
                 threading.Thread(target=_pump_in_relay, args=(in_w, False),
@@ -542,8 +550,11 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
     return pcb
 
 
+# Write the child's stdout to log_path; with echo=True
+# it is printed to the terminal as well, a tee.
 def _log_relay(out_r, log_path, echo=False):
-    """把子进程 stdout 落盘；echo=True 时同时继续输出到终端（tee）。"""
+    # One direction of the log relay: read the child
+    # stdout into the file, and echo it when asked.
     def _pump():
         try:
             with open(log_path, "ab") as f:
@@ -566,8 +577,9 @@ def _log_relay(out_r, log_path, echo=False):
     threading.Thread(target=_pump, daemon=True).start()
 
 
+# Wait for a child to end and reap it, the wait
+# semantics, then drop the entry from the table.
 def wait(pid, timeout=30.0):
-    """等待子进程结束并回收（wait 语义：结束后从表中移除）。"""
     pcb = proc.wait_for(pid, timeout=timeout)
     output_thread = _relay_threads.pop(pid, None)
     if output_thread is not None:

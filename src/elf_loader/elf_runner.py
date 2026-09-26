@@ -1,10 +1,13 @@
-#
-#   elf_loader/elf_runner.py
-#   ELF 程序运行器
-#   工业级实现版本
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      elf_runner.py
+ *      Drives a loaded ELF program on the CPU emulator.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass, field
@@ -23,6 +26,7 @@ from .syscall_emulator import SyscallEmulator
 logger = logging.getLogger(__name__)
 
 
+# What one run of a guest program produced.
 @dataclass
 class ExecutionResult:
     exit_code: int
@@ -34,12 +38,14 @@ class ExecutionResult:
     signal: int = 0
     fault_addr: int = 0
     
+# Summarise the run for logging.
     def __str__(self) -> str:
         return (f"ExecutionResult(exit_code={self.exit_code}, "
                 f"instructions={self.instruction_count}, "
                 f"time={self.execution_time:.3f}s)")
 
 
+# Counts collected while the ELF file was being loaded.
 @dataclass
 class LoaderStats:
     segments_loaded: int = 0
@@ -51,8 +57,10 @@ class LoaderStats:
     load_time: float = 0.0
 
 
+# Own the whole pipeline: parse, load, emulate, emulate syscalls, report.
 class ELFRunner:
     
+# Record the path and the options; nothing is read from disk yet.
     def __init__(self, elf_path: str, base_addr: Optional[int] = None,
                  enable_aslr: bool = False, strict_mode: bool = True):
         self.elf_path = elf_path
@@ -81,6 +89,7 @@ class ELFRunner:
         self._watchpoints: Dict[int, int] = {}
         self._debug_mode = False
     
+# Read, parse and load the file, then build the syscall emulator and the CPU.
     def load(self) -> bool:
         if self.is_loaded:
             return True
@@ -151,15 +160,18 @@ class ELFRunner:
             logger.error(f"Error loading ELF file: {e}")
             return False
     
+# Reserved hook for redirecting guest output; it does nothing.
     def _setup_output_capture(self) -> None:
         pass
     
+# Dispatch a syscall to a registered handler, else to the emulator.
     def _handle_syscall(self, number: int, *args) -> int:
         if number in self.custom_syscall_handlers:
             return self.custom_syscall_handlers[number](*args)
         
         return self.syscall_emulator.handle_syscall(number, *args)
     
+# Run the init functions once the image is loaded.
     def initialize(self) -> bool:
         if not self.is_loaded:
             return False
@@ -172,6 +184,7 @@ class ELFRunner:
         
         return True
     
+# Run the guest to completion and report what it did.
     def run(self, 
             argv: Optional[List[str]] = None,
             envp: Optional[Dict[str, str]] = None,
@@ -245,10 +258,12 @@ class ELFRunner:
         
         return result
     
+# Let the loader walk the fini functions once the program has stopped.
     def _run_fini_handlers(self) -> None:
         if self.loader:
             self.loader.run_fini_functions(self.cpu)
     
+# Return the total number of bytes held by the mapped regions.
     def _calculate_memory_usage(self) -> int:
         if not self.loader:
             return 0
@@ -258,6 +273,7 @@ class ELFRunner:
             total += len(region.data)
         return total
     
+# Execute one instruction; False means the program should stop.
     def step(self) -> bool:
         if not self.is_loaded:
             return False
@@ -287,6 +303,7 @@ class ELFRunner:
             logger.error(f"Step error: {e}")
             return False
     
+# Return the watchpoints whose value changed, re-arming each one.
     def _check_watchpoints(self) -> List[Tuple[int, int, int]]:
         triggered = []
         for addr, original in self._watchpoints.items():
@@ -300,6 +317,7 @@ class ELFRunner:
                 pass
         return triggered
     
+# Return a snapshot of the runner and the CPU state.
     def get_state(self) -> Dict[str, Any]:
         if not self.cpu:
             return {}
@@ -314,24 +332,30 @@ class ELFRunner:
             'stats': self.stats,
         }
     
+# Override one syscall number with a Python callable.
     def register_syscall_handler(self, number: int, handler: Callable) -> None:
         self.custom_syscall_handlers[number] = handler
     
+# Record a hook for a symbol name; nothing consumes it yet.
     def register_symbol_hook(self, name: str, handler: Callable) -> None:
         self.symbol_hooks[name] = handler
         if self.loader and name in self.loader.symbols:
             pass
     
+# Set the data the guest will read from stdin.
     def set_stdin(self, data: str) -> None:
         if self.syscall_emulator:
             self.syscall_emulator.stdin = data
     
+# Return everything the guest has written to stdout.
     def get_stdout(self) -> str:
         return b''.join(self.syscall_emulator.stdout_buffer).decode('utf-8', errors='replace')
     
+# Return everything the guest has written to stderr.
     def get_stderr(self) -> str:
         return b''.join(self.syscall_emulator.stderr_buffer).decode('utf-8', errors='replace')
     
+# Return size bytes of guest memory, from the entry point by default.
     def dump_memory(self, addr: Optional[int] = None, size: int = 256) -> bytes:
         if not self.cpu:
             return b''
@@ -345,6 +369,7 @@ class ELFRunner:
             logger.error(f"Memory dump error: {e}")
             return b''
     
+# Return the CPU registers keyed by name for the current width.
     def dump_registers(self) -> Dict[str, int]:
         if not self.cpu:
             return {}
@@ -369,6 +394,7 @@ class ELFRunner:
         
         return result
     
+# Return (address, mnemonic, length, operands) for count instructions.
     def disassemble(self, addr: Optional[int] = None, 
                    count: int = 10) -> List[Tuple[int, str, int, List]]:
         if not self.cpu:
@@ -392,6 +418,7 @@ class ELFRunner:
         
         return result
     
+# Return (start, size, name, rwx) per region, sorted by address.
     def get_memory_map(self) -> List[Tuple[int, int, str, str]]:
         if not self.loader:
             return []
@@ -406,25 +433,30 @@ class ELFRunner:
         
         return sorted(result, key=lambda x: x[0])
     
+# Return a symbol's address, or None.
     def get_symbol(self, name: str) -> Optional[int]:
         if not self.loader:
             return None
         return self.loader.resolve_symbol(name)
     
+# Return the name of the symbol at addr, or None.
     def get_symbol_at(self, addr: int) -> Optional[str]:
         if not self.loader:
             return None
         return self.loader.get_symbol_at(addr)
     
+# Stop at addr; this also turns debug mode on.
     def add_breakpoint(self, addr: int) -> None:
         self._breakpoints.add(addr)
         self._debug_mode = True
         logger.info(f"Breakpoint added at 0x{addr:x}")
     
+# Forget the breakpoint at addr.
     def remove_breakpoint(self, addr: int) -> None:
         self._breakpoints.discard(addr)
         logger.info(f"Breakpoint removed at 0x{addr:x}")
     
+# Report the dword at addr whenever it changes.
     def add_watchpoint(self, addr: int) -> None:
         try:
             original = self.cpu.memory.read_dword(addr)
@@ -434,11 +466,13 @@ class ELFRunner:
         except Exception as e:
             logger.error(f"Failed to add watchpoint: {e}")
     
+# Forget the watchpoint at addr.
     def remove_watchpoint(self, addr: int) -> None:
         self._watchpoints.pop(addr, None)
         logger.info(f"Watchpoint removed at 0x{addr:x}")
 
 
+# Load and run an ELF file in one call.
 def run_elf(elf_path: str,
             argv: Optional[List[str]] = None,
             envp: Optional[Dict[str, str]] = None,
@@ -450,8 +484,10 @@ def run_elf(elf_path: str,
     return runner.run(argv, envp, max_instructions)
 
 
+# Step-at-a-time driver sitting on top of an ELFRunner.
 class ELFDebugger:
     
+# Wrap a runner and start with an empty breakpoint set.
     def __init__(self, runner: ELFRunner):
         self.runner = runner
         self.breakpoints: set = set()
@@ -460,20 +496,25 @@ class ELFDebugger:
         self.history: List[Dict] = []
         self.max_history = 1000
     
+# Add a breakpoint here and on the runner.
     def add_breakpoint(self, addr: int) -> None:
         self.breakpoints.add(addr)
         self.runner.add_breakpoint(addr)
     
+# Remove a breakpoint from here and from the runner.
     def remove_breakpoint(self, addr: int) -> None:
         self.breakpoints.discard(addr)
         self.runner.remove_breakpoint(addr)
     
+# Add a watchpoint on the runner.
     def add_watchpoint(self, addr: int) -> None:
         self.runner.add_watchpoint(addr)
     
+# Remove a watchpoint from the runner.
     def remove_watchpoint(self, addr: int) -> None:
         self.runner.remove_watchpoint(addr)
     
+# Step until a breakpoint or the instruction cap, printing at every stop.
     def run_with_debugging(self, 
                           argv: Optional[List[str]] = None,
                           envp: Optional[Dict[str, str]] = None,
@@ -534,6 +575,7 @@ class ELFDebugger:
             instruction_count=instruction_count
         )
     
+# Print the registers and the next instruction at a breakpoint.
     def _debug_prompt(self) -> None:
         regs = self.runner.dump_registers()
         ip = regs.get('RIP', regs.get('EIP', 0))
@@ -550,9 +592,11 @@ class ELFDebugger:
         
         print("================================\n")
     
+# Execute one instruction, descending into calls.
     def step_into(self) -> bool:
         return self.runner.step()
     
+# Run through a call by breaking on the instruction that follows it.
     def step_over(self) -> bool:
         ip = self.runner.cpu._get_ip()
         disasm = self.runner.disassemble(ip, 1)
@@ -572,6 +616,7 @@ class ELFDebugger:
         
         return self.runner.step()
     
+# Step until the next breakpoint; False means the program ended.
     def continue_execution(self) -> bool:
         while self.runner.step():
             ip = self.runner.cpu._get_ip()
@@ -580,6 +625,7 @@ class ELFDebugger:
                 return True
         return False
     
+# Walk the frame pointers, newest frame first.
     def get_backtrace(self) -> List[Tuple[int, Optional[str]]]:
         if not self.runner.cpu:
             return []
@@ -612,6 +658,7 @@ class ELFDebugger:
         
         return backtrace
     
+# Print the frames as '#index address in symbol'.
     def print_backtrace(self) -> None:
         bt = self.get_backtrace()
         print("\nBacktrace:")

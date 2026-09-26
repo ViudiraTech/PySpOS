@@ -1,11 +1,13 @@
-#
-#   shell/shparser.py
-#   shell 词法 / 语法 / 展开：引号、管道、&&/||/;、重定向、变量、命令替换、glob。
-#
-
-"""分词把一行拆成 WORD（含引号片段）和 OP；语法把 OP 串成管线与条件链；
-展开把 WORD 算成最终参数。执行在 shexec.py。
-"""
+'''
+ *
+ *      shparser.py
+ *      Shell lexer, parser and word expansion: quotes, pipes, &&/||/;, redirects, variables, substitution and glob.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import glob as _glob
 import os
@@ -16,35 +18,38 @@ MAX_SUBST_DEPTH = 16
 _NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
+# Raised for a malformed line: bad quoting, unbalanced brackets, bad operators.
 class LexError(Exception):
     pass
 
 
+# Raised when expansion fails, such as an unset variable with :? or a bad substitution.
 class ExpandError(Exception):
     pass
 
 
+# Report whether text is a valid shell variable name.
 def _is_name(text):
     return bool(_NAME_RE.match(text or ""))
 
 
+# Split a line into [('word', spans) | ('op', op)].
+# A span is ('lit', text, quoted), ('var', name, quoted) or ('subst', inner command).
+# quoted only records whether the span came from inside single or double quotes; no other
+# quoting semantics live here, those belong to expand_word.
 def tokenize(line):
-    """拆成 [('word', spans) | ('op', op)]。
-
-    span 有三种：('lit', 文本, quoted)、('var', 名, quoted)、
-    ('subst', 内部命令)。quoted 只区分单双引号内外，不做转义外
-    的任何语义事，语义全留给 expand_word。
-    """
     tokens = []
     spans = []
     buf = []
     i, n = 0, len(line)
 
+    # Close the pending literal run into one span.
     def flush_lit():
         if buf:
             spans.append(("lit", "".join(buf), False))
             buf.clear()
 
+    # Close the pending spans into one word token.
     def flush_word():
         flush_lit()
         if spans:
@@ -180,8 +185,8 @@ def tokenize(line):
     return tokens
 
 
+# Scan a $-introduced expansion and return (kind, name or inner command, quoted, new position).
 def _scan_dollar(line, i, quoted):
-    """扫 $ 开头的扩展，返回 (kind, 名/内部命令, quoted, 新位置)。"""
     n = len(line)
     if line.startswith("$((", i):
         j = line.find("))", i + 3)
@@ -225,6 +230,7 @@ def _scan_dollar(line, i, quoted):
     return "lit", "$", quoted, i + 1
 
 
+# Scan a backtick substitution and return (inner command, position after the closing tick).
 def _scan_backtick(line, i):
     j = i + 1
     n = len(line)
@@ -241,11 +247,9 @@ def _scan_backtick(line, i):
     return "".join(piece), j + 1
 
 
+# Split on ; & && || and return [(tokens, condition, background)].
+# Parentheses nest: only balanced top level brackets are stripped and treated as one command.
 def _split_statements(tokens):
-    """按 ; & && || 切语句，返回 [(tokens, cond, background)]。
-
-    圆括号做嵌套分组：只有配平的顶层括号会被剥掉，当成一次普通命令。
-    """
     out = []
     cur = []
     pending_cond = None
@@ -277,8 +281,8 @@ def _split_statements(tokens):
     return out
 
 
+# Strip one outer ( ... ) pair; return None when it is unbalanced or absent.
 def _strip_group(tokens):
-    """剥掉 ( ... ) 外层括号；未配平或首尾不是括号时返回 None。"""
     if not (tokens and tokens[0] == ("op", "(")
             and tokens[-1] == ("op", ")")):
         return None
@@ -288,8 +292,8 @@ def _strip_group(tokens):
     return inner
 
 
+# Split on | into pipeline members; a parenthesised group counts as one member.
 def _split_pipeline(tokens):
-    """按 | 切管线。括号分组整体算一段，可以做管线成员。"""
     parts, cur = [], []
     i, n = 0, len(tokens)
     while i < n:
@@ -327,6 +331,7 @@ _REDIRECTS = {">", ">>", "<", "2>", "2>&1", "&1"}
 _FD_DUP_RE = re.compile(r"\A(\d+)>?&(\d+)\Z")
 
 
+# Turn one pipeline member into a command dict of argv, redirects and assignments.
 def _parse_command(tokens):
     argv, redirects, assign = [], [], []
     i, n = 0, len(tokens)
@@ -378,8 +383,8 @@ def _parse_command(tokens):
     return {"argv": argv, "redirects": redirects, "assign": assign}
 
 
+# Turn one token run into a command, recursing into a parenthesised group as a subprogram.
 def _build_cmd(part, parse_inner):
-    """把一段 token 变成 cmd；遇到括号分组就递归解析成子程序。"""
     groups = [tok for tok in part if tok[0] == "group"]
     if groups:
         if len(groups) > 1 or groups[0] is not part[0]:
@@ -395,11 +400,12 @@ def _build_cmd(part, parse_inner):
     return _parse_command(part)
 
 
+# Line -> [({"cmds": [...], "background": bool}, cond)].
 def parse(line):
-    """line -> [({"cmds": [...], "background": bool}, cond)]。"""
     return _parse_tokens(tokenize(line))
 
 
+# Parse a token list into a program, refusing nesting deeper than 16.
 def _parse_tokens(tokens, depth=0):
     if depth > 16:
         raise LexError("括号嵌套太深")
@@ -411,8 +417,9 @@ def _parse_tokens(tokens, depth=0):
     return program
 
 
+# Look a name up without folding: None when unset, "" when set but empty.
+# ${V-d} and ${V:-d} tell those two cases apart.
 def _lookup_raw(name, ctx):
-    """未设返回 None，已设但为空返回 ""。${V-d} / ${V:-d} 就靠这个区分。"""
     if name == "?":
         return str(ctx.get("last", 0))
     if name == "$":
@@ -431,16 +438,16 @@ def _lookup_raw(name, ctx):
     return os.environ.get(name)
 
 
+# Look a name up, mapping unset to the empty string.
 def _lookup_var(name, ctx):
     value = _lookup_raw(name, ctx)
     return "" if value is None else value
 
 
+# Handle ${V} and ${V:-d}, ${V:=d}, ${V:?msg}, ${V:+alt}.
+# With no operator it is plain ${V}; the :- family triggers on unset or empty,
+# the - family only on unset.
 def _expand_var_spec(spec, ctx):
-    """${V} / ${V:-d} / ${V:=d} / ${V:?msg} / ${V:+alt}。
-
-    没写运算符就是 ${V}；:- 类在未设或为空时取默认值，- 类只看未设。
-    """
     match = _VAR_MOD_RE.match(spec)
     if not match:
         name = spec
@@ -477,8 +484,8 @@ _VAR_MOD_RE = re.compile(r"\A([A-Za-z_][A-Za-z0-9_]*)"
                          r"(?:(:-|-|:\+|\+|:=|=|\?|:\?)(.*))?\Z", re.S)
 
 
+# Expand the $VAR references inside a default or alternate value.
 def _eval_operand(text, ctx):
-    """默认值/备选值里的 $VAR 仍要展开。"""
     if not text:
         return ""
     toks = tokenize(text)
@@ -490,25 +497,27 @@ def _eval_operand(text, ctx):
     return " ".join(out)
 
 
+# Integer evaluator for $(( )).
+# It is a hand-written recursive descent parser rather than eval on purpose: a function
+# name, attribute or subscript in arithmetic would mean someone is trying to escape from
+# the shell into Python, and the sandbox refuses to do that.
 class _Arith:
-    """$(( )) 的整数表达式求值。
-
-    手写递归下降而不是 eval：算术展开里出现函数名/属性/下标就意味着
-    有人想从 shell 逃到 Python，沙子箱里不做这事。
-    """
-
+    # Take the expression text, the expansion context and a cursor at its start.
     def __init__(self, text, ctx):
         self.text = text
         self.ctx = ctx
         self.pos = 0
 
+    # Return the character at the cursor, or an empty string at the end.
     def _peek(self):
         return self.text[self.pos] if self.pos < len(self.text) else ""
 
+    # Advance the cursor past any whitespace.
     def _skip(self):
         while self._peek().isspace():
             self.pos += 1
 
+    # Consume the given character if it comes next; report whether it did.
     def _eat(self, ch):
         self._skip()
         if self._peek() == ch:
@@ -516,6 +525,7 @@ class _Arith:
             return True
         return False
 
+    # Evaluate the whole expression and reject anything left over.
     def value(self):
         result = self.expr()
         self._skip()
@@ -523,6 +533,7 @@ class _Arith:
             raise ExpandError(f"算术表达式有多余内容: {self.text[self.pos:]}")
         return str(result)
 
+    # Parse a left-associative sum of terms.
     def expr(self):
         left = self.term()
         while True:
@@ -537,6 +548,7 @@ class _Arith:
             else:
                 return left
 
+    # Parse a left-associative product of powers, rejecting division by zero.
     def term(self):
         left = self.power()
         while True:
@@ -560,6 +572,7 @@ class _Arith:
             else:
                 return left
 
+    # Parse a power, which is the only right-associative operator here.
     def power(self):
         base = self.unary()
         self._skip()
@@ -568,6 +581,7 @@ class _Arith:
             return base ** self.power()
         return base
 
+    # Parse a leading unary plus or minus, or fall through to an atom.
     def unary(self):
         self._skip()
         if self._eat("-"):
@@ -576,6 +590,7 @@ class _Arith:
             return self.power()
         return self.atom()
 
+    # Parse a parenthesised subexpression, a $VAR reference or an integer literal.
     def atom(self):
         self._skip()
         if self._eat("("):
@@ -609,6 +624,7 @@ class _Arith:
         raise ExpandError(f"算术表达式无法解析: {self.text[start:]}")
 
 
+# Coerce a value to an integer, raising ExpandError naming the context if it is not one.
 def _as_int(value, context=""):
     try:
         return int(str(value).strip() or "0")
@@ -616,10 +632,12 @@ def _as_int(value, context=""):
         raise ExpandError(f"算术表达式需要整数: {value!r}") from None
 
 
+# Report whether text contains a glob magic character.
 def _has_magic(text):
     return any(m in text for m in "*?[")
 
 
+# Append text to the last field, splitting on whitespace and tracking glob magic per field.
 def _append_text(fields, flags, text, split, magic):
     if split:
         parts = text.split()
@@ -635,8 +653,8 @@ def _append_text(fields, flags, text, split, magic):
         flags[-1] = flags[-1] or (magic and _has_magic(text))
 
 
+# Turn WORD spans into the final argument strings, including splitting, globbing and ~.
 def expand_word(spans, ctx):
-    """WORD spans -> 最终参数串列表（含分词、glob、~）。"""
     run_capture = ctx.get("run_capture")
     depth = ctx.get("depth", 0)
     fields, flags, touched = [""], [False], [False]

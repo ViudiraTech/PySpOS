@@ -1,9 +1,13 @@
-#
-#   elf_loader/__init__.py
-#   PySpOS ELF 加载器与模拟器 init 模块
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      __init__.py
+ *      ELF loader package.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 __version__ = "2.0.0"
 __develop_stage__ = "stable"
@@ -32,16 +36,17 @@ from .elf_runner import (
     ELFRunner, ELFDebugger, ExecutionResult, LoaderStats, run_elf
 )
 
-# Unicorn 引擎（可选依赖）：无 unicorn 库时降级为 None，上层自动用自研引擎兜底。
+# The Unicorn engine is an optional dependency; without the library these names degrade to None and callers fall back to the in-house emulator.
 try:
     from .unicorn_runner import (
         UnicornRunner, UnicornRunError, run_elf_unicorn, unicorn_available,
     )
-except Exception:  # ImportError 等
+except Exception:  # ImportError and friends
     UnicornRunner = None
     UnicornRunError = type("UnicornRunError", (Exception,), {})
     run_elf_unicorn = None
 
+# Report whether the Unicorn engine can be used on this host.
     def unicorn_available() -> bool:
         return False
 

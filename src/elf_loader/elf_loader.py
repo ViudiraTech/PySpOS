@@ -1,10 +1,13 @@
-#
-#   elf_loader/elf_loader.py
-#   ELF 加载器, 内存加载和重定位
-#   工业级实现版本
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      elf_loader.py
+ *      Maps an ELF image into a process image and relocates it.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import struct
 import logging
@@ -33,14 +36,17 @@ PAGE_SIZE = 0x1000
 PAGE_MASK = ~(PAGE_SIZE - 1)
 
 
+# Round value up to the next multiple of alignment.
 def align_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
+# Round value down to the previous multiple of alignment.
 def align_down(value: int, alignment: int) -> int:
     return value & ~(alignment - 1)
 
 
+# Page protection bits, numbered like the x86 PF_* flags.
 class MemoryProtection(IntFlag):
     NONE = 0
     READ = 4
@@ -51,6 +57,7 @@ class MemoryProtection(IntFlag):
     RWX = READ | WRITE | EXEC
 
 
+# One mapped range of the process image, with the bytes behind it.
 @dataclass
 class MemoryRegion:
     start: int
@@ -62,31 +69,39 @@ class MemoryRegion:
     file_backed: bool = False
     growable: bool = False
     
+# Return the first address past the region.
     @property
     def end(self) -> int:
         return self.start + self.size
     
+# Report whether the region may be read.
     @property
     def readable(self) -> bool:
         return (self.flags & MemoryProtection.READ) != 0
     
+# Report whether the region may be written.
     @property
     def writable(self) -> bool:
         return (self.flags & MemoryProtection.WRITE) != 0
     
+# Report whether the region may be executed.
     @property
     def executable(self) -> bool:
         return (self.flags & MemoryProtection.EXEC) != 0
     
+# Report whether addr falls inside the region.
     def contains(self, addr: int) -> bool:
         return self.start <= addr < self.end
     
+# Return the region start rounded down to a page boundary.
     def page_aligned_start(self) -> int:
         return align_down(self.start, PAGE_SIZE)
     
+# Return the region end rounded up to a page boundary.
     def page_aligned_end(self) -> int:
         return align_up(self.end, PAGE_SIZE)
     
+# Read size bytes at addr, refusing anything that leaves the region.
     def read(self, addr: int, size: int) -> bytes:
         offset = addr - self.start
         if offset < 0 or offset + size > self.size:
@@ -96,6 +111,7 @@ class MemoryRegion:
             )
         return bytes(self.data[offset:offset + size])
     
+# Write data at addr; a region without write permission raises.
     def write(self, addr: int, data: bytes) -> None:
         if not self.writable:
             raise MemoryProtectionError(f"write to read-only region at 0x{addr:x}")
@@ -107,6 +123,7 @@ class MemoryRegion:
             )
         self.data[offset:offset + len(data)] = data
     
+# Read a 1, 2, 4 or 8 byte little-endian integer.
     def read_int(self, addr: int, size: int, signed: bool = False) -> int:
         data = self.read(addr, size)
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
@@ -115,6 +132,7 @@ class MemoryRegion:
             fmt = fmt.lower()
         return struct.unpack('<' + fmt, data)[0]
     
+# Write a 1, 2, 4 or 8 byte little-endian integer.
     def write_int(self, addr: int, value: int, size: int) -> None:
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
         fmt = fmt_map.get(size, 'I')
@@ -123,6 +141,7 @@ class MemoryRegion:
         self.write(addr, data)
 
 
+# One PT_LOAD segment after loading, carrying its relocated address.
 @dataclass
 class LoadedSegment:
     ph: ProgramHeader
@@ -133,6 +152,7 @@ class LoadedSegment:
     page_aligned: bool = True
 
 
+# The PT_TLS segment, that is where the thread-local template lives.
 @dataclass
 class TLSInfo:
     template_addr: int = 0
@@ -145,6 +165,7 @@ class TLSInfo:
     module_id: int = 0
 
 
+# One DT_VERSYM entry, the version index attached to a dynamic symbol.
 @dataclass
 class SymbolVersion:
     index: int
@@ -152,6 +173,7 @@ class SymbolVersion:
     is_hidden: bool = False
 
 
+# One PLT slot, tied to the GOT entry that has to be filled in for it.
 @dataclass
 class PLTEntry:
     addr: int
@@ -161,12 +183,14 @@ class PLTEntry:
     resolver_stub: Optional[Callable] = None
 
 
+# One key/value pair of the ELF auxiliary vector.
 @dataclass
 class AuxvEntry:
     key: int
     value: int
 
 
+# The AT_* keys of the ELF auxiliary vector.
 class AuxvType(IntEnum):
     AT_NULL = 0
     AT_IGNORE = 1
@@ -198,34 +222,42 @@ class AuxvType(IntEnum):
     AT_SYSINFO_EHDR = 33
 
 
+# Base class for every load-time failure.
 class ELFLoaderError(Exception):
     pass
 
 
+# Raised when an address falls outside every mapped region.
 class MemoryAccessError(ELFLoaderError):
     pass
 
 
+# Raised when a write hits a region that has no write permission.
 class MemoryProtectionError(ELFLoaderError):
     pass
 
 
+# Raised when a relocation cannot be applied.
 class RelocationError(ELFLoaderError):
     pass
 
 
+# Raised when a relocation needs a symbol nothing can supply.
 class SymbolResolutionError(ELFLoaderError):
     pass
 
 
+# A numbered TLS module; its id is what DTPMOD relocations hand out.
 class TLSModule:
     _next_id = 1
     
+# Take the next module id.
     def __init__(self):
         self.id = TLSModule._next_id
         TLSModule._next_id += 1
 
 
+# Turn a parsed ELF file into a runnable process image.
 class ELFLoader:
     
     DEFAULT_BASE_ADDR_64 = 0x400000
@@ -237,6 +269,7 @@ class ELFLoader:
     HEAP_START_32 = 0x80000000
     VDSO_BASE = 0x7ffff7ffd000
     
+# Pick the load base, honouring an explicit address, ASLR or the defaults.
     def __init__(self, parser: ELFParser, base_addr: Optional[int] = None,
                  enable_aslr: bool = False, strict_protection: bool = True):
         self.parser = parser
@@ -301,6 +334,7 @@ class ELFLoader:
         
         self._external_symbol_resolver: Optional[Callable[[str], Optional[int]]] = None
         
+# Choose a page-aligned base inside the window the architecture allows.
     def _randomize_base(self) -> int:
         if self.parser.is_32bit:
             base_range = (0x08048000, 0x40000000)
@@ -311,6 +345,7 @@ class ELFLoader:
         random_page = random.randint(0, page_count)
         return base_range[0] + random_page * PAGE_SIZE
     
+# Run the whole load pipeline; calling it a second time does nothing.
     def load(self) -> 'ELFLoader':
         if self.loaded:
             return self
@@ -354,6 +389,7 @@ class ELFLoader:
             logger.error(f"ELF load failed: {e}")
             raise ELFLoaderError(f"Failed to load ELF: {e}") from e
     
+# Reject anything that is not a loadable x86 ELF image.
     def _validate_elf(self) -> None:
         header = self.parser.header
         
@@ -371,11 +407,13 @@ class ELFLoader:
         if not loadable:
             raise ELFLoaderError("No loadable segments found")
     
+# Return the bias added to every address, which is zero for ET_EXEC.
     def _calculate_load_offset(self) -> int:
         if self.parser.header.e_type == ELFType.ET_EXEC:
             return 0
         return self.base_addr
     
+# Load the PT_LOAD segments in address order and note GNU_STACK and RELRO.
     def _load_segments(self, load_offset: int) -> None:
         loadable_segments = [ph for ph in self.parser.program_headers 
                            if ph.p_type == ProgramHeaderType.PT_LOAD]
@@ -395,6 +433,7 @@ class ELFLoader:
                 self.gnu_relro_start = align_down(ph.p_vaddr + load_offset, PAGE_SIZE)
                 self.gnu_relro_size = align_up(ph.p_memsz, PAGE_SIZE)
     
+# Fuse neighbouring segments that share permissions and alignment.
     def _merge_segments(self, segments: List[ProgramHeader]) -> List[ProgramHeader]:
         if not segments:
             return []
@@ -430,6 +469,7 @@ class ELFLoader:
         merged.append(current)
         return merged
     
+# Copy one segment's file bytes into a page-aligned region.
     def _load_segment(self, ph: ProgramHeader, load_offset: int) -> None:
         vaddr = ph.p_vaddr + load_offset
         
@@ -468,6 +508,7 @@ class ELFLoader:
             page_aligned=True
         ))
     
+# Find the program header table in memory and compute the entry point.
     def _parse_program_headers(self, load_offset: int) -> None:
         header = self.parser.header
         
@@ -486,6 +527,7 @@ class ELFLoader:
         self.phdr_ent_size = header.e_phentsize
         self.entry_point = header.e_entry + load_offset
     
+# Copy the DT_* tags into a dict, biasing the pointer-valued ones.
     def _parse_dynamic(self, load_offset: int) -> None:
         for dyn in self.parser.dynamics:
             tag = dyn.d_tag
@@ -511,6 +553,7 @@ class ELFLoader:
         
         self.needed_libs = self.parser.get_needed_libraries()
     
+# Parse DT_VERSYM, DT_VERDEF and DT_VERNEED when they are present.
     def _parse_symbol_versions(self, load_offset: int) -> None:
         versym_addr = self.dynamic_info.get(DT_VERSYM, 0)
         verdef_addr = self.dynamic_info.get(DT_VERDEF, 0)
@@ -525,6 +568,7 @@ class ELFLoader:
         if verneed_addr:
             self._parse_verneed(verneed_addr, load_offset)
     
+# Read the version index of every dynamic symbol.
     def _parse_versym(self, addr: int, load_offset: int) -> None:
         sym_count = len(self.parser.dynamic_symbols)
         for i in range(sym_count):
@@ -536,6 +580,7 @@ class ELFLoader:
             except MemoryAccessError:
                 break
     
+# Read the symbol versions this object defines.
     def _parse_verdef(self, addr: int, load_offset: int) -> None:
         strtab = self.dynamic_info.get(DynamicTag.DT_STRTAB, 0)
         if not strtab:
@@ -557,6 +602,7 @@ class ELFLoader:
             except MemoryAccessError:
                 break
     
+# Read the symbol versions this object needs from other objects.
     def _parse_verneed(self, addr: int, load_offset: int) -> None:
         strtab = self.dynamic_info.get(DynamicTag.DT_STRTAB, 0)
         if not strtab:
@@ -588,6 +634,7 @@ class ELFLoader:
             except MemoryAccessError:
                 break
     
+# Record the addresses of the static and the dynamic symbols.
     def _parse_symbols(self, load_offset: int) -> None:
         for sym in self.parser.symbols:
             if sym.name and sym.st_value != 0:
@@ -610,6 +657,7 @@ class ELFLoader:
                         addr = sym.st_value
                     self.symbols[sym.name] = addr
     
+# Locate the PLT and the GOT, then index the PLT relocations.
     def _setup_plt_got(self, load_offset: int) -> None:
         plt_addr = 0
         got_plt_addr = 0
@@ -633,6 +681,7 @@ class ELFLoader:
             self._parse_plt_entries(jmprel_addr, jmprel_size, load_offset, 
                                    plt_addr, got_plt_addr)
     
+# Turn the DT_JMPREL table into PLT and GOT entries.
     def _parse_plt_entries(self, jmprel_addr: int, jmprel_size: int, 
                           load_offset: int, plt_addr: int, got_plt_addr: int) -> None:
         pltrel_type = self.dynamic_info.get(DynamicTag.DT_PLTREL, DynamicTag.DT_RELA)
@@ -676,6 +725,7 @@ class ELFLoader:
                 
                 self.got_entries[got_entry_addr] = 0
     
+# Apply the Rela, Rel, PLT and section relocations exactly once.
     def _perform_relocations(self, load_offset: int) -> None:
         if self.relocations_done:
             return
@@ -711,6 +761,7 @@ class ELFLoader:
         
         self.relocations_done = True
     
+# Walk a Rela table and apply every entry in it.
     def _process_rela_relocations(self, addr: int, size: int, ent_size: int, 
                                   load_offset: int) -> None:
         num_entries = size // ent_size
@@ -734,6 +785,7 @@ class ELFLoader:
             )
             self._apply_relocation(rel, load_offset)
     
+# Walk a Rel table and apply every entry in it.
     def _process_rel_relocations(self, addr: int, size: int, ent_size: int,
                                 load_offset: int) -> None:
         num_entries = size // ent_size
@@ -751,10 +803,12 @@ class ELFLoader:
             rel = ELFRelocation(r_offset=r_offset, r_info=r_info)
             self._apply_relocation(rel, load_offset)
     
+# Apply a relocation the parser has already decoded.
     def _apply_relocation_from_parsed(self, rel: Union[ELFRelocation, ELFRelocationA],
                                      load_offset: int) -> None:
         self._apply_relocation(rel, load_offset)
     
+# Resolve the symbol, compute the new value and write it back.
     def _apply_relocation(self, rel: Union[ELFRelocation, ELFRelocationA],
                          load_offset: int) -> None:
         addr = rel.r_offset
@@ -818,6 +872,7 @@ class ELFLoader:
             except MemoryAccessError as e:
                 logger.warning(f"Relocation write failed at 0x{addr:x}: {e}")
     
+# Return a symbol's address, asking the external resolver if needed.
     def _resolve_external_symbol(self, name: str) -> Optional[int]:
         if name in self.symbols:
             return self.symbols[name]
@@ -827,6 +882,7 @@ class ELFLoader:
         
         return None
     
+# Return the new value for one x86_64 relocation, None meaning write nothing.
     def _calc_relocation_x86_64(self, rel_type: int, addr: int, sym_value: int,
                                 addend: int, load_offset: int, sym_name: str,
                                 sym_size: int) -> Optional[int]:
@@ -930,6 +986,7 @@ class ELFLoader:
             logger.debug(f"Unhandled relocation type: {rel_type}")
             return None
     
+# Return the new value for one i386 relocation, None meaning write nothing.
     def _calc_relocation_i386(self, rel_type: int, addr: int, sym_value: int,
                               addend: int, load_offset: int, sym_name: str,
                               sym_size: int) -> Optional[int]:
@@ -1018,6 +1075,7 @@ class ELFLoader:
             logger.debug(f"Unhandled i386 relocation type: {rel_type}")
             return None
     
+# Return the GOT slot holding sym_value, recycling a free slot when there is one.
     def _get_got_entry(self, sym_name: str, sym_value: int) -> int:
         for got_addr, value in self.got_entries.items():
             if value == sym_value or value == 0:
@@ -1028,6 +1086,7 @@ class ELFLoader:
         self.got_entries[got_addr] = sym_value
         return got_addr
     
+# Hand out an unused GOT slot, skipping the three reserved entries.
     def _allocate_got_entry(self) -> int:
         if self.got_plt_base:
             for i in range(3, 100):
@@ -1038,10 +1097,12 @@ class ELFLoader:
         
         return 0
     
+# Resolve an IFUNC target; the loader owns no CPU, so it only logs and returns 0.
     def _call_ifunc_resolver(self, resolver_addr: int) -> int:
         logger.debug(f"IFUNC resolver at 0x{resolver_addr:x}")
         return 0
     
+# Record the PT_TLS template and give it a module id.
     def _setup_tls(self, load_offset: int) -> None:
         for ph in self.parser.program_headers:
             if ph.p_type == ProgramHeaderType.PT_TLS:
@@ -1058,6 +1119,7 @@ class ELFLoader:
                 self.tls_info.offset = align_up(self.tls_info.memsz, self.tls_info.align)
                 break
     
+# Gather the preinit, init and fini function addresses.
     def _collect_init_fini(self, load_offset: int) -> None:
         init_addr = self.dynamic_info.get(DynamicTag.DT_INIT, 0)
         fini_addr = self.dynamic_info.get(DynamicTag.DT_FINI, 0)
@@ -1112,6 +1174,7 @@ class ELFLoader:
                 except MemoryAccessError:
                     break
     
+# Place the heap past the highest segment and give it a first extent.
     def _setup_heap(self) -> None:
         max_addr = 0
         for seg in self.segments:
@@ -1135,6 +1198,7 @@ class ELFLoader:
         )
         self.memory[self.heap_start] = heap_region
     
+# Grow the heap to cover addr; returns the break, or the old one if the request is refused.
     def brk_extend(self, addr: int) -> int:
         if addr < self.heap_start:
             return self.brk
@@ -1159,6 +1223,7 @@ class ELFLoader:
         self.brk = addr
         return self.brk
     
+# Map the stack region and record its bounds.
     def _create_stack(self) -> None:
         if self.parser.is_32bit:
             stack_top = self.STACK_TOP_32
@@ -1180,6 +1245,7 @@ class ELFLoader:
         self.stack_top = stack_top
         self.stack_bottom = stack_bottom
     
+# Build the auxiliary vector that the guest's _start reads.
     def _build_auxv(self, load_offset: int) -> None:
         self.auxv = []
         
@@ -1203,6 +1269,7 @@ class ELFLoader:
         
         self.auxv.append(AuxvEntry(AuxvType.AT_NULL, 0))
     
+# Park bytes near the top of the stack and return where they landed.
     def _allocate_auxv_storage(self, data: bytes) -> int:
         stack_region = self.memory.get(self.stack_bottom)
         if stack_region:
@@ -1211,6 +1278,7 @@ class ELFLoader:
             return self.stack_bottom + offset
         return 0
     
+# Log the preinit and init functions; the loader owns no CPU to run them.
     def run_init_functions(self, cpu_emulator: Any) -> None:
         for func_addr in self.preinit_functions:
             logger.debug(f"Running preinit function at 0x{func_addr:x}")
@@ -1220,10 +1288,12 @@ class ELFLoader:
         
         self.initialized = True
     
+# Log the fini functions in reverse order.
     def run_fini_functions(self, cpu_emulator: Any) -> None:
         for func_addr in reversed(self.fini_functions):
             logger.debug(f"Running fini function at 0x{func_addr:x}")
     
+# Read size bytes, walking the regions one byte at a time.
     def read_memory(self, addr: int, size: int) -> bytes:
         result = bytearray()
         for i in range(size):
@@ -1239,6 +1309,7 @@ class ELFLoader:
             result.append(region.data[offset])
         return bytes(result)
     
+# Write data, walking the regions one byte at a time.
     def write_memory(self, addr: int, data: bytes) -> None:
         for i, byte in enumerate(data):
             cur_addr = addr + i
@@ -1252,6 +1323,7 @@ class ELFLoader:
             offset = cur_addr - region.start
             region.data[offset] = byte
     
+# Read a 1, 2, 4 or 8 byte little-endian integer.
     def read_int(self, addr: int, size: int, signed: bool = False) -> int:
         data = self.read_memory(addr, size)
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
@@ -1260,6 +1332,7 @@ class ELFLoader:
             fmt = fmt.lower()
         return struct.unpack('<' + fmt, data)[0]
     
+# Write a 1, 2, 4 or 8 byte little-endian integer.
     def write_int(self, addr: int, value: int, size: int) -> None:
         fmt_map = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
         fmt = fmt_map.get(size, 'I')
@@ -1267,6 +1340,7 @@ class ELFLoader:
         data = struct.pack('<' + fmt, value & (max_val - 1))
         self.write_memory(addr, data)
     
+# Lay out argc, argv, envp and the auxiliary vector on the stack; returns (sp, argc).
     def setup_argv_envp(self, argv: List[str], envp: Dict[str, str]) -> Tuple[int, int]:
         ptr_size = 8 if not self.parser.is_32bit else 4
         
@@ -1330,15 +1404,18 @@ class ELFLoader:
         
         return sp, argc
     
+# Install the callback used for symbols the image does not define.
     def set_external_symbol_resolver(self, resolver: Callable[[str], Optional[int]]) -> None:
         self._external_symbol_resolver = resolver
     
+# Read inside the one region that contains addr.
     def _read_memory(self, addr: int, size: int) -> bytes:
         for region in self.memory.values():
             if region.contains(addr):
                 return region.read(addr, size)
         raise MemoryAccessError(f"Cannot read memory at 0x{addr:x}")
     
+# Write inside the one region that contains addr.
     def _write_memory(self, addr: int, data: bytes) -> None:
         for region in self.memory.values():
             if region.contains(addr):
@@ -1346,12 +1423,14 @@ class ELFLoader:
                 return
         raise MemoryAccessError(f"Cannot write memory at 0x{addr:x}")
     
+# Read an integer inside the one region that contains addr.
     def _read_memory_int(self, addr: int, size: int, signed: bool = False) -> int:
         for region in self.memory.values():
             if region.contains(addr):
                 return region.read_int(addr, size, signed)
         raise MemoryAccessError(f"Cannot read memory at 0x{addr:x}")
     
+# Write an integer inside the one region that contains addr.
     def _write_memory_int(self, addr: int, value: int, size: int) -> None:
         for region in self.memory.values():
             if region.contains(addr):
@@ -1359,6 +1438,7 @@ class ELFLoader:
                 return
         raise MemoryAccessError(f"Cannot write memory at 0x{addr:x}")
     
+# Read a NUL-terminated string.
     def _read_string(self, addr: int) -> str:
         result = bytearray()
         while True:
@@ -1369,42 +1449,51 @@ class ELFLoader:
             addr += 1
         return result.decode('utf-8', errors='replace')
     
+# Return the region containing addr, or None.
     def get_memory_region(self, addr: int) -> Optional[MemoryRegion]:
         for region in self.memory.values():
             if region.contains(addr):
                 return region
         return None
     
+# Return the name of the symbol at addr, if there is one.
     def get_symbol_at(self, addr: int) -> Optional[str]:
         return self.symbols_by_addr.get(addr)
     
+# Return a copy of the name to address map.
     def get_all_symbols(self) -> Dict[str, int]:
         return dict(self.symbols)
     
+# Return (start, size, name, flags) per region, sorted by address.
     def get_memory_map(self) -> List[Tuple[int, int, str, int]]:
         result = []
         for start, region in self.memory.items():
             result.append((start, region.size, region.name, region.flags))
         return sorted(result, key=lambda x: x[0])
     
+# Resolve a name through the image first, then the external resolver.
     def resolve_symbol(self, name: str) -> Optional[int]:
         if name in self.symbols:
             return self.symbols[name]
         return self._resolve_external_symbol(name)
     
+# Return the (address, size) of the TLS template, or None.
     def get_tls_block(self) -> Optional[Tuple[int, int]]:
         if self.tls_info:
             return (self.tls_info.template_addr, self.tls_info.memsz)
         return None
     
+# Report whether the image is an ET_DYN.
     def is_position_independent(self) -> bool:
         return self.parser.header.e_type == ELFType.ET_DYN
     
+# Return the bias that was added to the file's addresses.
     def get_load_bias(self) -> int:
         if self.parser.header.e_type == ELFType.ET_EXEC:
             return 0
         return self.base_addr
     
+# Summarise the loaded image for debugging.
     def __repr__(self) -> str:
         return (f"ELFLoader(entry=0x{self.entry_point:x}, "
                 f"base=0x{self.base_addr:x}, "

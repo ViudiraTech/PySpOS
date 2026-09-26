@@ -1,8 +1,14 @@
-#
-#   proc.py
-#   兼容垫片（2026-09-24）：真正的进程管理 + EEVDF 调度器已迁移至 process.py，
-#   本模块仅做名称重导出，保证历史调用方（main/shell/tests）零改动。
-#
+'''
+ *
+ *      proc.py
+ *      Compatibility shim re-exporting the names of process.py.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 from process import (
     PCB,
     SIGTERM, SIGKILL, SIGINT, SIGUSR1, SIGUSR2, SIGSTOP, SIGCONT,

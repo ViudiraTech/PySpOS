@@ -1,10 +1,13 @@
-#
-#   elf_loader/elf_parser.py
-#   ELF 文件解析器
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
-
+'''
+ *
+ *      elf_parser.py
+ *      ELF32/ELF64 header, section, symbol and relocation parsing.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import struct
 from dataclasses import dataclass
@@ -26,224 +29,252 @@ from .elf_constants import (
 )
 
 
+# The e_ident block that opens every ELF file.
 @dataclass
 class ELFIdent:
-    """ELF 标识结构"""
-    ei_mag: bytes           # 魔数
-    ei_class: int           # 文件类别 (32/64 位)
-    ei_data: int            # 数据编码
-    ei_version: int         # ELF 版本
-    ei_osabi: int           # 操作系统/ABI
-    ei_abiversion: int      # ABI 版本
-    ei_pad: bytes           # 填充
+    ei_mag: bytes           # magic number
+    ei_class: int           # file class (32/64-bit)
+    ei_data: int            # data encoding
+    ei_version: int         # ELF version
+    ei_osabi: int           # OS/ABI
+    ei_abiversion: int      # ABI version
+    ei_pad: bytes           # padding
     
+# Report whether the file is a 32-bit object.
     @property
     def is_32bit(self) -> bool:
         return self.ei_class == ELFClass.ELFCLASS32
     
+# Report whether the file is a 64-bit object.
     @property
     def is_64bit(self) -> bool:
         return self.ei_class == ELFClass.ELFCLASS64
     
+# Report whether the file is little-endian.
     @property
     def is_little_endian(self) -> bool:
         return self.ei_data == ELFData.ELFDATA2LSB
     
+# Report whether the file is big-endian.
     @property
     def is_big_endian(self) -> bool:
         return self.ei_data == ELFData.ELFDATA2MSB
 
 
+# The file header: entry point plus the locations of both tables.
 @dataclass
 class ELFHeader:
-    """ELF 文件头"""
-    e_ident: ELFIdent       # ELF 标识
-    e_type: int             # 文件类型
-    e_machine: int          # 目标架构
-    e_version: int          # 文件版本
-    e_entry: int            # 入口点地址
-    e_phoff: int            # 程序头表偏移
-    e_shoff: int            # 节区头表偏移
-    e_flags: int            # 处理器特定标志
-    e_ehsize: int           # ELF 头大小
-    e_phentsize: int        # 程序头表条目大小
-    e_phnum: int            # 程序头表条目数量
-    e_shentsize: int        # 节区头表条目大小
-    e_shnum: int            # 节区头表条目数量
-    e_shstrndx: int         # 节区名称字符串表索引
+    e_ident: ELFIdent       # ELF identification
+    e_type: int             # file type
+    e_machine: int          # target architecture
+    e_version: int          # file version
+    e_entry: int            # entry point address
+    e_phoff: int            # program header table offset
+    e_shoff: int            # section header table offset
+    e_flags: int            # processor-specific flags
+    e_ehsize: int           # ELF header size
+    e_phentsize: int        # program header entry size
+    e_phnum: int            # program header entry count
+    e_shentsize: int        # section header entry size
+    e_shnum: int            # section header entry count
+    e_shstrndx: int         # index of the section-name string table
 
 
+# One program header, that is one segment of the load image.
 @dataclass
 class ProgramHeader:
-    """程序头（段描述）"""
-    p_type: int             # 段类型
-    p_flags: int            # 段标志 (64 位)
-    p_offset: int           # 文件偏移
-    p_vaddr: int            # 虚拟地址
-    p_paddr: int            # 物理地址
-    p_filesz: int           # 文件大小
-    p_memsz: int            # 内存大小
-    p_align: int            # 对齐
+    p_type: int             # segment type
+    p_flags: int            # segment flags (64-bit)
+    p_offset: int           # file offset
+    p_vaddr: int            # virtual address
+    p_paddr: int            # physical address
+    p_filesz: int           # size in file
+    p_memsz: int            # size in memory
+    p_align: int            # alignment
     
-    # 32 位特有的字段位置不同
-    p_flags_32: int = 0     # 32 位段标志
+# 32-bit puts this field elsewhere in the record
+    p_flags_32: int = 0     # 32-bit segment flags
     
+# Report whether this segment is mapped into memory.
     @property
     def is_loadable(self) -> bool:
         return self.p_type == ProgramHeaderType.PT_LOAD
     
+# Report whether this segment names the dynamic linker.
     @property
     def is_interpreter(self) -> bool:
         return self.p_type == ProgramHeaderType.PT_INTERP
     
+# Report whether this segment holds the _DYNAMIC array.
     @property
     def is_dynamic(self) -> bool:
         return self.p_type == ProgramHeaderType.PT_DYNAMIC
     
+# Report whether this is the GNU stack-execution segment.
     @property
     def is_stack(self) -> bool:
         return self.p_type == PT_GNU_STACK
     
+# Report readable permission, honouring the 32-bit flag field.
     @property
     def is_readable(self) -> bool:
         flags = self.p_flags if self.p_flags else self.p_flags_32
         return bool(flags & ProgramHeaderFlags.PF_R)
     
+# Report writable permission, honouring the 32-bit flag field.
     @property
     def is_writable(self) -> bool:
         flags = self.p_flags if self.p_flags else self.p_flags_32
         return bool(flags & ProgramHeaderFlags.PF_W)
     
+# Report executable permission, honouring the 32-bit flag field.
     @property
     def is_executable(self) -> bool:
         flags = self.p_flags if self.p_flags else self.p_flags_32
         return bool(flags & ProgramHeaderFlags.PF_X)
 
 
+# One section header, describing the file through the linker's eyes.
 @dataclass
 class SectionHeader:
-    """节区头"""
-    sh_name: int            # 节区名称字符串表偏移
-    sh_type: int            # 节区类型
-    sh_flags: int           # 节区标志
-    sh_addr: int            # 虚拟地址
-    sh_offset: int          # 文件偏移
-    sh_size: int            # 节区大小
-    sh_link: int            # 链接的节区索引
-    sh_info: int            # 附加信息
-    sh_addralign: int       # 地址对齐
-    sh_entsize: int         # 条目大小
+    sh_name: int            # section-name string table offset
+    sh_type: int            # section type
+    sh_flags: int           # section flags
+    sh_addr: int            # virtual address
+    sh_offset: int          # file offset
+    sh_size: int            # section size
+    sh_link: int            # index of the linked section
+    sh_info: int            # extra information
+    sh_addralign: int       # address alignment
+    sh_entsize: int         # entry size
     
-    # 运行时填充
-    name: str = ""          # 节区名称
+# filled in while parsing
+    name: str = ""          # section name
     
+# Report whether the section occupies memory at run time.
     @property
     def is_allocatable(self) -> bool:
         return bool(self.sh_flags & SectionHeaderFlags.SHF_ALLOC)
     
+# Report whether the section is writable.
     @property
     def is_writable(self) -> bool:
         return bool(self.sh_flags & SectionHeaderFlags.SHF_WRITE)
     
+# Report whether the section holds instructions.
     @property
     def is_executable(self) -> bool:
         return bool(self.sh_flags & SectionHeaderFlags.SHF_EXECINSTR)
     
+# Report whether the section is BSS and takes no file space.
     @property
     def is_nobits(self) -> bool:
         return self.sh_type == SectionHeaderType.SHT_NOBITS
 
 
+# One symbol table entry.
 @dataclass
 class ELFSymbol:
-    """ELF 符号表条目"""
-    st_name: int            # 符号名称字符串表偏移
-    st_info: int            # 符号类型和绑定信息
-    st_other: int           # 可见性
-    st_shndx: int           # 相关节区索引
-    st_value: int           # 符号值/地址
-    st_size: int            # 符号大小
+    st_name: int            # symbol-name string table offset
+    st_info: int            # symbol type and binding
+    st_other: int           # visibility
+    st_shndx: int           # related section index
+    st_value: int           # symbol value or address
+    st_size: int            # symbol size
     
-    # 运行时填充
-    name: str = ""          # 符号名称
+# filled in while parsing
+    name: str = ""          # symbol name
     
+# Return the binding, the high nibble of st_info.
     @property
     def bind(self) -> int:
         return self.st_info >> 4
     
+# Return the symbol type, the low nibble of st_info.
     @property
     def type(self) -> int:
         return self.st_info & 0xf
     
+# Return the visibility, the low two bits of st_other.
     @property
     def visibility(self) -> int:
         return self.st_other & 0x3
     
+# Report whether the symbol is file-local.
     @property
     def is_local(self) -> bool:
         return self.bind == SymbolBinding.STB_LOCAL
     
+# Report whether the symbol is globally visible.
     @property
     def is_global(self) -> bool:
         return self.bind == SymbolBinding.STB_GLOBAL
     
+# Report whether the symbol is weak.
     @property
     def is_weak(self) -> bool:
         return self.bind == SymbolBinding.STB_WEAK
     
+# Report whether the symbol names a function.
     @property
     def is_function(self) -> bool:
         return self.type == SymbolType.STT_FUNC
     
+# Report whether the symbol names a data object.
     @property
     def is_object(self) -> bool:
         return self.type == SymbolType.STT_OBJECT
     
+# Report whether the symbol is undefined, missing or irrelevant.
     @property
     def is_undefined(self) -> bool:
         return self.st_shndx == SpecialSectionIndex.SHN_UNDEF
 
 
+# One Rel relocation; the addend lives in the section contents.
 @dataclass
 class ELFRelocation:
-    """ELF 重定位条目 (Rel)"""
-    r_offset: int           # 重定位偏移/地址
-    r_info: int             # 符号索引和重定位类型
+    r_offset: int           # relocation offset or address
+    r_info: int             # symbol index and relocation type
     
+# Return the symbol index encoded in r_info.
     @property
     def sym(self) -> int:
         return self.r_info >> 32
     
+# Return the relocation type encoded in r_info.
     @property
     def type(self) -> int:
         return self.r_info & 0xffffffff
 
 
+# One Rela relocation, that is a Rel entry carrying an explicit addend.
 @dataclass
 class ELFRelocationA:
-    """ELF 重定位条目 (Rela - 带加数)"""
-    r_offset: int           # 重定位偏移/地址
-    r_info: int             # 符号索引和重定位类型
-    r_addend: int           # 加数
+    r_offset: int           # relocation offset or address
+    r_info: int             # symbol index and relocation type
+    r_addend: int           # addend
     
+# Return the symbol index encoded in r_info.
     @property
     def sym(self) -> int:
         return self.r_info >> 32
     
+# Return the relocation type encoded in r_info.
     @property
     def type(self) -> int:
         return self.r_info & 0xffffffff
 
 
+# One entry of the _DYNAMIC array.
 @dataclass
 class ELFDynamic:
-    """ELF 动态链接条目"""
-    d_tag: int              # 标签类型
-    d_val: int              # 整数值/地址
+    d_tag: int              # tag type
+    d_val: int              # integer value or address
     
+# Report whether d_val is an address rather than a plain number.
     @property
     def is_pointer(self) -> bool:
-        """判断是否为指针类型的标签"""
         pointer_tags = {
             DynamicTag.DT_PLTGOT, DynamicTag.DT_HASH, DynamicTag.DT_STRTAB,
             DynamicTag.DT_SYMTAB, DynamicTag.DT_RELA, DynamicTag.DT_INIT,
@@ -259,20 +290,15 @@ class ELFDynamic:
         return self.d_tag in pointer_tags
 
 
+# Parse an ELF image that is already in memory.
 class ELFParser:
-    """ELF 文件解析器"""
     
+# Keep the image and a read cursor over it; nothing is parsed yet.
     def __init__(self, data: bytes):
-        """
-        初始化 ELF 解析器
-        
-        Args:
-            data: ELF 文件内容
-        """
         self.data = data
         self.stream = BytesIO(data)
         
-        # 解析结果
+# parse results
         self.header: Optional[ELFHeader] = None
         self.program_headers: List[ProgramHeader] = []
         self.section_headers: List[SectionHeader] = []
@@ -281,28 +307,28 @@ class ELFParser:
         self.dynamics: List[ELFDynamic] = []
         self.relocations: List[Union[ELFRelocation, ELFRelocationA]] = []
         
-        # 字符串表
+# string table
         self.shstrtab: bytes = b""
         self.strtab: bytes = b""
         self.dynstr: bytes = b""
         
-        # 节区名称映射
+# section name lookup
         self.section_by_name: Dict[str, SectionHeader] = {}
         
-        # 架构信息
+# architecture information
         self.is_32bit = False
         self.is_little_endian = True
         
-        # 格式字符串
-        self._fmt_half = "<H"  # 16 位
-        self._fmt_word = "<I"  # 32 位
-        self._fmt_addr = "<I"  # 地址
-        self._fmt_off = "<I"   # 偏移
-        self._fmt_xword = "<Q" # 64 位
-        self._fmt_sword = "<i" # 有符号 32 位
+# struct format strings
+        self._fmt_half = "<H"  # 16-bit
+        self._fmt_word = "<I"  # 32-bit
+        self._fmt_addr = "<I"  # address
+        self._fmt_off = "<I"   # offset
+        self._fmt_xword = "<Q" # 64-bit
+        self._fmt_sword = "<i" # signed 32-bit
     
+# Rebuild every struct format string for the file's byte order.
     def _set_endian(self, little_endian: bool):
-        """设置字节序"""
         prefix = "<" if little_endian else ">"
         self._fmt_half = prefix + "H"
         self._fmt_word = prefix + "I"
@@ -311,58 +337,53 @@ class ELFParser:
         self._fmt_xword = prefix + "Q"
         self._fmt_sword = prefix + "i"
     
+# Read size bytes from the current cursor.
     def _read(self, size: int) -> bytes:
-        """从流中读取数据"""
         return self.stream.read(size)
     
+# Move the read cursor to a file offset.
     def _seek(self, offset: int):
-        """设置流位置"""
         self.stream.seek(offset)
     
+# Read an unsigned 16-bit integer.
     def _read_half(self) -> int:
-        """读取 16 位无符号整数"""
         return struct.unpack(self._fmt_half, self._read(2))[0]
     
+# Read an unsigned 32-bit integer.
     def _read_word(self) -> int:
-        """读取 32 位无符号整数"""
         return struct.unpack(self._fmt_word, self._read(4))[0]
     
+# Read a signed 32-bit integer.
     def _read_sword(self) -> int:
-        """读取 32 位有符号整数"""
         return struct.unpack(self._fmt_sword, self._read(4))[0]
     
+# Read a 32-bit address.
     def _read_addr(self) -> int:
-        """读取地址（32 位）"""
         return struct.unpack(self._fmt_addr, self._read(4))[0]
     
+# Read a 64-bit address.
     def _read_addr64(self) -> int:
-        """读取地址（64 位）"""
         return struct.unpack(self._fmt_xword, self._read(8))[0]
     
+# Read a 32-bit file offset.
     def _read_off(self) -> int:
-        """读取偏移（32 位）"""
         return struct.unpack(self._fmt_off, self._read(4))[0]
     
+# Read a 64-bit file offset.
     def _read_off64(self) -> int:
-        """读取偏移（64 位）"""
         return struct.unpack(self._fmt_xword, self._read(8))[0]
     
+# Read an unsigned 64-bit integer.
     def _read_xword(self) -> int:
-        """读取 64 位无符号整数"""
         return struct.unpack(self._fmt_xword, self._read(8))[0]
     
+# Read a signed 64-bit integer.
     def _read_sxword(self) -> int:
-        """读取 64 位有符号整数"""
         fmt = "<q" if self._fmt_xword.startswith("<") else ">q"
         return struct.unpack(fmt, self._read(8))[0]
     
+# Parse the whole image; returns self so the calls can be chained.
     def parse(self) -> 'ELFParser':
-        """
-        解析 ELF 文件
-        
-        Returns:
-            self 用于链式调用
-        """
         self._parse_ident()
         self._parse_header()
         self._parse_program_headers()
@@ -374,23 +395,23 @@ class ELFParser:
         self._parse_relocations()
         return self
     
+# Parse e_ident, rejecting anything that is not ELF.
     def _parse_ident(self):
-        """解析 ELF 标识"""
         self._seek(0)
         
-        # 魔数
+# magic number
         ei_mag = self._read(SELFMAG)
         if ei_mag != ELFMAG:
             raise ValueError(f"无效的 ELF 魔数: {ei_mag!r}")
         
-        # 文件类别
+# file class
         ei_class = self._read(1)[0]
         if ei_class not in (ELFClass.ELFCLASS32, ELFClass.ELFCLASS64):
             raise ValueError(f"不支持的 ELF 类别: {ei_class}")
         
         self.is_32bit = (ei_class == ELFClass.ELFCLASS32)
         
-        # 数据编码
+# data encoding
         ei_data = self._read(1)[0]
         if ei_data not in (ELFData.ELFDATA2LSB, ELFData.ELFDATA2MSB):
             raise ValueError(f"不支持的 ELF 数据编码: {ei_data}")
@@ -398,16 +419,16 @@ class ELFParser:
         self.is_little_endian = (ei_data == ELFData.ELFDATA2LSB)
         self._set_endian(self.is_little_endian)
         
-        # 版本
+# version
         ei_version = self._read(1)[0]
         
         # OS/ABI
         ei_osabi = self._read(1)[0]
         
-        # ABI 版本
+# ABI version
         ei_abiversion = self._read(1)[0]
         
-        # 填充
+# padding
         ei_pad = self._read(7)
         
         self.ident = ELFIdent(
@@ -420,8 +441,8 @@ class ELFParser:
             ei_pad=ei_pad
         )
     
+# Parse the file header that follows e_ident.
     def _parse_header(self):
-        """解析 ELF 文件头"""
         e_type = self._read_half()
         e_machine = self._read_half()
         e_version = self._read_word()
@@ -460,8 +481,8 @@ class ELFParser:
             e_shstrndx=e_shstrndx
         )
     
+# Parse every entry of the program header table.
     def _parse_program_headers(self):
-        """解析程序头表"""
         if self.header.e_phoff == 0 or self.header.e_phnum == 0:
             return
         
@@ -474,8 +495,8 @@ class ELFParser:
                 ph = self._parse_program_header_64()
             self.program_headers.append(ph)
     
+# Parse one 32-bit program header.
     def _parse_program_header_32(self) -> ProgramHeader:
-        """解析 32 位程序头"""
         p_type = self._read_word()
         p_offset = self._read_off()
         p_vaddr = self._read_addr()
@@ -497,8 +518,8 @@ class ELFParser:
             p_flags_32=p_flags_32
         )
     
+# Parse one 64-bit program header.
     def _parse_program_header_64(self) -> ProgramHeader:
-        """解析 64 位程序头"""
         p_type = self._read_word()
         p_flags = self._read_word()
         p_offset = self._read_off64()
@@ -520,8 +541,8 @@ class ELFParser:
             p_flags_32=0
         )
     
+# Parse every entry of the section header table.
     def _parse_section_headers(self):
-        """解析节区头表"""
         if self.header.e_shoff == 0 or self.header.e_shnum == 0:
             return
         
@@ -534,8 +555,8 @@ class ELFParser:
                 sh = self._parse_section_header_64()
             self.section_headers.append(sh)
     
+# Parse one 32-bit section header.
     def _parse_section_header_32(self) -> SectionHeader:
-        """解析 32 位节区头"""
         sh_name = self._read_word()
         sh_type = self._read_word()
         sh_flags = self._read_word()
@@ -560,8 +581,8 @@ class ELFParser:
             sh_entsize=sh_entsize
         )
     
+# Parse one 64-bit section header.
     def _parse_section_header_64(self) -> SectionHeader:
-        """解析 64 位节区头"""
         sh_name = self._read_word()
         sh_type = self._read_word()
         sh_flags = self._read_xword()
@@ -586,22 +607,22 @@ class ELFParser:
             sh_entsize=sh_entsize
         )
     
+# Cache the section name string table.
     def _parse_string_tables(self):
-        """解析字符串表"""
-        # 节区名称字符串表
+# section name string table
         if self.header.e_shstrndx != SpecialSectionIndex.SHN_UNDEF:
             shstrtab_hdr = self.section_headers[self.header.e_shstrndx]
             self.shstrtab = self.data[shstrtab_hdr.sh_offset:
                                       shstrtab_hdr.sh_offset + shstrtab_hdr.sh_size]
     
+# Resolve every section name and index the sections by it.
     def _resolve_section_names(self):
-        """解析节区名称"""
         for sh in self.section_headers:
             sh.name = self._get_string(self.shstrtab, sh.sh_name)
             self.section_by_name[sh.name] = sh
     
+# Return the string at offset in a string table, or empty if out of range.
     def _get_string(self, strtab: bytes, offset: int) -> str:
-        """从字符串表中获取字符串"""
         if offset >= len(strtab):
             return ""
         end = strtab.find(b'\x00', offset)
@@ -609,18 +630,18 @@ class ELFParser:
             end = len(strtab)
         return strtab[offset:end].decode('utf-8', errors='replace')
     
+# Parse the static symbol table and the dynamic one.
     def _parse_symbols(self):
-        """解析符号表"""
-        # 查找符号表节区
+# look for the symbol table sections
         for sh in self.section_headers:
             if sh.sh_type == SectionHeaderType.SHT_SYMTAB:
                 self._parse_symbol_section(sh, False)
             elif sh.sh_type == SectionHeaderType.SHT_DYNSYM:
                 self._parse_symbol_section(sh, True)
     
+# Parse one symbol table section together with its string table.
     def _parse_symbol_section(self, sh: SectionHeader, is_dynamic: bool):
-        """解析符号表节区"""
-        # 获取字符串表
+# fetch the associated string table
         if sh.sh_link < len(self.section_headers):
             strtab_sh = self.section_headers[sh.sh_link]
             strtab = self.data[strtab_sh.sh_offset:
@@ -632,7 +653,7 @@ class ELFParser:
         else:
             strtab = b""
         
-        # 解析符号
+# read the symbol entries
         offset = sh.sh_offset
         entry_size = 16 if self.is_32bit else 24
         
@@ -649,8 +670,8 @@ class ELFParser:
             else:
                 self.symbols.append(sym)
     
+# Parse one 32-bit symbol table entry.
     def _parse_symbol_32(self, strtab: bytes) -> ELFSymbol:
-        """解析 32 位符号"""
         st_name = self._read_word()
         st_value = self._read_addr()
         st_size = self._read_word()
@@ -670,8 +691,8 @@ class ELFParser:
             name=name
         )
     
+# Parse one 64-bit symbol table entry.
     def _parse_symbol_64(self, strtab: bytes) -> ELFSymbol:
-        """解析 64 位符号"""
         st_name = self._read_word()
         st_info = self._read(1)[0]
         st_other = self._read(1)[0]
@@ -691,21 +712,21 @@ class ELFParser:
             name=name
         )
     
+# Parse the _DYNAMIC array from sections, else from the PT_DYNAMIC segment.
     def _parse_dynamic(self):
-        """解析动态链接信息"""
         for sh in self.section_headers:
             if sh.sh_type == SectionHeaderType.SHT_DYNAMIC:
                 self._parse_dynamic_section(sh)
         
-        # 也可以从 PT_DYNAMIC 段解析
+# the same array can also come from the PT_DYNAMIC segment
         for ph in self.program_headers:
             if ph.p_type == ProgramHeaderType.PT_DYNAMIC:
-                # 如果还没有从节区解析，则从段解析
+# only used when the sections produced nothing
                 if not self.dynamics:
                     self._parse_dynamic_segment(ph)
     
+# Parse the _DYNAMIC array out of a section.
     def _parse_dynamic_section(self, sh: SectionHeader):
-        """解析动态链接节区"""
         offset = sh.sh_offset
         entry_size = 8 if self.is_32bit else 16
         
@@ -724,8 +745,8 @@ class ELFParser:
             if d_tag == DynamicTag.DT_NULL:
                 break
     
+# Parse the _DYNAMIC array out of the PT_DYNAMIC segment.
     def _parse_dynamic_segment(self, ph: ProgramHeader):
-        """从段解析动态链接信息"""
         offset = ph.p_offset
         entry_size = 8 if self.is_32bit else 16
         num_entries = ph.p_filesz // entry_size
@@ -745,16 +766,16 @@ class ELFParser:
             if d_tag == DynamicTag.DT_NULL:
                 break
     
+# Parse every Rel and Rela section.
     def _parse_relocations(self):
-        """解析重定位表"""
         for sh in self.section_headers:
             if sh.sh_type == SectionHeaderType.SHT_REL:
                 self._parse_rel_section(sh)
             elif sh.sh_type == SectionHeaderType.SHT_RELA:
                 self._parse_rela_section(sh)
     
+# Parse one Rel relocation section.
     def _parse_rel_section(self, sh: SectionHeader):
-        """解析 Rel 重定位表"""
         offset = sh.sh_offset
         entry_size = 8 if self.is_32bit else 16
         
@@ -773,8 +794,8 @@ class ELFParser:
                 r_info=r_info
             ))
     
+# Parse one Rela relocation section.
     def _parse_rela_section(self, sh: SectionHeader):
-        """解析 Rela 重定位表"""
         offset = sh.sh_offset
         entry_size = 12 if self.is_32bit else 24
         
@@ -796,22 +817,22 @@ class ELFParser:
                 r_addend=r_addend
             ))
     
+# Return a section's bytes, zero filled when it is BSS.
     def get_section_data(self, sh: SectionHeader) -> bytes:
-        """获取节区数据"""
         if sh.is_nobits:
             return b'\x00' * sh.sh_size
         return self.data[sh.sh_offset:sh.sh_offset + sh.sh_size]
     
+# Return the PT_INTERP path, that is the dynamic linker, or None.
     def get_interpreter(self) -> Optional[str]:
-        """获取解释器路径（动态链接器）"""
         for ph in self.program_headers:
             if ph.is_interpreter:
                 data = self.data[ph.p_offset:ph.p_offset + ph.p_filesz]
                 return data.rstrip(b'\x00').decode('utf-8', errors='replace')
         return None
     
+# Return the shared library names listed by DT_NEEDED.
     def get_needed_libraries(self) -> List[str]:
-        """获取所需共享库列表"""
         libraries = []
         for dyn in self.dynamics:
             if dyn.d_tag == DynamicTag.DT_NEEDED:
@@ -819,8 +840,8 @@ class ELFParser:
                 libraries.append(lib_name)
         return libraries
     
+# Look a name up in the static symbols first, then the dynamic ones.
     def get_symbol_by_name(self, name: str) -> Optional[ELFSymbol]:
-        """根据名称查找符号"""
         for sym in self.symbols:
             if sym.name == name:
                 return sym
@@ -829,10 +850,11 @@ class ELFParser:
                 return sym
         return None
     
+# Return the PT_LOAD program headers.
     def get_loadable_segments(self) -> List[ProgramHeader]:
-        """获取可加载段列表"""
         return [ph for ph in self.program_headers if ph.is_loadable]
     
+# Summarise the parsed image for debugging.
     def __repr__(self) -> str:
         return (f"ELFParser(arch={'32' if self.is_32bit else '64'}bit, "
                 f"endian={'little' if self.is_little_endian else 'big'}, "

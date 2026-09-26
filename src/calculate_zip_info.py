@@ -1,7 +1,14 @@
-#   calculate_zip_info.py
-#   弃用垫片（2026-09-24）：历史上与根目录 build_update.py 功能重复。
-#   为保持兼容保留本文件，但不再维护逻辑；直接转发到根目录 build_update.main()。
-#   请统一使用：python build_update.py
+'''
+ *
+ *      calculate_zip_info.py
+ *      Deprecated shim forwarding to the top-level build_update.py.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import sys
 
@@ -18,5 +25,5 @@ if __name__ == "__main__":
     print("提示：src/calculate_zip_info.py 已弃用，已转发到根目录 build_update.py")
     main()
 else:
-    # 被 import 时不抛异常（历史行为是抛 RuntimeError，已修正为兼容模式）
+    # being imported must not raise; it used to raise RuntimeError and is now in compatibility mode
     pass

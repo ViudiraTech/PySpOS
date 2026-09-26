@@ -1,30 +1,34 @@
-#
-#   parse_spf.py
-#   spf解析功能（移植的SpaceOS的spf解析器，跟那个不大一样）
-#
-#   2026/1/31 By GoutouStdio
-#   @2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      parse_spf.py
+ *      Parser for SpaceConfig files.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import gc
 import logk
 import main
 import pyspos
 
-# 全局变量，控制运行日志是否开启（如果系统开发阶段为alpha或开发者模式则开启，那时候很需要）
+# Run logging is on in alpha and developer builds, where it is badly needed.
 if pyspos.OS_DEVELOP_STAGE == "alpha" or pyspos.DEVELOPER_MODE:
     run_log_enabled = 1
 else:
     run_log_enabled = 0
 
-# 运行指定路径的spf文件
-# SPF 2.0（2026-09-24，向后兼容 0.1 的 putchar/exit）新增：
-#   print("...")        putchar 别名（支持 $变量插值）
-#   var(name, "val")    定义变量
-#   set(name, "val")    修改变量（不存在则创建）
-#   add(a, b, out)      数值加法存入 out（a/b 可为变量名或数字）
-#   input("prompt", out) 读一行存入 out
-#   sleep(seconds)      休眠
-#   include("other.spf") 引入执行另一个 spf（深度上限 8，防止循环）
+# Run the spf file at the given path.
+# SPF 2.0 additions (2026-09-24, backward compatible with the 0.1 putchar/exit):
+# print("...")        putchar alias, with $variable interpolation
+# var(name, "val")    define a variable
+# set(name, "val")    change a variable, creating it if absent
+# add(a, b, out)      add a and b into out, either may be a name or a number
+# input("prompt", out) read a line into out
+# sleep(seconds)      sleep
+# include("other.spf") run another spf, depth capped at 8 to catch cycles
 def run_spf(spf_path, _depth=0, _env=None):
     if _env is None:
         _env = {}
@@ -62,14 +66,15 @@ def run_spf(spf_path, _depth=0, _env=None):
                 if not cmd_stripped:
                     continue
 
+# Strip one layer of matching quotes, if present.
                 def _unquote(s):
                     s = s.strip()
                     if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
                         return s[1:-1]
                     return s
 
+# Expand $name from the environment; $$ is a literal dollar sign.
                 def _subst(s):
-                    # $变量插值（$$ 转义为 $）
                     out = []
                     i = 0
                     while i < len(s):
@@ -88,8 +93,8 @@ def run_spf(spf_path, _depth=0, _env=None):
                             i += 1
                     return ''.join(out)
 
+# Split a call's arguments on commas, ignoring commas inside quotes.
                 def _split_args(inner):
-                    # 简单逗号切分（支持引号包裹的逗号）
                     args, cur, q = [], '', None
                     for ch in inner:
                         if q:
@@ -108,6 +113,7 @@ def run_spf(spf_path, _depth=0, _env=None):
                         args.append(cur.strip())
                     return [a for a in args if a != '']
 
+# Coerce an argument to int, then float, resolving a variable name first.
                 def _num(v):
                     if isinstance(v, (int, float)):
                         return v

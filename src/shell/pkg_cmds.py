@@ -1,9 +1,22 @@
+'''
+ *
+ *      pkg_cmds.py
+ *      Runs the entry point of an installed user package.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 
 import main
 import printk
 
 
+# Fork the package entry point described by target, waiting or backgrounding it.
+# A background run gets its own /tmp log file so its output cannot corrupt the terminal.
 def run_entrypoint(target, args="", background=False):
     import forkexec
     import process as proc

@@ -1,21 +1,13 @@
-#
-#   shell/dispatch.py
-#   命令分发：注册表解析（builtin → PATH 外部命令）+ 重定向/管道 + 后台作业。
-#
-#   解析顺序（对齐 bash）：
-#     含 '/' 的路径 → 外部/脚本
-#     注册表 alias  → 注册表 builtin
-#     apps/ 外部命令 → forkexec 真子进程
-#     包命令         → pkg 入口
-#     宿主 PATH     → fork+exec 跑 Linux 原生程序（hostexec）
-#     其余          → 127 command not found
-#
-#   行级语法（引号/管道/&&/||/;/重定向/变量/$()）由 shparser 解析、
-#   shexec 执行；本模块只保留注册表、分发目标与主入口。
-#
-#   后台/并发：`cmd &` 立即返回并注册后台作业，$! 取最近后台 PID；
-#   jobs/fg/bg/wait 走 process.py 的作业表 + 僵尸回收。
-#
+'''
+ *
+ *      dispatch.py
+ *      Command dispatch: registry lookup, tab completion and background jobs.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 
@@ -26,7 +18,7 @@ import main
 from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
 from . import filter_cmds, hostexec, shexec
 
-# 命令历史（history 命令 + readline 持久化）
+# command history, used by the history command and by readline persistence
 _cmd_history = []
 try:
     import readline as _readline
@@ -38,6 +30,7 @@ try:
         pass
     import atexit as _atexit
 
+    # Flush the readline history file at exit, ignoring a read-only home.
     def _save_history():
         try:
             _readline.write_history_file(_hist_file)
@@ -50,11 +43,11 @@ except ImportError:
 
 
 # --------------------------------------------------------------------------
-# Tab 补全（bash programmable completion 的简化版，数据源=注册表+PATH）
+# tab completion, a simplified bash programmable completion whose data source is the registry plus PATH
 # --------------------------------------------------------------------------
 
+# Readline completer: complete command names on the first word, paths on the rest.
 def _complete(text, state):
-    """readline completer：命令行第一个词补命令名，其余词补路径。"""
     try:
         line = _readline.get_line_buffer() if _readline else ""
         line_buffer = _readline.get_line_buffer()[:_readline.get_endidx()] if _readline else line
@@ -79,6 +72,7 @@ def _complete(text, state):
     return None
 
 
+# List path completions for a partial word, marking directories with a trailing slash.
 def _path_matches(text):
     import glob as _glob
     d, _, base = text.rpartition("/")
@@ -93,6 +87,7 @@ def _path_matches(text):
     return out
 
 
+# Install the readline completer and key bindings; False when readline is absent.
 def _install_completer():
     if _readline is None:
         return False
@@ -110,7 +105,7 @@ _completion_enabled = _install_completer()
 
 
 # --------------------------------------------------------------------------
-# 注册表（带分组/摘要元数据）
+# the command registry, carrying group and summary metadata
 # --------------------------------------------------------------------------
 _REG = [
     # system
@@ -194,7 +189,7 @@ for _name, _fn, _summary, _usage, _group, _aliases, _arg in _REG:
     cmd_registry.register(_name, _fn, summary=_summary, usage=_usage,
                           group=_group, aliases=_aliases, takes_arg=_arg)
 
-# 历史兼容：无参调用时的用法提示表（内核仍对外暴露 COMMANDS）
+# legacy compatibility: a usage table for calls without arguments; the kernel still exposes COMMANDS
 COMMANDS = {}
 for _name, _fn, _summary, _usage, _group, _aliases, _arg in _REG:
     if _arg:
@@ -206,9 +201,10 @@ for _name, _fn, _summary, _usage, _group, _aliases, _arg in _REG:
 
 
 # --------------------------------------------------------------------------
-# 外部命令（apps/ 作为 PATH）
+# external commands, with apps/ acting as PATH
 # --------------------------------------------------------------------------
 
+# Run an apps/ command as a real child, waiting or registering a background job.
 def _fork_external(name: str, args: str, background: bool):
     import forkexec
     rel = name + ".py"
@@ -231,6 +227,7 @@ def _fork_external(name: str, args: str, background: bool):
     return pcb
 
 
+# Run an installed package entry point, reporting a launch failure itself.
 def _fork_package(target: dict, args: str, background: bool):
     try:
         return pkg_cmds.run_entrypoint(target, args, background=background)
@@ -240,15 +237,13 @@ def _fork_package(target: dict, args: str, background: bool):
 
 
 # --------------------------------------------------------------------------
-# 主分发
+# main dispatch
 # --------------------------------------------------------------------------
 
+# Call a builtin according to its signature and return its exit code.
+# Only an exact int counts as a status. A TypeError is deliberately not used to detect a
+# missing argument, because that would report a real bug inside the command as a usage error.
 def _invoke_builtin(meta, args: str):
-    """按签名决定是否传参，返回退出码（只认精确 int）。
-
-    不用 try/except TypeError 判断——那会把命令内部真正的 TypeError
-    误报成“缺参数”，掩盖真实 bug。
-    """
     import inspect
     fn = meta.fn
     try:
@@ -272,6 +267,7 @@ def _invoke_builtin(meta, args: str):
     return ret if type(ret) is int else 0
 
 
+# Record the line in the history and run it; an empty line is ignored.
 def handle_command(prompt) -> str:
     prompt = (prompt or "").strip()
     if not prompt:

@@ -1,3 +1,14 @@
+'''
+ *
+ *      pkg.py
+ *      User package install, verification and registry.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import hashlib
 import json
 import os
@@ -25,11 +36,16 @@ _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$")
 _HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
+# Every package failure surfaces as this one error type.
 class PackageError(ValueError):
     pass
 
 
+# A read-only view over a package, which is a directory or a .pyspkg zip.
+# Construction validates the manifest and the hashes, and refuses symlinks,
+# absolute member paths, duplicates and oversized members.
 class PackageSource:
+    # Open a directory or zip package and validate it end to end.
     def __init__(self, source: os.PathLike[str] | str):
         self.path = os.path.abspath(os.fspath(source))
         self._zip = None
@@ -44,17 +60,21 @@ class PackageSource:
         else:
             raise PackageError(f"包路径不存在: {source}")
 
+    # Enter a with block, handing back the source itself.
     def __enter__(self) -> "PackageSource":
         return self
 
+    # Leave the with block, closing the archive even when validation raised.
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.close()
 
+    # Close the zip handle; a directory package holds nothing open.
     def close(self) -> None:
         if self._zip is not None:
             self._zip.close()
             self._zip = None
 
+    # Index a directory package: reject symlinks, cap size and count, then validate.
     def _load_directory(self) -> None:
         manifest_path = os.path.join(self.path, MANIFEST_NAME)
         if not os.path.isfile(manifest_path) or os.path.islink(manifest_path):
@@ -85,6 +105,8 @@ class PackageSource:
         self._load_manifest_from_file(manifest_path)
         self.manifest = _validate_source(self.manifest, self._member_names(), self)
 
+    # Index a zip package: reject encrypted, duplicate,
+    # symlink or huge members, then validate.
     def _load_zip(self) -> None:
         try:
             self._zip = zipfile.ZipFile(self.path, "r")
@@ -123,6 +145,7 @@ class PackageSource:
             self.close()
             raise
 
+    # Read and parse package.json, refusing anything past MAX_MANIFEST_SIZE.
     def _load_manifest_from_file(self, path: str) -> None:
         try:
             with open(path, "rb") as stream:
@@ -131,6 +154,7 @@ class PackageSource:
             raise PackageError(f"读取 package.json 失败: {exc}") from exc
         self.manifest = _parse_manifest(raw)
 
+    # Apply the per-member and whole-package size limits.
     def _check_size(self, name: str, size: int) -> None:
         if size < 0 or size > MAX_FILE_SIZE:
             raise PackageError(f"包成员过大: {name}")
@@ -139,9 +163,11 @@ class PackageSource:
             if self._total_size > MAX_TOTAL_SIZE:
                 raise PackageError("包解压总大小超过限制")
 
+    # Names of every payload member this source can hand out.
     def _member_names(self) -> set[str]:
         return set(self._directory_files) | set(self._zip_files)
 
+    # Read one member out of the archive, capped at MAX_FILE_SIZE.
     def _read_zip(self, name: str) -> bytes:
         info = self._zip_files.get(name)
         if info is None or self._zip is None:
@@ -155,6 +181,7 @@ class PackageSource:
             raise PackageError(f"包成员过大: {name}")
         return data
 
+    # Return one member's bytes, whether the package is a directory or a zip.
     def read_member(self, name: str) -> bytes:
         name = _safe_member_name(name)
         if name == MANIFEST_NAME:
@@ -177,6 +204,7 @@ class PackageSource:
             return data
         return self._read_zip(name)
 
+    # Write every member under destination; nothing is made executable here.
     def materialize(self, destination: str) -> None:
         os.makedirs(destination, exist_ok=True)
         for name in sorted(self._member_names()):
@@ -193,6 +221,8 @@ class PackageSource:
                 pass
 
 
+# Parse package.json bytes into a dict, folding size and JSON errors into
+# PackageError.
 def _parse_manifest(raw: bytes) -> Dict[str, Any]:
     if len(raw) > MAX_MANIFEST_SIZE:
         raise PackageError("package.json 过大")
@@ -205,6 +235,8 @@ def _parse_manifest(raw: bytes) -> Dict[str, Any]:
     return value
 
 
+# Reject member paths that could escape the
+# package: absolute, drive letter, backslash or ..
 def _safe_member_name(name: str) -> str:
     if not isinstance(name, str) or not name or "\\" in name:
         raise PackageError(f"非法包成员路径: {name!r}")
@@ -216,6 +248,8 @@ def _safe_member_name(name: str) -> str:
     return "/".join(parts)
 
 
+# Check the manifest shape, the entrypoints and the per-file hashes;
+# returns the normalized manifest the registry stores.
 def _validate_manifest(manifest: Dict[str, Any], members: set[str],
                        source: PackageSource) -> Dict[str, Any]:
     if manifest.get("format") != PACKAGE_FORMAT:
@@ -311,27 +345,33 @@ def _validate_manifest(manifest: Dict[str, Any], members: set[str],
     return result
 
 
+# SHA-256 hex digest of one member's bytes.
 def _hash_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# Thin wrapper, kept so the call sites read like the module level functions.
 def _validate_source(manifest: Dict[str, Any], members: set[str],
                       source: PackageSource) -> Dict[str, Any]:
     return _validate_manifest(manifest, members, source)
 
 
+# Directory that holds the installed packages under a root.
 def packages_dir(root_dir: str) -> str:
     return os.path.join(os.path.abspath(root_dir), "etc", "packages")
 
 
+# Path of the package registry file.
 def registry_path(root_dir: str) -> str:
     return os.path.join(packages_dir(root_dir), "registry.json")
 
 
+# The registry shape to use when none exists yet.
 def _empty_registry() -> Dict[str, Any]:
     return {"format": PACKAGE_FORMAT, "packages": {}}
 
 
+# Re-check a manifest read back from disk, since the registry is plain JSON.
 def _validate_registry_manifest(package_id: str, manifest: Dict[str, Any]) -> None:
     if manifest.get("format") != PACKAGE_FORMAT or manifest.get("id") != package_id:
         raise PackageError(f"包注册表 manifest 无效: {package_id}")
@@ -357,6 +397,7 @@ def _validate_registry_manifest(package_id: str, manifest: Dict[str, Any]) -> No
             raise PackageError(f"包注册表 entrypoint aliases 无效: {package_id}")
 
 
+# Read and validate the registry; a missing file just means nothing is installed.
 def load_registry(root_dir: str) -> Dict[str, Any]:
     path = registry_path(root_dir)
     try:
@@ -380,6 +421,8 @@ def load_registry(root_dir: str) -> Dict[str, Any]:
     return value
 
 
+# Write JSON through a temp file, fsync and
+# os.replace, so a crash cannot truncate the registry.
 def _write_json_atomic(path: str, value: Dict[str, Any]) -> None:
     parent = os.path.dirname(path)
     os.makedirs(parent, exist_ok=True)
@@ -396,16 +439,20 @@ def _write_json_atomic(path: str, value: Dict[str, Any]) -> None:
             os.unlink(temporary)
 
 
+# Persist the registry atomically.
 def save_registry(root_dir: str, registry: Dict[str, Any]) -> None:
     _write_json_atomic(registry_path(root_dir), registry)
 
 
+# Yield an entrypoint's name followed by its aliases.
 def _entrypoint_names(manifest: Dict[str, Any]) -> Iterable[str]:
     for entry in manifest.get("entrypoints", []):
         yield entry.get("name", "")
         yield from entry.get("aliases", [])
 
 
+# Refuse the install when a command name clashes with a system or an
+# installed package command.
 def _check_conflicts(manifest: Dict[str, Any], root_dir: str,
                      replacing_id: Optional[str], reserved_commands: Iterable[str]) -> None:
     reserved = set(reserved_commands)
@@ -424,6 +471,7 @@ def _check_conflicts(manifest: Dict[str, Any], root_dir: str,
                 f"包命令与已安装包 {package_id} 冲突: " + ", ".join(overlap))
 
 
+# Delete a file, a symlink or a whole directory tree.
 def _remove_path(path: str) -> None:
     if not os.path.lexists(path):
         return
@@ -433,12 +481,16 @@ def _remove_path(path: str) -> None:
         os.unlink(path)
 
 
+# Install directory of one package; the id must match _ID_RE so it cannot
+# escape.
 def _installed_base(root_dir: str, package_id: str) -> str:
     if not _ID_RE.fullmatch(package_id):
         raise PackageError("包 id 无效")
     return os.path.join(packages_dir(root_dir), package_id)
 
 
+# True when target really sits under base, false
+# when the two paths cannot be compared at all.
 def _is_within(base: str, target: str) -> bool:
     try:
         return os.path.commonpath((base, target)) == base
@@ -446,6 +498,8 @@ def _is_within(base: str, target: str) -> bool:
         return False
 
 
+# Resolve an installed member path, refusing anything that escapes the package
+# directory.
 def _installed_entry_path(root_dir: str, package_id: str, relative: str) -> str:
     base = os.path.realpath(_installed_base(root_dir, package_id))
     relative = _safe_member_name(relative)
@@ -455,6 +509,7 @@ def _installed_entry_path(root_dir: str, package_id: str, relative: str) -> str:
     return target
 
 
+# Build the registry record kept for an installed package.
 def _record_for_manifest(manifest: Dict[str, Any], source: str) -> Dict[str, Any]:
     return {
         "manifest": manifest,
@@ -463,6 +518,9 @@ def _record_for_manifest(manifest: Dict[str, Any], source: str) -> Dict[str, Any
     }
 
 
+# Install a package into etc/packages/<id> and record it in the registry.
+# The payload is staged in a sibling temp directory and swapped in with os.replace, so a
+# failure leaves the previous version in place. replace=False refuses to overwrite.
 def install_package(source: os.PathLike[str] | str, root_dir: str, *,
                      replace: bool = True,
                      reserved_commands: Iterable[str] = ()) -> Dict[str, Any]:
@@ -513,6 +571,8 @@ def install_package(source: os.PathLike[str] | str, root_dir: str, *,
                 os.replace(backup, target)
 
 
+# Uninstall a package: drop the registry record first, then delete the tree,
+# restoring it if the save fails.
 def remove_package(package_id: str, root_dir: str) -> Dict[str, Any]:
     if not _ID_RE.fullmatch(package_id):
         raise PackageError("包 id 无效")
@@ -539,6 +599,7 @@ def remove_package(package_id: str, root_dir: str) -> Dict[str, Any]:
     return record["manifest"]
 
 
+# Manifests of every installed package, ordered by id.
 def list_packages(root_dir: str) -> List[Dict[str, Any]]:
     registry = load_registry(root_dir)
     result = []
@@ -550,6 +611,7 @@ def list_packages(root_dir: str) -> List[Dict[str, Any]]:
     return result
 
 
+# Manifest of one installed package, or None when the id is unknown.
 def get_package(package_id: str, root_dir: str) -> Optional[Dict[str, Any]]:
     if not _ID_RE.fullmatch(package_id):
         return None
@@ -561,6 +623,7 @@ def get_package(package_id: str, root_dir: str) -> Optional[Dict[str, Any]]:
     return result
 
 
+# Runtime record for one entrypoint, or an empty dict when its file is gone.
 def _entrypoint_record(package_id: str, manifest: Dict[str, Any], entry: Dict[str, Any],
                        root_dir: str) -> Dict[str, Any]:
     path = _installed_entry_path(root_dir, package_id, entry["path"])
@@ -576,6 +639,7 @@ def _entrypoint_record(package_id: str, manifest: Dict[str, Any], entry: Dict[st
     }
 
 
+# Map a command word to the package entrypoint that provides it, or None.
 def resolve_command(command: str, root_dir: str) -> Optional[Dict[str, Any]]:
     if not isinstance(command, str) or not command:
         return None
@@ -592,6 +656,8 @@ def resolve_command(command: str, root_dir: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+# Look up one entrypoint of a package by name or alias; defaults to the
+# first one.
 def resolve_package_entrypoint(package_id: str, root_dir: str,
                                 entrypoint: Optional[str] = None) -> Optional[Dict[str, Any]]:
     manifest = get_package(package_id, root_dir)
@@ -612,6 +678,7 @@ def resolve_package_entrypoint(package_id: str, root_dir: str,
         return None
 
 
+# Every usable entrypoint, for the shell command registry.
 def discover_commands(root_dir: str) -> List[Dict[str, Any]]:
     registry = load_registry(root_dir)
     result = []
@@ -627,11 +694,13 @@ def discover_commands(root_dir: str) -> List[Dict[str, Any]]:
     return result
 
 
+# Validate a package and return its manifest without installing anything.
 def verify_package(source: os.PathLike[str] | str) -> Dict[str, Any]:
     with PackageSource(source) as package:
         return dict(package.manifest)
 
 
+# Zip a package directory into a .pyspkg; refuses to write over its own source.
 def build_package(source: os.PathLike[str] | str,
                   output: os.PathLike[str] | str) -> str:
     source_path = os.path.abspath(os.fspath(source))

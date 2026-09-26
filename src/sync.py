@@ -1,26 +1,30 @@
-#
-#   sync.py
-#   同步文件功能
-#
-#   2026/1/23 by GoutouStdio
-#   @2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      sync.py
+ *      Legacy fix/ directory synchronisation helpers.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import shutil
 import printk
 
-# 2026-09-24 弃用说明：本模块引用的 fix/ 目录在仓库中不存在，
-# 且 OTA 槽位机制已替代其职责。文件予以保留以兼容旧 import，
-# 但 sync_fix_to_root() 将直接返回 False 并打印弃用提示，不再执行复制。
+# deprecated on 2026-09-24: the fix/ directory this module refers to is not in the repository,
+# and the OTA slot mechanism has taken over its job. The file is kept so old imports still work,
+# but sync_fix_to_root() now just returns False after printing a deprecation notice and copies nothing.
 
-# 定义必须同步的文件
+# files that must be synchronised
 REQUIRED_FILES = [
     "kernel.py", "main.py", "fs.py", "printk.py", "sync.py", "btcfg.py"
 ]
-# 定义必须同步的目录
+# directories that must be synchronised
 REQUIRED_DIRS = ["apps", "etc"]
 
-# 获取文件大小
+# Return the size of a file
 def get_file_size(path: str) -> int:
     if os.path.isfile(path):
         try:
@@ -30,7 +34,7 @@ def get_file_size(path: str) -> int:
             return -1
     return 0
 
-# 从fix文件夹同步文件
+# Copy one file out of the fix directory
 def sync_file_from_fix(src_path: str, dest_path: str) -> bool:
     if not os.path.exists(src_path):
         printk.warn(f"源文件不存在，跳过同步: {src_path}")
@@ -42,7 +46,7 @@ def sync_file_from_fix(src_path: str, dest_path: str) -> bool:
     src_size = get_file_size(src_path)
     dest_size = get_file_size(dest_path)
     
-    # 检查文件大小
+    # compare the file sizes
     if src_size == dest_size and src_size != -1:
         printk.info(f"文件大小一致，无需同步: {os.path.basename(dest_path)}")
         return True
@@ -55,7 +59,7 @@ def sync_file_from_fix(src_path: str, dest_path: str) -> bool:
         printk.error(f"同步文件失败 {src_path} -> {dest_path}: {str(e)}")
         return False
 
-# 递归同步目录
+# Synchronise a directory recursively
 def sync_dir_from_fix(src_dir: str, dest_dir: str) -> bool:
     if not os.path.isdir(src_dir):
         printk.warn(f"源目录不存在，跳过同步: {src_dir}")
@@ -77,7 +81,7 @@ def sync_dir_from_fix(src_dir: str, dest_dir: str) -> bool:
     
     return sync_success
 
-# 将fix目录文件同步到根目录
+# Copy the fix directory into the root directory
 def sync_fix_to_root() -> bool:
     printk.warn("sync.fix 已弃用：fix/ 目录不存在，OTA 槽位机制已替代其职责，本次调用不执行任何复制。")
     return False

@@ -1,41 +1,46 @@
-#
-#   shell/elf_cmd.py
-#   ELF 运行命令（由 main.py 拆分而来，行为保持不变）。
-#   默认 unicorn 引擎，失败自动降级自研 CPU 模拟器兜底。
-#
+'''
+ *
+ *      elf_cmd.py
+ *      The run command: load and execute an ELF binary.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import printk
 import logk
-import process as proc  # 进程管理以 process.py（PCB + EEVDF）为准，proc.py 仅为兼容垫片
+import process as proc  # process management lives in process.py (PCB + EEVDF); proc.py is only a compatibility shim
 import pyspos
 import main
 from elf_loader import ELFRunner, __version__ as ELF_LOADER_VERSION
 
 
+# Load and run an ELF executable.
+#
+# Usage: run [-v] [-d] [-f] [--stats] [--map] [--disasm [N]] [--strace] [--engine auto|unicorn|native] <elf path>
+#
+# Options:
+#     -v  show the ELF on Windows Space compatibility layer version
+#     -d  enable debug logging, which prints much more of the execution
+#     -f  force the run, skipping some safety checks
+#     --stats   print statistics after the run: instructions, time, memory, segments, symbols, load time
+#     --map     print the memory map before the run
+#     --disasm [N] disassemble N instructions at the entry point, 10 by default
+#     --strace  print the number and arguments of every syscall, for teaching
+#     --engine  which engine to use: auto (the default, Unicorn first and a
+#               fallback to the in-house emulator), unicorn (forced) or
+#               native (forced to the in-house CPU emulator)
 def cmd_run(args: str):
-    """加载并运行 ELF 可执行文件
-
-    用法: run [-v] [-d] [-f] [--stats] [--map] [--disasm [N]] [--strace] [--engine auto|unicorn|native] <elf文件路径>
-
-    选项:
-        -v  显示 ELF on Windows Space 兼容层版本信息
-        -d  启用调试日志模式（显示更多执行信息）
-        -f  强制运行（跳过某些安全检查）
-        --stats   运行后打印统计（指令数/耗时/内存/段/符号/加载耗时）
-        --map     运行前打印内存映射
-        --disasm [N] 反汇编入口处 N 条指令（默认 10）
-        --strace  打印每次 syscall 的编号与参数（教学用）
-        --engine  执行引擎：auto（默认，先 unicorn，失败自动降级自研引擎）、
-                  unicorn（强制 unicorn）、native（强制自研 CPU 模拟器兜底）
-    """
     import logging
     import shlex
 
-    # 解析参数
+    # parse the arguments
     show_version = False
     debug_mode = False
-    force_mode = False  # 历史 -f 占位：保留参数兼容，暂无可跳过的安全检查
+    force_mode = False  # legacy -f placeholder: kept for argument compatibility, there is no safety check to skip yet
     show_stats = False
     show_map = False
     disasm_n = 0
@@ -43,11 +48,11 @@ def cmd_run(args: str):
     engine = "auto"
     elf_path = None
 
-    # 使用 shlex 分割参数，支持引号
+    # split the arguments with shlex, which honours quotes
     try:
         tokens = shlex.split(args) if args else []
     except ValueError:
-        # 引号不匹配，简单分割
+        # unbalanced quotes, fall back to a plain split
         tokens = args.split() if args else []
 
     i = 0
@@ -60,7 +65,7 @@ def cmd_run(args: str):
             debug_mode = True
             i += 1
         elif token == '-f':
-            force_mode = True  # noqa: F841 — 同上，保留 -f 参数兼容
+            force_mode = True  # noqa: F841 — same as above, -f is kept for argument compatibility
             i += 1
         elif token == '--stats':
             show_stats = True
@@ -140,12 +145,12 @@ def cmd_run(args: str):
             return
         print("执行ELF程序...")
     
-    # 检查 ELF 路径
+    # check the ELF path
     if elf_path is None:
         printk.error("用法: run [-v] [-d] [-f] [--stats] [--map] [--disasm [N]] [--strace] <elf文件路径>\n")
         return
     
-    # 设置日志级别
+    # set the log level
     if debug_mode:
         logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
         logk.printl("run", "调试模式已启用", main.boot_time)
@@ -153,9 +158,9 @@ def cmd_run(args: str):
     else:
         logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     
-    # 检查文件是否存在
+    # check whether the file exists
     if not os.path.exists(elf_path):
-        # 尝试在 elf_apps 目录中查找
+        # try the elf_apps directory
         alt_path = os.path.join(os.getcwd(), "elf_apps", elf_path)
         if debug_mode:
             logk.printl("run", f"尝试查找: {alt_path}", main.boot_time)
@@ -178,11 +183,11 @@ def cmd_run(args: str):
     
     pcb = proc.spawn(f"run {elf_path}", kind="elf")
     try:
-        # 根据调试模式决定是否禁用日志
+        # mute logging unless debug mode is on
         if not debug_mode:
             logging.disable(logging.CRITICAL)
 
-        # 引擎选择：默认 unicorn，真机语义；失败自动降级自研引擎（兜底）。
+        # engine choice: Unicorn by default for real machine semantics, falling back to the in-house engine on failure.
         from elf_loader import unicorn_available
         runner = None
         engine_used = "native"
@@ -202,15 +207,15 @@ def cmd_run(args: str):
                     logging.disable(logging.NOTSET)
                 return
         if runner is None:
-            # native 兜底（自研 CPU 模拟器）
+            # native fallback, the in-house CPU emulator
             runner = ELFRunner(elf_path)
             engine_used = "native"
         if debug_mode or show_stats:
             logk.printl("run", f"执行引擎: {engine_used}", main.boot_time)
 
-        # 加载 ELF 文件
+        # load the ELF file
         if not runner.load():
-            # auto 模式下 unicorn 加载失败 → 降级 native 重试一次
+            # in auto mode, if Unicorn fails to load, retry once with the native engine
             if engine == "auto" and engine_used == "unicorn":
                 printk.warn("unicorn 加载失败，降级到自研引擎重试...\n")
                 runner = ELFRunner(elf_path)
@@ -249,6 +254,7 @@ def cmd_run(args: str):
         if strace:
             _orig_handler = runner.syscall_emulator.handle_syscall
 
+            # Wrapper installed on the syscall handler for --strace.
             def _traced(number, *a, **k):
                 print(f"[strace] syscall nr={number} args={list(a)}")
                 return _orig_handler(number, *a, **k)
@@ -263,7 +269,7 @@ def cmd_run(args: str):
             logk.printl("run", f"节头数量: {runner.parser.header.e_shnum}", main.boot_time)
             logk.printl("run", "开始执行程序...", main.boot_time)
 
-        # 运行程序
+        # run the program
         result = runner.run()
 
         if debug_mode:
@@ -294,11 +300,11 @@ def cmd_run(args: str):
 
         proc.finish(pcb.pid, int(result.exit_code or 0))
 
-        # 恢复日志输出
+        # restore logging
         if not debug_mode:
             logging.disable(logging.NOTSET)
 
-        # 显示程序输出
+        # print the program output
         if result.stdout:
             print(result.stdout, end='')
         if result.stderr:
@@ -313,4 +319,3 @@ def cmd_run(args: str):
             import traceback
             traceback.print_exc()
 
-# 检查是否有可用的更新命令

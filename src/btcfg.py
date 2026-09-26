@@ -1,9 +1,13 @@
-#
-#   btcfg.py
-#   bootcfg.json 操作模块
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      btcfg.py
+ *      bootcfg.json reader and writer with validation.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import json
 import sys
@@ -13,36 +17,36 @@ import tempfile
 import printk
 import hashlib
 
-# 获取btcfg.py所在目录
-# 统一走 common.paths，失败时回退到历史逻辑。
+# Directory holding btcfg.py
+# Ask common.paths first, falling back to the old logic if that fails
 script_dir = os.path.dirname(os.path.abspath(__file__))
 try:
     from common.paths import get_root_dir as _get_root_dir
     root_dir = _get_root_dir(script_dir)
 except Exception:
     if os.path.basename(script_dir) == 'src':
-        # 在src目录中，根目录是src的父目录
+        # Running from src, so the root is its parent
         root_dir = os.path.dirname(script_dir)
     elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-        # 在槽位目录中，根目录是槽位的父目录
+        # Running from a slot directory, so the root is its parent
         root_dir = os.path.dirname(script_dir)
     else:
-        # 其他情况，使用当前目录作为根目录
+        # Anything else, treat the directory itself as the root
         root_dir = script_dir
 
-# bootcfg.json 的位置（使用根目录的etc文件夹）
+# Where bootcfg.json lives, under the root's etc directory
 boot_config = os.path.join(root_dir, 'etc', 'bootcfg.json')
 
-# 全局bootcfg变量
+# The in-memory bootcfg
 bootcfg = {}
 
-# 计算配置校验和（排除校验和自身）
+# Hash the config, excluding the checksum field itself.
 def calculate_checksum(cfg):
     cfg_copy = cfg.copy()
     cfg_copy.pop('checksum', None)
     return hashlib.sha256(json.dumps(cfg_copy, sort_keys=True).encode()).hexdigest()
 
-# 公共异常处理函数
+# Shared handler for a rejected or corrupt bootcfg: offer a repair, else stop.
 def _handle_bootcfg_error(error_msg: str, allow_repair: bool = True) -> None:
     print(f"\033[31m{error_msg}\033[0m")
     if os.environ.get("PYSPOS_BOOT_LOCKED") == "1":
@@ -54,9 +58,9 @@ def _handle_bootcfg_error(error_msg: str, allow_repair: bool = True) -> None:
         input("按下任意键关闭系统...")
         sys.exit(0)
 
-# 创建/修复 bootcfg 文件
-# 2026-09-24: 移除历史 raise（此前直接抛异常导致自动修复入口不可用），
-# 改为：先备份损坏的 etc/ 再写入默认配置。如需恢复旧行为，置环境变量 PYSPOS_BTCFG_NOREPAIR=1。
+# Create or repair bootcfg.json.
+# 2026-09-24: dropped the historical raise, which had made the repair entry point unreachable,
+# and replaced it with: back up the broken etc/ first, then write the defaults. Set PYSPOS_BTCFG_NOREPAIR=1 for the old behaviour.
 def create_bootcfg():
     global bootcfg
     if os.environ.get("PYSPOS_BTCFG_NOREPAIR") == "1":
@@ -82,12 +86,13 @@ def create_bootcfg():
         printk.ok("create_bootcfg: 引导文件夹创建成功！")
         bootcfg['locked'] = False
         bootcfg['rootstate'] = False
-        # 计算并添加校验和
+        # Recompute the checksum
         bootcfg['checksum'] = calculate_checksum(bootcfg)
         printk.ok("create_bootcfg: 成功写入了默认配置！")
         save_bootcfg_data(bootcfg)
         printk.ok("create_bootcfg: 所有步骤全部完成！")
 
+# Check that a bootcfg value is a dict with bool 'locked' and 'rootstate', else raise ValueError.
 def _validate_bootcfg(value):
     if not isinstance(value, dict):
         raise ValueError("配置文件必须是 JSON 对象")
@@ -97,6 +102,7 @@ def _validate_bootcfg(value):
     return value
 
 
+# Write JSON to a temporary file in the same directory, fsync it, then os.replace it into place and chmod 600.
 def _write_json_atomic(path, value):
     parent = os.path.dirname(path)
     os.makedirs(parent, exist_ok=True)
@@ -116,7 +122,7 @@ def _write_json_atomic(path, value):
             os.unlink(temporary)
 
 
-# 存储引导配置
+# Store the boot config, refreshing its checksum first.
 def save_bootcfg_data(bootcfg_data):
     try:
         _validate_bootcfg(bootcfg_data)
@@ -126,30 +132,30 @@ def save_bootcfg_data(bootcfg_data):
         printk.error(f"保存引导配置时出错: {e}")
         raise
 
-# 读取引导配置
+# Return one value from the in-memory boot config.
 def get_bootcfg(cfg):
     global bootcfg
     return bootcfg[cfg]
 
-# 设置引导配置为 True
+# Set a boot config flag to True and save.
 def set_bootcfg_to_true(cfg):
     global bootcfg
     bootcfg[cfg] = True
     save_bootcfg_data(bootcfg)
 
-# 设置引导配置为 False
+# Set a boot config flag to False and save.
 def set_bootcfg_to_false(cfg):
     global bootcfg
     bootcfg[cfg] = False
     save_bootcfg_data(bootcfg)
 
-# 通用设置引导配置值
+# Set any boot config value and save.
 def set_bootcfg_value(cfg, value):
     global bootcfg
     bootcfg[cfg] = value
     save_bootcfg_data(bootcfg)
 
-# 加载引导配置
+# Load and verify bootcfg.json, writing a default when it is missing and repairing it when it is bad.
 def load_bootcfg():
     global bootcfg
     try:
@@ -167,7 +173,7 @@ def load_bootcfg():
         
         return bootcfg
     except FileNotFoundError as e:
-        # 文件不存在时自动创建默认配置
+        # Create a default config when the file is missing
         print(f"bootcfg.json 不存在，正在创建默认配置...")
         bootcfg = {
             'locked': False,
@@ -183,5 +189,5 @@ def load_bootcfg():
     except ValueError as e:
         _handle_bootcfg_error(f"检测到非法修改启动配置，拒绝启动。")
 
-# 模块加载时自动加载配置
+# Load the config as soon as this module is imported
 load_bootcfg()

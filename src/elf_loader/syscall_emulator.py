@@ -1,9 +1,13 @@
-#
-#   elf_loader/syscall_emulator.py
-#   系统调用模拟，在Windows上跑elf的重要模块
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      syscall_emulator.py
+ *      Linux syscall emulation for loaded ELF programs.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import sys
@@ -19,7 +23,8 @@ from enum import IntEnum
 logger = logging.getLogger(__name__)
 
 
-# Linux 系统调用号 (x86_64)
+# Linux syscall numbers (x86_64)
+# The x86_64 Linux syscall numbers, as far as this emulator implements them.
 class SyscallX86_64(IntEnum):
     READ = 0
     WRITE = 1
@@ -357,7 +362,8 @@ class SyscallX86_64(IntEnum):
     rseq = 334
 
 
-# Linux 系统调用号 (i386)
+# Linux syscall numbers (i386)
+# The i386 Linux syscall numbers, as far as this emulator implements them.
 class SyscallI386(IntEnum):
     RESTART_SYSCALL = 0
     EXIT = 1
@@ -724,7 +730,8 @@ class SyscallI386(IntEnum):
     GETPEERNAME = 366
 
 
-# 文件打开标志
+# file open flags
+# The O_* flags the guest passes to open.
 class OpenFlags(IntEnum):
     O_RDONLY = 0o0
     O_WRONLY = 0o1
@@ -747,7 +754,8 @@ class OpenFlags(IntEnum):
     O_PATH = 0o10000000
 
 
-# mmap 保护标志
+# mmap protection flags
+# The PROT_* protection bits mmap and mprotect take.
 class MmapProt(IntEnum):
     PROT_NONE = 0x0
     PROT_READ = 0x1
@@ -757,7 +765,8 @@ class MmapProt(IntEnum):
     PROT_GROWSUP = 0x02000000
 
 
-# mmap 标志
+# mmap flags
+# The MAP_* flags mmap takes.
 class MmapFlags(IntEnum):
     MAP_SHARED = 0x01
     MAP_PRIVATE = 0x02
@@ -779,9 +788,9 @@ class MmapFlags(IntEnum):
     MAP_FIXED_NOREPLACE = 0x100000
 
 
+# One guest file descriptor and the host file behind it.
 @dataclass
 class FileDescriptor:
-    """文件描述符"""
     fd: int
     path: str
     flags: int
@@ -789,27 +798,22 @@ class FileDescriptor:
     is_open: bool = True
 
 
+# Answer guest syscalls by calling the host on the program's behalf.
 class SyscallEmulator:
-    """系统调用模拟器"""
     
+# Bind to a loaded image, open the standard descriptors, install the handlers.
     def __init__(self, loader):
-        """
-        初始化系统调用模拟器
-        
-        Args:
-            loader: ELFLoader 实例
-        """
         self.loader = loader
         self.is_64bit = not loader.parser.is_32bit
         
-        # 文件描述符表
+# file descriptor table
         self.fd_table: Dict[int, FileDescriptor] = {}
-        self.next_fd = 3  # 0, 1, 2 保留给 stdin, stdout, stderr
+        self.next_fd = 3  # 0, 1 and 2 are reserved for stdin, stdout and stderr
         
-        # 初始化标准文件描述符
+# standard file descriptors stay open
         self._init_stdio()
         
-        # 进程信息
+# process information
         self.pid = random.randint(1000, 65535)
         self.ppid = random.randint(1000, 65535)
         self.uid = 1000
@@ -817,34 +821,34 @@ class SyscallEmulator:
         self.euid = 1000
         self.egid = 1000
         
-        # 工作目录
+# working directory
         self.cwd = os.getcwd()
         
-        # 系统调用处理函数映射
+# syscall number to handler
         self._setup_syscall_handlers()
         
-        # 内存映射
-        self.mmaps: Dict[int, Tuple[int, int]] = {}  # 地址 -> (大小, 标志)
+# memory mappings
+        self.mmaps: Dict[int, Tuple[int, int]] = {}  # address to (size, flags)
         self.mmap_base = 0x7f0000000000 if self.is_64bit else 0x40000000
     
+# Reserve fds 0 to 2 and create the output capture buffers.
     def _init_stdio(self):
-        """初始化标准输入输出"""
         self.fd_table[0] = FileDescriptor(0, "<stdin>", OpenFlags.O_RDONLY)
         self.fd_table[1] = FileDescriptor(1, "<stdout>", OpenFlags.O_WRONLY)
         self.fd_table[2] = FileDescriptor(2, "<stderr>", OpenFlags.O_WRONLY)
         
-        # 输出缓冲区（用于捕获 stdout/stderr）
+# output buffers that capture stdout and stderr
         self.stdout_buffer: List[bytes] = []
         self.stderr_buffer: List[bytes] = []
         
-        # stdout 和 stderr 属性（兼容性）
+# stdout and stderr properties, kept for compatibility
         self.stdout = sys.stdout
         self.stderr = sys.stderr
     
+# Map numbers to handlers, using the i386 table in 32-bit mode.
     def _setup_syscall_handlers(self):
-        """设置系统调用处理函数"""
         self.handlers: Dict[int, Callable] = {
-            # 文件操作
+# file operations
             SyscallX86_64.READ: self.sys_read,
             SyscallX86_64.WRITE: self.sys_write,
             SyscallX86_64.OPEN: self.sys_open,
@@ -855,13 +859,13 @@ class SyscallEmulator:
             SyscallX86_64.FSTAT: self.sys_fstat,
             SyscallX86_64.LSTAT: self.sys_lstat,
             
-            # 内存管理
+# memory management
             SyscallX86_64.MMAP: self.sys_mmap,
             SyscallX86_64.MUNMAP: self.sys_munmap,
             SyscallX86_64.MPROTECT: self.sys_mprotect,
             SyscallX86_64.BRK: self.sys_brk,
             
-            # 进程管理
+# process management
             SyscallX86_64.EXIT: self.sys_exit,
             SyscallX86_64.EXIT_GROUP: self.sys_exit_group,
             SyscallX86_64.GETPID: self.sys_getpid,
@@ -871,16 +875,16 @@ class SyscallEmulator:
             SyscallX86_64.GETEUID: self.sys_geteuid,
             SyscallX86_64.GETEGID: self.sys_getegid,
             
-            # 时间
+# time
             SyscallX86_64.GETTIMEOFDAY: self.sys_gettimeofday,
             SyscallX86_64.CLOCK_GETTIME: self.sys_clock_gettime,
             SyscallX86_64.NANOSLEEP: self.sys_nanosleep,
             
-            # 系统信息
+# system information
             SyscallX86_64.UNAME: self.sys_uname,
             SyscallX86_64.SYSINFO: self.sys_sysinfo,
             
-            # 文件系统
+# file system
             SyscallX86_64.GETCWD: self.sys_getcwd,
             SyscallX86_64.CHDIR: self.sys_chdir,
             SyscallX86_64.MKDIR: self.sys_mkdir,
@@ -894,16 +898,16 @@ class SyscallEmulator:
             SyscallX86_64.READV: self.sys_readv,
             SyscallX86_64.WRITEV: self.sys_writev,
             
-            # 目录
+# directories
             SyscallX86_64.GETDENTS64: self.sys_getdents64,
             
-            # 其他
+# everything else
             SyscallX86_64.ARCH_PRCTL: self.sys_arch_prctl,
             SyscallX86_64.PREAD64: self.sys_pread64,
             SyscallX86_64.PWRITE64: self.sys_pwrite64,
         }
         
-        # i386 系统调用号映射
+# i386 syscall number mapping
         if not self.is_64bit:
             self.handlers = {
                 SyscallI386.READ: self.sys_read,
@@ -940,6 +944,7 @@ class SyscallEmulator:
                 SyscallI386.GETDENTS: self.sys_getdents64,
             }
     
+# Dispatch one syscall, turning a host exception into a negative errno.
     def handle_syscall(self, num: int, *args) -> int:
         handler = self.handlers.get(num)
         if handler:
@@ -957,8 +962,8 @@ class SyscallEmulator:
             logger.warning(f"Unimplemented syscall: {num}")
             return -errno.ENOSYS
     
+# Map a host exception onto the errno the guest expects.
     def _get_errno(self, e: Exception) -> int:
-        """将异常转换为错误码"""
         if isinstance(e, FileNotFoundError):
             return errno.ENOENT
         elif isinstance(e, PermissionError):
@@ -972,8 +977,8 @@ class SyscallEmulator:
         else:
             return errno.EIO
     
+# Read a NUL-terminated string out of guest memory.
     def _read_string(self, addr: int) -> str:
-        """从内存读取字符串"""
         result = bytearray()
         offset = 0
         while True:
@@ -983,25 +988,25 @@ class SyscallEmulator:
                     break
                 result.extend(byte)
                 offset += 1
-                if offset > 4096:  # 限制最大长度
+                if offset > 4096:  # cap the length
                     break
             except MemoryError:
                 break
         return result.decode('utf-8', errors='replace')
     
+# Read size bytes out of guest memory.
     def _read_buffer(self, addr: int, size: int) -> bytes:
-        """从内存读取缓冲区"""
         return self.loader.read_memory(addr, size)
     
+# Write data into guest memory.
     def _write_buffer(self, addr: int, data: bytes):
-        """向内存写入缓冲区"""
         self.loader.write_memory(addr, data)
     
-    # ==================== 系统调用实现 ====================
+# ==================== syscall implementations ====================
     
+# Read from a descriptor into guest memory.
     def sys_read(self, fd: int, buf: int, count: int) -> int:
-        """读取文件"""
-        if fd in (0, 1, 2):  # 标准IO
+        if fd in (0, 1, 2):  # standard I/O
             try:
                 data = os.read(fd, count)
                 self._write_buffer(buf, data)
@@ -1023,8 +1028,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Write from guest memory to a descriptor or to the capture buffer.
     def sys_write(self, fd: int, buf: int, count: int, *args) -> int:
-        """写入文件"""
         try:
             data = self._read_buffer(buf, count)
         except Exception as e:
@@ -1036,7 +1041,7 @@ class SyscallEmulator:
         elif fd == 2:  # stderr
             self.stderr_buffer.append(data)
             return count
-        elif fd == 0:  # stdin - 错误
+        elif fd == 0:  # stdin is an error
             return -errno.EBADF
         
         fd_obj = self.fd_table.get(fd)
@@ -1054,19 +1059,19 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Open a host file and hand the guest a new descriptor.
     def sys_open(self, pathname: int, flags: int, mode: int = 0o666) -> int:
-        """打开文件"""
         path = self._read_string(pathname)
         
-        # 处理相对路径
+# resolve a relative path
         if not os.path.isabs(path):
             path = os.path.join(self.cwd, path)
         path = os.path.normpath(path)
         
-        # 检查文件是否存在
+# see whether the file exists
         exists = os.path.exists(path)
         
-        # 解析标志
+# decode the flags
         read_write = flags & 0o3
         create = bool(flags & OpenFlags.O_CREAT)
         truncate = bool(flags & OpenFlags.O_TRUNC)
@@ -1085,7 +1090,7 @@ class SyscallEmulator:
         if not os.path.exists(path):
             return -errno.ENOENT
         
-        # 分配文件描述符
+# take a free descriptor
         fd_num = self.next_fd
         self.next_fd += 1
         
@@ -1097,10 +1102,10 @@ class SyscallEmulator:
         
         return fd_num
     
+# Close a descriptor; the standard three always succeed.
     def sys_close(self, fd: int) -> int:
-        """关闭文件"""
         if fd in (0, 1, 2):
-            return 0  # 标准IO不能关闭
+            return 0  # the standard descriptors cannot be closed
         
         fd_obj = self.fd_table.get(fd)
         if not fd_obj:
@@ -1110,8 +1115,8 @@ class SyscallEmulator:
         del self.fd_table[fd]
         return 0
     
+# Move the file position and return the new one.
     def sys_lseek(self, fd: int, offset: int, whence: int) -> int:
-        """设置文件位置"""
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
@@ -1130,8 +1135,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Check that a path exists; the access mode is not enforced.
     def sys_access(self, pathname: int, mode: int) -> int:
-        """检查文件访问权限"""
         path = self._read_string(pathname)
         
         if not os.path.isabs(path):
@@ -1141,13 +1146,13 @@ class SyscallEmulator:
         try:
             if not os.path.exists(path):
                 return -errno.ENOENT
-            # 简化处理，假设总是可访问
+# simplified: everything is assumed accessible
             return 0
         except OSError as e:
             return -e.errno
     
+# Fill a guest struct stat from the host's os.stat.
     def sys_stat(self, pathname: int, statbuf: int) -> int:
-        """获取文件状态"""
         path = self._read_string(pathname)
         
         if not os.path.isabs(path):
@@ -1161,8 +1166,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Fill a guest struct stat for an already open descriptor.
     def sys_fstat(self, fd: int, statbuf: int) -> int:
-        """获取文件状态（通过fd）"""
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
@@ -1174,15 +1179,15 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Fill a guest struct stat; unlike Linux, symlinks are followed.
     def sys_lstat(self, pathname: int, statbuf: int) -> int:
-        """获取文件状态（不跟随符号链接）"""
-        return self.sys_stat(pathname, statbuf)  # 简化处理
+        return self.sys_stat(pathname, statbuf)  # simplified
     
+# Write this architecture's struct stat layout into guest memory.
     def _write_stat(self, addr: int, st: os.stat_result):
-        """写入 stat 结构"""
         if self.is_64bit:
-            # x86_64 stat 结构
-            # 简化版本，只填充关键字段
+# x86_64 stat layout
+# a simplified layout that only fills the fields programs check
             data = struct.pack('<QQQQQQQQQQQQQQQQQQQ',
                 st.st_dev,      # dev
                 st.st_ino,      # ino
@@ -1204,7 +1209,7 @@ class SyscallEmulator:
                 0, 0, 0         # __unused
             )
         else:
-            # i386 stat 结构
+# i386 stat layout
             data = struct.pack('<QQIIIIIIIIIIIIIIII',
                 st.st_dev,      # dev
                 0,              # __pad1
@@ -1227,8 +1232,8 @@ class SyscallEmulator:
             )
         self._write_buffer(addr, data)
     
+# Return a free page-aligned range of size, preferring hint.
     def _find_free_memory(self, size: int, hint: int = 0) -> int:
-        """查找可用的内存区域"""
         size = (size + 0xfff) & ~0xfff
         
         if hint != 0:
@@ -1245,15 +1250,15 @@ class SyscallEmulator:
         
         return 0
     
+# Report whether the range overlaps nothing the loader has mapped.
     def _is_region_free(self, addr: int, size: int) -> bool:
-        """检查内存区域是否空闲"""
         for region in self.loader.memory.values():
             if addr < region.end and addr + size > region.start:
                 return False
         return True
     
+# Map a fresh region into the loader, anonymous or file backed.
     def sys_mmap(self, addr: int, length: int, prot: int, flags: int, fd: int, offset: int) -> int:
-        """内存映射"""
         if length <= 0:
             return -errno.EINVAL
         
@@ -1308,8 +1313,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Drop a mapping this emulator made.
     def sys_munmap(self, addr: int, length: int) -> int:
-        """解除内存映射"""
         if addr in self.mmaps:
             del self.mmaps[addr]
             if addr in self.loader.memory:
@@ -1317,50 +1322,51 @@ class SyscallEmulator:
             return 0
         return -errno.EINVAL
     
+# Change protection; accepted and ignored, so the old bits stay.
     def sys_mprotect(self, addr: int, length: int, prot: int) -> int:
-        """设置内存保护"""
-        # 简化处理
+# simplified
         return 0
     
+# Report the break when addr is zero, otherwise grow the heap.
     def sys_brk(self, addr: int, *args) -> int:
         if addr == 0:
             return self.loader.brk
         return self.loader.brk_extend(addr)
     
+# End the run by raising SystemExit with the guest's status.
     def sys_exit(self, status: int, *args) -> int:
-        """退出进程"""
         raise SystemExit(status)
     
+# End the run; there is only one thread, so this is sys_exit again.
     def sys_exit_group(self, status: int, *args) -> int:
-        """退出进程组"""
         raise SystemExit(status)
     
+# Return the invented pid.
     def sys_getpid(self) -> int:
-        """获取进程ID"""
         return self.pid
     
+# Return the invented parent pid.
     def sys_getppid(self) -> int:
-        """获取父进程ID"""
         return self.ppid
     
+# Return the invented real uid.
     def sys_getuid(self) -> int:
-        """获取用户ID"""
         return self.uid
     
+# Return the invented real gid.
     def sys_getgid(self) -> int:
-        """获取组ID"""
         return self.gid
     
+# Return the invented effective uid.
     def sys_geteuid(self) -> int:
-        """获取有效用户ID"""
         return self.euid
     
+# Return the invented effective gid.
     def sys_getegid(self) -> int:
-        """获取有效组ID"""
         return self.egid
     
+# Fill a guest timeval from the host clock.
     def sys_gettimeofday(self, tv: int, tz: int) -> int:
-        """获取时间"""
         now = time.time()
         sec = int(now)
         usec = int((now - sec) * 1000000)
@@ -1373,8 +1379,8 @@ class SyscallEmulator:
         self._write_buffer(tv, data)
         return 0
     
+# Fill a guest timespec; the clock id is ignored.
     def sys_clock_gettime(self, clk_id: int, tp: int) -> int:
-        """获取时钟时间"""
         now = time.time()
         sec = int(now)
         nsec = int((now - sec) * 1000000000)
@@ -1383,8 +1389,8 @@ class SyscallEmulator:
         self._write_buffer(tp, data)
         return 0
     
+# Sleep the host for the requested time, so the guest really waits.
     def sys_nanosleep(self, req: int, rem: int) -> int:
-        """纳秒级睡眠"""
         if self.is_64bit:
             data = self._read_buffer(req, 16)
             sec, nsec = struct.unpack('<QQ', data)
@@ -1395,9 +1401,9 @@ class SyscallEmulator:
         time.sleep(sec + nsec / 1000000000)
         return 0
     
+# Fill a guest struct utsname with fixed PySpOS strings.
     def sys_uname(self, buf: int) -> int:
-        """获取系统信息"""
-        # utsname 结构
+# utsname layout
         sysname = b"PySPK\x00"
         nodename = b"pyspos\x00"
         release = b"3.0.0\x00"
@@ -1406,10 +1412,10 @@ class SyscallEmulator:
         domainname = b"(none)\x00"
         
         if self.is_64bit:
-            # x86_64: 每个字段 65 字节
+# x86_64: 65 bytes per field
             field_size = 65
         else:
-            # i386: 每个字段 65 字节
+# i386: 65 bytes per field
             field_size = 65
         
         data = (
@@ -1424,14 +1430,14 @@ class SyscallEmulator:
         self._write_buffer(buf, data)
         return 0
     
+# Fill a guest struct sysinfo from the host's memory statistics.
     def sys_sysinfo(self, info: int) -> int:
-        """获取系统统计信息"""
         import psutil
         
         mem = psutil.virtual_memory()
         
         if self.is_64bit:
-            # sysinfo 结构 (x86_64)
+# sysinfo layout (x86_64)
             data = struct.pack('<QQQQQQQQQQQIQQ',
                 int(time.time()),  # uptime
                 1,  # loads[0]
@@ -1449,7 +1455,7 @@ class SyscallEmulator:
                 0   # freehigh
             )
         else:
-            # sysinfo 结构 (i386)
+# sysinfo layout (i386)
             data = struct.pack('<IIIIIIIIIIIIIII',
                 int(time.time()),  # uptime
                 1, 1, 1,  # loads
@@ -1463,16 +1469,16 @@ class SyscallEmulator:
         self._write_buffer(info, data)
         return 0
     
+# Copy the working directory into the guest's buffer.
     def sys_getcwd(self, buf: int, size: int) -> int:
-        """获取当前工作目录"""
         cwd = self.cwd.encode('utf-8')
         if len(cwd) >= size:
             return -errno.ERANGE
         self._write_buffer(buf, cwd + b'\x00')
         return len(cwd) + 1
     
+# Change the directory that relative guest paths resolve against.
     def sys_chdir(self, path: int) -> int:
-        """改变工作目录"""
         new_path = self._read_string(path)
         
         if not os.path.isabs(new_path):
@@ -1485,8 +1491,8 @@ class SyscallEmulator:
         self.cwd = new_path
         return 0
     
+# Create a host directory for the guest.
     def sys_mkdir(self, pathname: int, mode: int) -> int:
-        """创建目录"""
         path = self._read_string(pathname)
         
         if not os.path.isabs(path):
@@ -1499,8 +1505,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Remove a host directory for the guest.
     def sys_rmdir(self, pathname: int) -> int:
-        """删除目录"""
         path = self._read_string(pathname)
         
         if not os.path.isabs(path):
@@ -1513,8 +1519,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Delete a host file for the guest.
     def sys_unlink(self, pathname: int) -> int:
-        """删除文件"""
         path = self._read_string(pathname)
         
         if not os.path.isabs(path):
@@ -1527,8 +1533,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Rename a host file for the guest.
     def sys_rename(self, oldpath: int, newpath: int) -> int:
-        """重命名文件"""
         old = self._read_string(oldpath)
         new = self._read_string(newpath)
         
@@ -1546,22 +1552,22 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Accept the request and report success; no device is emulated.
     def sys_ioctl(self, fd: int, request: int, arg: int) -> int:
-        """设备控制"""
-        # 简化处理，返回 0
+# simplified: report success
         return 0
     
+# Validate the descriptor, then ignore the command.
     def sys_fcntl(self, fd: int, cmd: int, arg: int = 0) -> int:
-        """文件控制"""
         fd_obj = self.fd_table.get(fd)
         if not fd_obj:
             return -errno.EBADF
         
-        # 简化处理
+# simplified
         return 0
     
+# Write host directory entries as guest struct linux_dirent64 records.
     def sys_getdents64(self, fd: int, dirp: int, count: int) -> int:
-        """读取目录项"""
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
@@ -1575,15 +1581,15 @@ class SyscallEmulator:
             
             for entry in entries:
                 entry_bytes = entry.encode('utf-8')
-                entry_len = 24 + len(entry_bytes) + 1  # 对齐到 8 字节
+                entry_len = 24 + len(entry_bytes) + 1  # round up to a multiple of 8
                 entry_len = (entry_len + 7) & ~7
                 
                 if len(result) + entry_len > count:
                     break
                 
-                # linux_dirent64 结构
-                d_ino = 0  # inode 号
-                d_off = 0  # 偏移
+# linux_dirent64 layout
+                d_ino = 0  # inode number
+                d_off = 0  # offset
                 d_reclen = entry_len
                 d_type = 4 if os.path.isdir(os.path.join(fd_obj.path, entry)) else 8  # DT_DIR or DT_REG
                 
@@ -1598,13 +1604,13 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Accept the request and report success; TLS is not set up.
     def sys_arch_prctl(self, code: int, addr: int) -> int:
-        """架构特定进程控制"""
-        # 简化处理
+# simplified
         return 0
     
+# Run sys_read once per iovec and add the counts up.
     def sys_readv(self, fd: int, iov: int, iovcnt: int) -> int:
-        """分散读取"""
         total = 0
         for i in range(iovcnt):
             if self.is_64bit:
@@ -1620,8 +1626,8 @@ class SyscallEmulator:
             total += n
         return total
     
+# Run sys_write once per iovec and add the counts up.
     def sys_writev(self, fd: int, iov: int, iovcnt: int) -> int:
-        """集中写入"""
         total = 0
         for i in range(iovcnt):
             if self.is_64bit:
@@ -1637,8 +1643,8 @@ class SyscallEmulator:
             total += n
         return total
     
+# Read at an explicit offset without moving the file position.
     def sys_pread64(self, fd: int, buf: int, count: int, offset: int) -> int:
-        """指定位置读取"""
         fd_obj = self.fd_table.get(fd)
         if not fd_obj or not fd_obj.is_open:
             return -errno.EBADF
@@ -1652,8 +1658,8 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
+# Write at an explicit offset without moving the file position.
     def sys_pwrite64(self, fd: int, buf: int, count: int, offset: int) -> int:
-        """指定位置写入"""
         data = self._read_buffer(buf, count)
         
         fd_obj = self.fd_table.get(fd)

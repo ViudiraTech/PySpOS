@@ -1,16 +1,13 @@
-#
-#   syslocale.py
-#   系统语言（i18n）+ 时区。标准库 only，被 kernel/main 早期导入，
-#   因此本模块禁止 import 主工程模块（main/btcfg/kernel），只做纯逻辑。
-#
-#   语言：_('key') 查目录，缺省回退 key 本身；set_language 切换即时生效，
-#   由 OOBE/开机 init_from_bootcfg 持久化（bootcfg.lang）。
-#   目录覆盖：OOBE 全流程 + TUI 框体 + locale 命令 + 开机 banner。
-#   （shell 历史命令体的中文串保持原样，属增量翻译范畴，见 TODO。）
-#
-#   时区：set_timezone(name) 用 zoneinfo 校验并立即生效——POSIX 写 TZ+tzset，
-#   全平台同时登记 _TZ 供 now_str() 使用；init_from_bootcfg 开机应用。
-#
+'''
+ *
+ *      syslocale.py
+ *      Language and timezone runtime state.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import time
@@ -19,7 +16,7 @@ from datetime import datetime
 try:
     from zoneinfo import ZoneInfo, available_timezones
     _ZONEINFO_OK = True
-except ImportError:  # 极旧 Python 回退
+except ImportError:  # fallback for very old Python without zoneinfo
     ZoneInfo = None
     available_timezones = lambda: set()
     _ZONEINFO_OK = False
@@ -36,7 +33,7 @@ _current_tz = DEFAULT_TIMEZONE
 
 CATALOGS = {
     "zh_CN": {
-        # TUI 框体
+        # TUI frame text
         "tui.cont": "继续",
         "tui.back": "返回",
         "tui.cancel": "取消",
@@ -46,7 +43,7 @@ CATALOGS = {
         "tui.choose": "请输入编号",
         "tui.invalid": "输入无效，请重试",
         "tui.press_enter": "按回车继续…",
-        # 开机 banner
+        # Boot banner
         "boot.loading": "加载 PySpKernel...",
         "boot.locked": "已上锁",
         "boot.unlocked": "已解锁",
@@ -56,7 +53,7 @@ CATALOGS = {
         "boot.root_enabled": "ROOT已启用",
         "boot.root_disabled": "ROOT未启用",
         "boot.welcome": "欢迎使用 PySpOS 操作系统，{user}！",
-        # locale 命令
+        # Locale command
         "locale.usage": "用法: locale [lang <zh_CN|en> | tz <时区> | user <显示名>]",
         "locale.current": "当前语言：{lang}，时区：{tz}，显示名：{user}",
         "locale.lang_ok": "语言已切换为 {lang}，重启后依然有效",
@@ -166,6 +163,7 @@ CATALOGS = {
 }
 
 
+# Look up a catalog string for the current language, format it with kwargs, and fall back to the key itself.
 def _(key, **kwargs):
     text = CATALOGS.get(_current_lang, {}).get(key, CATALOGS[DEFAULT_LANG].get(key, key))
     if kwargs:
@@ -176,10 +174,12 @@ def _(key, **kwargs):
     return text
 
 
+# Return the active language code.
 def get_language():
     return _current_lang
 
 
+# Switch the active language; returns False for an unsupported code and changes nothing.
 def set_language(lang):
     global _current_lang
     if lang not in SUPPORTED_LANGS:
@@ -188,10 +188,12 @@ def set_language(lang):
     return True
 
 
+# Return the active timezone name.
 def get_timezone():
     return _current_tz
 
 
+# Return the sorted zone names, with a small built-in list when zoneinfo has no database.
 def list_timezones():
     try:
         zones = sorted(available_timezones())
@@ -203,8 +205,8 @@ def list_timezones():
     return zones
 
 
+# Validate the zone name and apply it at once; on failure return False and keep the current zone.
 def set_timezone(name):
-    """校验并立即生效；失败返回 False（不改动当前状态）。"""
     global _current_tz
     name = (name or "").strip()
     if not name:
@@ -226,6 +228,7 @@ def set_timezone(name):
     return True
 
 
+# Return the current time in the active zone, falling back to the host's local time.
 def now_str(fmt="%H:%M:%S"):
     try:
         if _ZONEINFO_OK:
@@ -235,12 +238,13 @@ def now_str(fmt="%H:%M:%S"):
     return time.strftime(fmt)
 
 
+# Return the current date and time in the active zone.
 def full_timestamp(fmt="%Y-%m-%d %H:%M:%S"):
     return now_str(fmt)
 
 
+# Apply the persisted language and timezone at boot; missing keys fall back to the defaults and never raise.
 def init_from_bootcfg(bootcfg):
-    """开机应用持久化语言/时区。bootcfg 缺键时用默认，不抛异常。"""
     try:
         lang = (bootcfg or {}).get("lang", DEFAULT_LANG)
         if lang in SUPPORTED_LANGS:

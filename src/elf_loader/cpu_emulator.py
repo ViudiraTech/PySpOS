@@ -1,12 +1,13 @@
-#
-#   elf_loader/cpu_emulator.py
-#   CPU 模拟器模块
-#   提供 x86/x86_64 CPU 模拟功能，用于执行 ELF 程序。
-#
-#   模拟 CPU 型号：SpaceCPU 1 Pro (x86/x86_64) || 未量产，处于构思阶段
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      cpu_emulator.py
+ *      x86 CPU emulation core.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 from typing import Dict, List, Optional, Tuple, Callable, Any
 from dataclasses import dataclass, field
@@ -18,20 +19,24 @@ from .elf_constants import ELFMachine
 logger = logging.getLogger(__name__)
 
 
+# The 32-bit register numbers, in x86 encoding order rather than alphabetical.
 class Register32(IntEnum):
     EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, EIP, EFLAGS = range(10)
 
 
+# The 64-bit register numbers, continuing the same order as Register32.
 class Register64(IntEnum):
     RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI = range(8)
     R8, R9, R10, R11, R12, R13, R14, R15 = range(8, 16)
     RIP, RFLAGS = 16, 17
 
 
+# Bit positions of the condition flags the emulator tracks.
 class EFlags(IntEnum):
     CF, PF, AF, ZF, SF, TF, IF, DF, OF = 0, 2, 4, 6, 7, 8, 9, 10, 11
 
 
+# The architectural state: registers, segment selectors, control and debug registers.
 @dataclass
 class CPUState:
     regs: Dict[int, int] = field(default_factory=dict)
@@ -54,80 +59,100 @@ class CPUState:
     dr6: int = 0
     dr7: int = 0
     
+# Make sure every general register slot exists so lookups never miss.
     def __post_init__(self):
         if not self.regs:
             for i in range(18):
                 self.regs[i] = 0
 
 
+# Base class for everything the emulator throws at the runner.
 class CPUException(Exception):
     pass
 
 
+# Raised for an opcode the decoder does not know.
 class InvalidInstruction(CPUException):
     pass
 
 
+# Raised when an access hits an unmapped or unwritable address.
 class PageFault(CPUException):
+# Remember the faulting address and whether it was a write.
     def __init__(self, address: int, is_write: bool = False):
         self.address = address
         self.is_write = is_write
         super().__init__(f"Page fault at 0x{address:08x} ({'write' if is_write else 'read'})")
 
 
+# Raised by SYSCALL to hand the number and the arguments to the runner.
 class SyscallInterrupt(CPUException):
+# Carry the syscall number and its arguments.
     def __init__(self, number: int, args: List[int]):
         self.number = number
         self.syscall_args = args
         super().__init__(f"Syscall {number} with args {args}")
 
 
+# Byte-level guest memory access layered on the loader's regions.
 class MemoryController:
+# Bind to the loader whose regions hold the guest image.
     def __init__(self, loader):
         self.loader = loader
         self.page_size = 4096
         
+# Read one byte, raising PageFault when the address is unmapped.
     def read_byte(self, addr: int) -> int:
         region = self._find_region(addr)
         if region is None:
             raise PageFault(addr, False)
         return region.data[addr - region.start]
     
+# Read a little-endian 16-bit value.
     def read_word(self, addr: int) -> int:
         return self.read_byte(addr) | (self.read_byte(addr + 1) << 8)
     
+# Read a little-endian 32-bit value.
     def read_dword(self, addr: int) -> int:
         return (self.read_byte(addr) | (self.read_byte(addr + 1) << 8) |
                 (self.read_byte(addr + 2) << 16) | (self.read_byte(addr + 3) << 24))
     
+# Read a little-endian 64-bit value.
     def read_qword(self, addr: int) -> int:
         return self.read_dword(addr) | (self.read_dword(addr + 4) << 32)
     
+# Read size bytes into a bytes object.
     def read_bytes(self, addr: int, size: int) -> bytes:
         return bytes(self.read_byte(addr + i) for i in range(size))
     
+# Write one byte, raising PageFault when unmapped or read-only.
     def write_byte(self, addr: int, value: int) -> None:
         region = self._find_region(addr)
         if region is None or not region.writable:
             raise PageFault(addr, True)
         region.data[addr - region.start] = value & 0xff
     
+# Write a little-endian 16-bit value.
     def write_word(self, addr: int, value: int) -> None:
         self.write_byte(addr, value & 0xff)
         self.write_byte(addr + 1, (value >> 8) & 0xff)
     
+# Write a little-endian 32-bit value.
     def write_dword(self, addr: int, value: int) -> None:
         for i in range(4):
             self.write_byte(addr + i, (value >> (i * 8)) & 0xff)
     
+# Write a little-endian 64-bit value.
     def write_qword(self, addr: int, value: int) -> None:
         for i in range(8):
             self.write_byte(addr + i, (value >> (i * 8)) & 0xff)
     
+# Write each byte of data in turn.
     def write_bytes(self, addr: int, data: bytes) -> None:
         for i, byte in enumerate(data):
             self.write_byte(addr + i, byte)
     
+# Return the region holding addr, or None.
     def _find_region(self, addr: int):
         for region in self.loader.memory.values():
             if region.start <= addr < region.start + len(region.data):
@@ -135,6 +160,7 @@ class MemoryController:
         return None
 
 
+# One memory operand: a modrm register or an effective address.
 @dataclass
 class DecodedOperand:
     operand_type: str
@@ -148,6 +174,7 @@ class DecodedOperand:
     has_sib: bool = False
 
 
+# Decode the subset of x86 that this emulator implements.
 class InstructionDecoder:
     OPCODES = {
         0x00: ('ADD', 'Eb', 'Gb'), 0x01: ('ADD', 'Ev', 'Gv'),
@@ -217,6 +244,7 @@ class InstructionDecoder:
         0x8E: ('JLE', 'Jz'), 0x8F: ('JNLE', 'Jz'),
     }
     
+# Reset the per-instruction prefix state.
     def __init__(self, is_64bit: bool = True):
         self.is_64bit = is_64bit
         self.rex = 0
@@ -224,6 +252,7 @@ class InstructionDecoder:
         self.operand_size = 64
         self.address_size = 64
         
+# Return (mnemonic, length, operands) for the instruction at ip.
     def decode(self, memory: MemoryController, ip: int) -> Tuple[str, int, List[Any]]:
         opcode = memory.read_byte(ip)
         length = 1
@@ -345,6 +374,7 @@ class InstructionDecoder:
         
         return (name, length, operands)
     
+# Decode the two-byte 0x0F opcode map.
     def _decode_0f(self, memory: MemoryController, ip: int, length: int) -> Tuple[str, int, List[Any]]:
         opcode2 = memory.read_byte(ip + length)
         length += 1
@@ -382,6 +412,7 @@ class InstructionDecoder:
         
         return (name, length, operands)
     
+# Consume the ModR/M byte plus any SIB byte and displacement.
     def _read_modrm(self, memory: MemoryController, ip: int, length: int, operands: List) -> Tuple[DecodedOperand, int]:
         modrm = memory.read_byte(ip + length)
         length += 1
@@ -425,6 +456,7 @@ class InstructionDecoder:
         operands.append(operand)
         return operand, length
     
+# Consume a 16 or 32 bit immediate and return it with the new length.
     def _read_imm(self, memory: MemoryController, ip: int, length: int, size: int) -> Tuple[int, int]:
         if size == 16:
             imm = memory.read_word(ip + length)
@@ -437,6 +469,7 @@ class InstructionDecoder:
             length += 4
         return imm, length
     
+# Map a table register name to its number, applying REX.B.
     def _get_register_number(self, reg_name: str, opcode: int) -> int:
         reg_map = {'rAX': 0, 'rCX': 1, 'rDX': 2, 'rBX': 3,
                    'rSP': 4, 'rBP': 5, 'rSI': 6, 'rDI': 7}
@@ -446,7 +479,9 @@ class InstructionDecoder:
         return base
 
 
+# Fetch, decode and execute guest instructions against the loaded image.
 class CPUEmulator:
+# Build the memory view and the decoder, then seed the registers.
     def __init__(self, loader, syscall_handler: Optional[Callable] = None):
         self.loader = loader
         self.parser = loader.parser
@@ -460,6 +495,7 @@ class CPUEmulator:
         self.next_ip = 0
         self._init_registers()
     
+# Point the stack, the instruction pointer and the flags at the entry state.
     def _init_registers(self) -> None:
         stack_top = self.loader.stack_top
         if stack_top >= 0x7fff0000:
@@ -473,24 +509,28 @@ class CPUEmulator:
             self.state.regs[Register32.EIP] = self.loader.entry_point
             self.state.regs[Register32.EFLAGS] = 0x202
     
+# Lay argv and envp out on the stack for the current width.
     def set_argv_envp(self, argv: List[str], envp: Dict[str, str]) -> None:
         if self.is_64bit:
             self._setup_argv_envp_64(argv, envp)
         else:
             self._setup_argv_envp_32(argv, envp)
     
+# Build the 64-bit startup stack, auxv area included.
     def _setup_argv_envp_64(self, argv: List[str], envp: Dict[str, str]) -> None:
         stack_top = self.loader.stack_top
         if stack_top >= 0x7fff0000:
             stack_top = 0x7ffefff0
         rsp = stack_top & ~0xF
         
+# Push one 64-bit word and return the new stack pointer.
         def push_qword(value: int) -> int:
             nonlocal rsp
             rsp -= 8
             self.memory.write_qword(rsp, value)
             return rsp
         
+# Push raw bytes and return the new stack pointer.
         def push_data(data: bytes) -> int:
             nonlocal rsp
             rsp -= len(data)
@@ -512,18 +552,21 @@ class CPUEmulator:
         
         self.state.regs[Register64.RSP] = rsp
     
+# Build the 32-bit startup stack, auxv area included.
     def _setup_argv_envp_32(self, argv: List[str], envp: Dict[str, str]) -> None:
         stack_top = self.loader.stack_top
         if stack_top >= 0x7fff0000:
             stack_top = 0x7ffefff0
         esp = stack_top & ~0x3
         
+# Push one 32-bit word and return the new stack pointer.
         def push_dword(value: int) -> int:
             nonlocal esp
             esp -= 4
             self.memory.write_dword(esp, value)
             return esp
         
+# Push raw bytes and return the new stack pointer.
         def push_data(data: bytes) -> int:
             nonlocal esp
             esp -= len(data)
@@ -545,6 +588,7 @@ class CPUEmulator:
         
         self.state.regs[Register32.ESP] = esp
     
+# Run until exit, the instruction cap or a fault; returns the exit code.
     def run(self, max_instructions: Optional[int] = None) -> int:
         if max_instructions:
             self.max_instructions = max_instructions
@@ -577,15 +621,19 @@ class CPUEmulator:
         
         return self._get_reg(0)
     
+# Return the instruction pointer for the current width.
     def _get_ip(self) -> int:
         return self.state.regs[Register64.RIP if self.is_64bit else Register32.EIP]
     
+# Set the instruction pointer for the current width.
     def _set_ip(self, value: int) -> None:
         self.state.regs[Register64.RIP if self.is_64bit else Register32.EIP] = value
     
+# Return a register by number, treating a missing slot as zero.
     def _get_reg(self, reg: int) -> int:
         return self.state.regs.get(reg, 0)
     
+# Write a register at the given size, following x86 write semantics.
     def _set_reg(self, reg: int, value: int, size: int = 64) -> None:
         if size == 8:
             old = self.state.regs.get(reg, 0)
@@ -598,23 +646,28 @@ class CPUEmulator:
         else:
             self.state.regs[reg] = value & 0xFFFFFFFFFFFFFFFF
     
+# Return the stack pointer for the current width.
     def _get_sp(self) -> int:
         return self.state.regs[Register64.RSP if self.is_64bit else Register32.ESP]
     
+# Set the stack pointer for the current width.
     def _set_sp(self, value: int) -> None:
         self.state.regs[Register64.RSP if self.is_64bit else Register32.ESP] = value
     
+# Return the base pointer for the current width.
     def _get_bp(self) -> int:
         return self.state.regs[Register64.RBP if self.is_64bit else Register32.EBP]
     
+# Set the base pointer for the current width.
     def _set_bp(self, value: int) -> None:
         self.state.regs[Register64.RBP if self.is_64bit else Register32.EBP] = value
     
+# Run one decoded instruction and advance the instruction pointer.
     def _execute(self, name: str, length: int, operands: List[Any]) -> Optional[str]:
         ip = self._get_ip()
         self.next_ip = ip + length
         
-        if name == 'NOP': # Nop 命令
+        if name == 'NOP': # the NOP instruction
             pass
         elif name == 'SYSCALL':
             self._set_ip(self.next_ip)
@@ -685,6 +738,7 @@ class CPUEmulator:
         self._set_ip(self.next_ip)
         return None
     
+# Return the linear address a modrm memory operand refers to.
     def _calc_effective_address(self, operand: DecodedOperand) -> int:
         if not isinstance(operand, DecodedOperand):
             return 0
@@ -723,6 +777,7 @@ class CPUEmulator:
         
         return addr & 0xFFFFFFFFFFFFFFFF
     
+# Push an operand onto the stack.
     def _exec_push(self, operands: List[Any]) -> None:
         op = operands[0]
         value = self._get_reg(op[1]) if op[0] == 'reg' else op[1] if op[0] in ('imm8', 'immz') else 0
@@ -736,6 +791,7 @@ class CPUEmulator:
             self.memory.write_dword(sp, value)
         self._set_sp(sp)
     
+# Pop the top of the stack into a register.
     def _exec_pop(self, operands: List[Any]) -> None:
         op = operands[0]
         if op[0] != 'reg':
@@ -748,11 +804,13 @@ class CPUEmulator:
         self._set_reg(op[1], value)
         self._set_sp(sp)
     
+# Copy the source operand into the destination.
     def _exec_mov(self, operands: List[Any]) -> None:
         dst, src = operands
         value = self._get_operand_value(src)
         self._set_operand_value(dst, value)
     
+# Add the operands and update the flags.
     def _exec_add(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
@@ -761,6 +819,7 @@ class CPUEmulator:
         self._set_operand_value(dst, result)
         self._update_flags(result, self._get_operand_size(dst))
     
+# Add with carry and update the flags.
     def _exec_adc(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
@@ -770,6 +829,7 @@ class CPUEmulator:
         self._set_operand_value(dst, result)
         self._update_flags(result, self._get_operand_size(dst))
     
+# Subtract the operands and update the flags.
     def _exec_sub(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
@@ -778,6 +838,7 @@ class CPUEmulator:
         self._set_operand_value(dst, result)
         self._update_flags(result, self._get_operand_size(dst))
     
+# Exclusive-or the operands and update the flags.
     def _exec_xor(self, operands: List[Any]) -> None:
         dst, src = operands
         dst_val = self._get_operand_value(dst)
@@ -786,6 +847,7 @@ class CPUEmulator:
         self._set_operand_value(dst, result)
         self._update_flags(result, self._get_operand_size(dst))
     
+# Push the return address and return the branch target.
     def _exec_call(self, operands: List[Any], next_ip: int) -> int:
         op = operands[0]
         
@@ -805,12 +867,14 @@ class CPUEmulator:
             return next_ip + offset
         return next_ip
     
+# Pop the return address and return it.
     def _exec_ret(self) -> int:
         sp = self._get_sp()
         target = self.memory.read_qword(sp) if self.is_64bit else self.memory.read_dword(sp)
         self._set_sp(sp + (8 if self.is_64bit else 4))
         return target
     
+# Return the unconditional branch target.
     def _exec_jmp(self, operands: List[Any], ip: int) -> int:
         op = operands[0]
         if op[0] == 'rel8':
@@ -822,6 +886,7 @@ class CPUEmulator:
             return ip + offset + 5
         return ip + 2
     
+# Return the branch target when the condition holds, else next_ip.
     def _exec_cond_jmp(self, name: str, operands: List[Any], ip: int, next_ip: int) -> int:
         flags = self._get_flags()
         
@@ -853,12 +918,14 @@ class CPUEmulator:
         
         return next_ip
     
+# Load the effective address of a memory operand into a register.
     def _exec_lea(self, operands: List[Any]) -> None:
         dst, src = operands
         if isinstance(src, DecodedOperand):
             addr = self._calc_effective_address(src)
             self._set_reg(dst[1], addr)
     
+# Restore the frame: set the stack to bp, then pop the saved bp.
     def _exec_leave(self) -> None:
         self._set_sp(self._get_bp())
         sp = self._get_sp()
@@ -866,6 +933,7 @@ class CPUEmulator:
         self._set_bp(value)
         self._set_sp(sp + (8 if self.is_64bit else 4))
     
+# Compute the bitwise and only for its effect on the flags.
     def _exec_test(self, operands: List[Any]) -> None:
         op1, op2 = operands
         val1 = self._get_operand_value(op1)
@@ -873,6 +941,7 @@ class CPUEmulator:
         result = val1 & val2
         self._update_flags(result, self._get_operand_size(op1))
     
+# Subtract without storing, setting ZF, SF and CF.
     def _exec_cmp(self, operands: List[Any]) -> None:
         op1, op2 = operands
         val1 = self._get_operand_value(op1)
@@ -893,6 +962,7 @@ class CPUEmulator:
         
         self._set_flags(flags)
     
+# Run the 0x80/0x81/0x83 group, the ALU operations picked by /digit.
     def _exec_grp1(self, operands: List[Any]) -> None:
         if len(operands) < 3:
             return
@@ -939,6 +1009,7 @@ class CPUEmulator:
         self._set_operand_value(dst, result)
         self._update_flags(result, dst_size)
     
+# Run the 0xF7 group: NOT, NEG, MUL, IMUL, DIV and IDIV.
     def _exec_grp3(self, operands: List[Any]) -> None:
         if len(operands) < 2:
             return
@@ -997,6 +1068,7 @@ class CPUEmulator:
                 self._set_reg(0, quotient & mask)
                 self._set_reg(2, remainder & mask)
     
+# Run the 0xFF group: INC, DEC and the indirect control transfers.
     def _exec_grp5(self, operands: List[Any]) -> None:
         if len(operands) < 2:
             return
@@ -1023,6 +1095,7 @@ class CPUEmulator:
             self.memory.write_qword(sp, dst_val)
             self._set_sp(sp)
     
+# Sign-extend a 32-bit source into a 64-bit register.
     def _exec_movsxd(self, operands: List[Any]) -> None:
         src, dst = operands
         src_val = self._get_operand_value(src) & 0xFFFFFFFF
@@ -1032,11 +1105,13 @@ class CPUEmulator:
             result = src_val
         self._set_reg(dst[1], result)
     
+# Zero-extend a byte into a register.
     def _exec_movzbl(self, operands: List[Any]) -> None:
         src, dst = operands
         src_val = self._get_operand_value(src) & 0xFF
         self._set_reg(dst[1], src_val)
     
+# Move only when the condition named by the mnemonic holds.
     def _exec_cmov(self, name: str, operands: List[Any]) -> None:
         cond = name[4:]
         flags = self._get_flags()
@@ -1072,6 +1147,7 @@ class CPUEmulator:
             elif isinstance(dst, DecodedOperand):
                 self._set_operand_value(dst, src_val)
     
+# Read an operand, whatever shape the decoder gave it.
     def _get_operand_value(self, operand: Any) -> int:
         if isinstance(operand, tuple):
             if operand[0] == 'reg':
@@ -1096,6 +1172,7 @@ class CPUEmulator:
                     return self.memory.read_qword(addr)
         return 0
     
+# Write an operand, whatever shape the decoder gave it.
     def _set_operand_value(self, operand: Any, value: int) -> None:
         if isinstance(operand, tuple):
             if operand[0] == 'reg':
@@ -1117,6 +1194,7 @@ class CPUEmulator:
                 else:
                     self.memory.write_qword(addr, value)
     
+# Return the operand width in bits, defaulting to the decoder's.
     def _get_operand_size(self, operand: Any) -> int:
         if isinstance(operand, tuple):
             if len(operand) > 2:
@@ -1129,12 +1207,15 @@ class CPUEmulator:
                 return self.decoder.operand_size
         return 64
     
+# Return RFLAGS, or EFLAGS in 32-bit mode.
     def _get_flags(self) -> int:
         return self.state.regs[Register64.RFLAGS if self.is_64bit else Register32.EFLAGS]
     
+# Set RFLAGS, or EFLAGS in 32-bit mode.
     def _set_flags(self, value: int) -> None:
         self.state.regs[Register64.RFLAGS if self.is_64bit else Register32.EFLAGS] = value
     
+# Set ZF and SF from a result; PF, AF and OF are not modelled.
     def _update_flags(self, result: int, size: int) -> None:
         flags = self._get_flags()
         flags &= ~((1 << EFlags.ZF) | (1 << EFlags.SF) | (1 << EFlags.CF) | (1 << EFlags.OF))
@@ -1147,6 +1228,7 @@ class CPUEmulator:
         
         self._set_flags(flags)
     
+# Return the instruction count, the registers and the current width.
     def get_state(self) -> Dict[str, Any]:
         return {
             'instruction_count': self.instruction_count,

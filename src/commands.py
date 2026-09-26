@@ -1,22 +1,19 @@
-#
-#   commands.py
-#   命令注册表（带元数据 + 分组 + PATH 外部命令解析 + Tab 补全数据源）。
-#
-#   借鉴 bash / zsh / just-bash 的成熟做法：
-#     - 元数据驱动：summary/usage/group/aliases/completer 全部声明式，
-#       help 由注册表自动生成，新增命令不必再手写长帮助列表；
-#     - 分组展示：help 输出按 group 归类（系统/文件/进程/OTA/配置/引导），
-#       help <cmd> 输出单命令详情；
-#     - PATH 解析：apps/ 作为外部命令目录（等价 $PATH），命令名直接可执行
-#       （gettoken 而非 open gettoken），命中后进 forkexec 真子进程；
-#     - 惰性加载：外部命令不预先 import，调用时才 fork。
-#
+'''
+ *
+ *      commands.py
+ *      Command registry with metadata, groups and PATH-style external command resolution.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
-# 分组定义（顺序即 help 展示顺序）
+# group definitions; this order is the order help prints them in
 GROUPS = [
     ("system", "系统"),
     ("file", "文件"),
@@ -31,6 +28,7 @@ GROUPS = [
 ]
 
 
+# Everything the registry knows about one command: how to run it and how to describe it.
 @dataclass
 class CommandMeta:
     name: str
@@ -39,26 +37,26 @@ class CommandMeta:
     usage: str = ""
     group: str = "system"
     aliases: List[str] = field(default_factory=list)
-    takes_arg: bool = False      # 是否有参数形态（决定 help <cmd> 提示）
-    external: bool = False       # True=PATH 外部命令（apps/）
+    takes_arg: bool = False      # whether the command takes an argument, which drives the help <cmd> hint
+    external: bool = False       # True means an external PATH command from apps/
 
 
 _REGISTRY: Dict[str, CommandMeta] = {}
 _ALIASES: Dict[str, str] = {}
 
 
+# Register a command, accepting two call shapes:
+#
+#   register(name, fn, summary=..., group=...)            # direct call
+#   register(name, "help text")(fn)                          # the old decorator form
 def register(name: str, fn=None, *, summary: str = "", usage: str = "",
              group: str = "system", aliases: Optional[List[str]] = None,
              takes_arg: bool = False):
-    """注册命令，兼容两种调用形态：
-
-      register(name, fn, summary=..., group=...)            # 直接注册
-      register(name, "帮助文本")(fn)                          # 历史装饰器形态
-    """
     if isinstance(fn, str):
-        # 第二个位置参数是 help 文本 → 返回装饰器等 fn 传进来
+        # the second positional argument is the help text, so return a decorator that waits for fn
         pending_summary = fn
 
+        # Decorator half of the legacy register(name, "help text") form.
         def deco(f):
             return register(name, f, summary=pending_summary, usage=usage,
                             group=group, aliases=aliases, takes_arg=takes_arg)
@@ -76,6 +74,7 @@ def register(name: str, fn=None, *, summary: str = "", usage: str = "",
     return fn
 
 
+# Register a name that is not a Python function, such as an app or a package.
 def register_external(name: str, *, summary: str = "", group: str = "app",
                       aliases: Optional[List[str]] = None):
     meta = CommandMeta(name=name, fn=None, summary=summary, group=group,
@@ -85,6 +84,7 @@ def register_external(name: str, *, summary: str = "", group: str = "app",
         _ALIASES[a] = name
 
 
+# Return the callable behind a name, or None.
 def get(name: str) -> Optional[Callable]:
     real = _ALIASES.get(name, name)
     meta = _REGISTRY.get(real)
@@ -93,26 +93,32 @@ def get(name: str) -> Optional[Callable]:
     return meta.fn
 
 
+# Return the metadata behind a name, or None.
 def get_meta(name: str) -> Optional[CommandMeta]:
     return _REGISTRY.get(_ALIASES.get(name, name))
 
 
+# Report whether a name is registered.
 def has(name: str) -> bool:
     return _ALIASES.get(name, name) in _REGISTRY
 
 
+# Return the registered names mapped to their callables.
 def all_commands() -> Dict[str, Callable]:
     return {k: v.fn for k, v in _REGISTRY.items() if v.fn is not None}
 
 
+# Return a copy of the whole metadata table.
 def all_meta() -> Dict[str, CommandMeta]:
     return dict(_REGISTRY)
 
 
+# Return the registered command names, sorted.
 def names() -> List[str]:
     return sorted(_REGISTRY.keys())
 
 
+# Return the names and aliases to offer for tab completion.
 def names_for_completion() -> List[str]:
     out = set(_REGISTRY.keys())
     out.update(_ALIASES.keys())
@@ -120,9 +126,10 @@ def names_for_completion() -> List[str]:
 
 
 # --------------------------------------------------------------------------
-# help 渲染
+# help rendering
 # --------------------------------------------------------------------------
 
+# Return the display label of a group id, or the id itself when unknown.
 def _group_label(gid: str) -> str:
     for k, label in GROUPS:
         if k == gid:
@@ -130,6 +137,7 @@ def _group_label(gid: str) -> str:
     return gid
 
 
+# Render the grouped command list, or the detail of one topic.
 def render_help(topic: Optional[str] = None) -> str:
     if topic:
         meta = get_meta(topic)
@@ -163,9 +171,10 @@ def render_help(topic: Optional[str] = None) -> str:
 
 
 # --------------------------------------------------------------------------
-# PATH 外部命令解析（apps/ 作为 $PATH）
+# PATH-style external command resolution, with apps/ as $PATH
 # --------------------------------------------------------------------------
 
+# Return the directory that plays the role of PATH, that is apps/.
 def _apps_dir() -> str:
     try:
         import main
@@ -182,8 +191,8 @@ def _apps_dir() -> str:
     return os.path.join(os.getcwd(), "apps")
 
 
+# Resolve an external command in PATH, currently apps/, and return its absolute path.
 def resolve_external(name: str) -> Optional[str]:
-    """在 PATH（当前为 apps/）里解析外部命令；命中返回绝对路径。"""
     if not name or "/" in name or "\\" in name:
         return None
     cand = os.path.join(_apps_dir(), name + ".py")
@@ -192,12 +201,12 @@ def resolve_external(name: str) -> Optional[str]:
     return None
 
 
-# apps/ 里的库模块：不对外暴露为可执行命令
+# library modules in apps/ are not exposed as runnable commands
 LIBRARY_MODULES = {"api"}
 
 
+# Scan apps/ for runnable .py apps and return their command names.
 def discover_external() -> List[str]:
-    """扫描 apps/ 里的可执行 app（.py），返回命令名列表。"""
     d = _apps_dir()
     if not os.path.isdir(d):
         return []
@@ -212,6 +221,7 @@ def discover_external() -> List[str]:
     return out
 
 
+# Return the root that installed packages are looked up under.
 def _package_root(root_dir: Optional[str] = None) -> str:
     if root_dir is not None:
         return os.path.abspath(root_dir)
@@ -222,6 +232,7 @@ def _package_root(root_dir: Optional[str] = None) -> str:
         return os.environ.get("PYSPOS_BOOT_ROOT", os.getcwd())
 
 
+# List the entry points of every installed package, or nothing on error.
 def discover_package_commands(root_dir: Optional[str] = None) -> List[dict]:
     try:
         import package_core as package_manager
@@ -230,6 +241,7 @@ def discover_package_commands(root_dir: Optional[str] = None) -> List[dict]:
         return []
 
 
+# Return the entry point of an installed package matching name, or None.
 def resolve_package_command(name: str, root_dir: Optional[str] = None) -> Optional[dict]:
     if not name or "/" in name or "\\" in name:
         return None
@@ -240,6 +252,7 @@ def resolve_package_command(name: str, root_dir: Optional[str] = None) -> Option
         return None
 
 
+# Return the names already taken by builtins, aliases and apps/.
 def reserved_command_names() -> set[str]:
     names = set()
     for name, meta in _REGISTRY.items():
@@ -250,8 +263,8 @@ def reserved_command_names() -> set[str]:
     return names
 
 
+# Register the apps/ scripts and the installed package entry points as external commands.
 def register_discovered(root_dir: Optional[str] = None) -> None:
-    """把 apps/ 和已安装包的入口注册为外部命令。"""
     for name in discover_external():
         if not has(name):
             register_external(name, summary="内置应用（fork 独立进程执行）")

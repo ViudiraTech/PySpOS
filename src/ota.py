@@ -1,9 +1,13 @@
-#   
-#   ota.py
-#   PySpOS OTA更新以及槽位模块
-#
-#   By GoutouStdio
-#   @2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      ota.py
+ *      OTA slot layout, download, install and rollback.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import shutil
@@ -23,44 +27,43 @@ import tempfile
 import uuid
 import secure_boot
 
-# 获取启动时间
 boot_time = logk.get_boot_time()
 
-# 获取根目录（ota.py所在目录的父目录）
-# 统一走 common.paths，失败时回退到历史逻辑。
+# Go through common.paths; fall back to the historical layout if that fails.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 try:
     from common.paths import get_root_dir as _get_root_dir
     root_dir = _get_root_dir(script_dir)
 except Exception:
     if os.path.basename(script_dir) == 'src':
-        # 在src目录中，根目录是src的父目录
+        # Running from src, the root is src's parent directory.
         root_dir = os.path.dirname(script_dir)
     elif os.path.basename(script_dir) in ['slot_a', 'slot_b']:
-        # 在槽位目录中，根目录是槽位的父目录
+        # Running from a slot directory, the root is the slot's parent.
         root_dir = os.path.dirname(script_dir)
     else:
-        # 其他情况，使用当前目录作为根目录
+        # Any other layout: the script directory itself is the root.
         root_dir = script_dir
 
-# 槽位定义
-SLOT_A = "slot_a"                           # 槽位A
-SLOT_B = "slot_b"                           # 槽位B
-CURRENT_SLOT_FILE = os.path.join(root_dir, "current_slot")          # 当前槽位记录文件
+# Slot layout: two immutable install targets plus the pointer to the active one.
+SLOT_A = "slot_a"
+SLOT_B = "slot_b"
+CURRENT_SLOT_FILE = os.path.join(root_dir, "current_slot")
 
-# 更新包相关配置
-OTA_PACKAGE_DIR = os.path.join(root_dir, "ota")                     # 更新包存放目录
-OTA_PACKAGE_NAME = "update.zip"             # 更新包文件名
-VERSION_FILE = "version.txt"                # 版本信息文件名
-UPDATE_LOG = "update_log.json"              # 更新日志文件名
+# Where downloaded update packages are staged.
+OTA_PACKAGE_DIR = os.path.join(root_dir, "ota")
+OTA_PACKAGE_NAME = "update.zip"
+VERSION_FILE = "version.txt"
+UPDATE_LOG = "update_log.json"
 
-# 云端更新服务器配置
-OTA_SERVER_URL = "https://goutoustdio.rainyland.top/ota/"  # 更新服务器域名
-REMOTE_VERSION_FILE = "version.json"        # 云端版本信息文件名
-REMOTE_UPDATE_FILE = "PySpOS.zip"           # 云端更新包文件名
+# Cloud update server.
+OTA_SERVER_URL = "https://goutoustdio.rainyland.top/ota/"
+REMOTE_VERSION_FILE = "version.json"
+REMOTE_UPDATE_FILE = "PySpOS.zip"
 
-# OTA 总开关（服务器故障时临时禁用云端更新，本地安装/回滚不受影响）。
-# 开关定义在 pyspos.py，恢复服务时改回 True 即可。ota.py 文件本身保留。
+# Master switch for cloud updates, read from pyspos.OTA_ENABLED.
+# Turning it off only silences the cloud; local install and rollback keep working.
+# pyspos.py is the file to edit once the server is back, ota.py itself stays.
 def _ota_enabled() -> bool:
     try:
         import pyspos as _pyspos
@@ -68,6 +71,7 @@ def _ota_enabled() -> bool:
     except Exception:
         return True
 
+# Human-readable reason to show while cloud updates are switched off.
 def _ota_disable_reason() -> str:
     try:
         import pyspos as _pyspos
@@ -75,26 +79,28 @@ def _ota_disable_reason() -> str:
     except Exception:
         return "OTA 已临时禁用"
 
+# Report whether cloud OTA is available, for the friendly hints in main and
+# recovery.
 def is_ota_enabled() -> bool:
-    """对外查询：云端 OTA 是否可用（供 main/recovery 打印友好提示）。"""
     return _ota_enabled()
 
-# 必要的文件
+# Files every slot must hold to be bootable.
 REQUIRED_CORE_FILES = [
     "kernel.py", "main.py", "fs.py", "printk.py", "logk.py", 
     "recovery.py", "ota.py", "btcfg.py", "pyspos.py", "parse_spf.py",
     "version.txt", "launcher.py"
 ]
 
-# 必要的文件夹
+# Directories every slot must hold to be bootable.
 REQUIRED_DIRS = ["apps", "spfapps"]
 
-# 版本比较函数
+# Compare two version strings, returning >0, 0 or
+# <0; a parse failure logs and counts as equal.
 def compare_versions(v1: str, v2: str) -> int:
     try:
-        # 分离版本号和后缀
+        # Split a version into its numbers plus a suffix
+        # weight: rc 0, final 1, beta -1, alpha -2, pre -3.
         def parse_version(version: str):
-            # 处理版本后缀（这些格式都放到pyspos.py中）
             suffix_map = {
                 'pre': -3,
                 'alpha': -2,
@@ -102,21 +108,16 @@ def compare_versions(v1: str, v2: str) -> int:
                 'rc': 0,
             }
             
-            # 移除版本号中的额外文本（如"(重构建)"）
+            # drop extra text such as a (rebuild) marker
             clean_version = version.split('(')[0].strip()
             
-            # 检查是否有后缀
             for suffix, weight in suffix_map.items():
                 if suffix in clean_version.lower():
-                    # 提取基础版本号
                     base_version = clean_version.lower().split(suffix)[0].rstrip('-')
-                    # 转换为数字列表
                     parts = list(map(int, base_version.split('.')))
-                    # 添加后缀权重作为最后一位
                     parts.append(weight)
                     return parts
             
-            # 没有后缀，视为正式版，权重为1
             parts = list(map(int, clean_version.split('.')))
             parts.append(1)
             return parts
@@ -124,12 +125,10 @@ def compare_versions(v1: str, v2: str) -> int:
         parts1 = parse_version(v1)
         parts2 = parse_version(v2)
         
-        # 确保长度一致
         max_len = max(len(parts1), len(parts2))
         parts1.extend([0] * (max_len - len(parts1)))
         parts2.extend([0] * (max_len - len(parts2)))
         
-        # 逐位比较
         for p1, p2 in zip(parts1, parts2):
             if p1 > p2:
                 return 1
@@ -140,7 +139,8 @@ def compare_versions(v1: str, v2: str) -> int:
         logk.printl("ota", f"版本比较失败: {e}", boot_time)
         return 0
 
-# 从云端获取最新版本信息
+# Read version.json from the cloud, trying requests, then urllib, then curl.
+# When every attempt fails it falls back to the local docs/ota/version.json.
 def fetch_remote_version() -> dict:
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}（未发起网络请求）", boot_time)
@@ -197,7 +197,7 @@ def fetch_remote_version() -> dict:
         logk.printl("ota", "本地版本文件不存在", boot_time)
         return None
 
-# 使用requests库获取云端文件
+# Fetch a cloud file with the requests library, if that library is installed.
 def _fetch_with_requests(url: str) -> dict:
     try:
         import requests as _requests
@@ -223,7 +223,8 @@ def _fetch_with_requests(url: str) -> dict:
     except Exception as e:
         raise
 
-# 使用urllib获取云端文件
+# Fetch a cloud file with urllib, decompressing the body if the server sent
+# gzip.
 def _fetch_with_urllib(url: str) -> dict:
     import urllib.request
     import gzip
@@ -238,13 +239,13 @@ def _fetch_with_urllib(url: str) -> dict:
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=15) as response:
         raw_data = response.read()
-        # 检查是否是 gzip 压缩
         if raw_data[:2] == b'\x1f\x8b':
             raw_data = gzip.decompress(raw_data)
         data = json.loads(raw_data.decode('utf-8'))
         return data
 
-# 使用curl命令获取云端文件
+# Fetch a cloud file by shelling out to curl, the last resort when no module is
+# available.
 def _fetch_with_curl(url: str) -> dict:
     import subprocess
     import json
@@ -268,7 +269,8 @@ def _fetch_with_curl(url: str) -> dict:
     else:
         raise Exception(f"curl命令失败: {result.stderr.decode('utf-8', errors='ignore')}")
 
-# 下载更新包
+# Stream an update package to local_path, skipping the download when a
+# same-sized file is already there.
 def download_update_package(remote_url: str, local_path: str, expected_size: int = 0) -> bool:
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}（跳过下载 {remote_url}）", boot_time)
@@ -333,6 +335,8 @@ def download_update_package(remote_url: str, local_path: str, expected_size: int
         logk.printl("ota", f"下载错误: {e}", boot_time)
         return False
 
+# True when the bootloader trust domain is locked;
+# a verification error fails closed to True.
 def _boot_is_locked():
     try:
         return secure_boot.read_locked(root_dir)
@@ -340,6 +344,7 @@ def _boot_is_locked():
         return True
 
 
+# Highest anti-rollback index in force, from the boot state and the signed policy.
 def _rollback_floor():
     try:
         state_floor = secure_boot.load_state(root_dir)["rollback_index"]
@@ -352,7 +357,8 @@ def _rollback_floor():
     return max(state_floor, policy_floor)
 
 
-# 验证更新包完整性
+# Check the package hash and its signature against the anti-rollback floor.
+# A missing signature is tolerated only while the bootloader is unlocked.
 def verify_update_package(package_path: str, expected_hash: str = None) -> bool:
     locked = _boot_is_locked()
     try:
@@ -379,6 +385,8 @@ def verify_update_package(package_path: str, expected_hash: str = None) -> bool:
         logk.printl("ota", f"验证失败: {e}", boot_time)
         return False
 
+# The slot to boot: boot state first, then the
+# slot file, and finally slot_a is written out.
 def get_current_slot() -> str:
     try:
         state = secure_boot.load_state(root_dir)
@@ -395,6 +403,7 @@ def get_current_slot() -> str:
     return SLOT_A
 
 
+# Write the active slot file atomically; the slot has to be slot_a or slot_b.
 def set_current_slot(slot: str) -> None:
     if slot not in [SLOT_A, SLOT_B]:
         raise ValueError("无效槽位")
@@ -412,11 +421,12 @@ def set_current_slot(slot: str) -> None:
             os.unlink(temporary)
     logk.printl("ota", f"已设置当前槽位为: {slot}", boot_time)
 
-# 获取其他槽位
+# The slot that is not the active one, where an update would land.
 def get_other_slot() -> str:
     return SLOT_B if get_current_slot() == SLOT_A else SLOT_A
 
-# 验证更新包
+# True only when the package version is strictly newer than the running
+# one.
 def verify_update_compatibility(package_path=None) -> bool:
     current_ver = get_current_version()
     update_ver = get_update_version(package_path)
@@ -431,12 +441,10 @@ def verify_update_compatibility(package_path=None) -> bool:
         logk.printl("ota", "更新包版本低于当前版本", boot_time)
         return False
 
+# Turn the download_url from version.json into an absolute URL.
+# A relative path is joined onto OTA_SERVER_URL; a rebuild file name is already
+# usable and the caller takes its basename.
 def resolve_download_url(download_url: str) -> str:
-    """把 version.json 里的 download_url 归一化成绝对 URL。
-
-    相对路径按 OTA_SERVER_URL 拼接；重构版文件名
-    （PySpOS-版本-日期.zip）直接可用，由调用方取 basename。
-    """
     if not download_url:
         return OTA_SERVER_URL + REMOTE_UPDATE_FILE
     if not download_url.startswith('http://') and not download_url.startswith('https://'):
@@ -444,13 +452,11 @@ def resolve_download_url(download_url: str) -> str:
     return download_url
 
 
+# Every version listed in the cloud changelog, newest first.
+# Each entry carries version / date / type / absolute download_url / sha256 /
+# file_size / notes, and without a changelog it degrades to the single top-level
+# version. Returns [] when OTA is off or the network fails, and never raises.
 def list_cloud_versions() -> list:
-    """列出云端 version.json 里 changelog 的全部版本（新到旧）。
-
-    每项：version / date / type / download_url（绝对）/
-    sha256 / file_size / notes。无 changelog 时退化为顶层单版本。
-    开关关闭或网络失败返回 []，不抛异常（调用方直接判空）。
-    """
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
         return []
@@ -490,7 +496,8 @@ def list_cloud_versions() -> list:
     return entries
 
 
-# 从云端检查更新
+# Compare the cloud version with the running one and describe what an update
+# would be.
 def check_cloud_update() -> dict:
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
@@ -519,10 +526,9 @@ def check_cloud_update() -> dict:
     
     if comparison > 0:
         logk.printl("ota", f"发现新版本: {remote_ver}", boot_time)
-        # 处理下载URL，确保是完整的URL
         raw_url = remote_info.get('download_url', '')
 
-        # 判断是否是重构版（文件名格式为PySpOS-版本-日期.zip）
+        # Rebuild builds are named PySpOS-<version>-<date>.zip.
         is_rebuild = raw_url and re.match(r'PySpOS-[\d.]+-[\d]+\.zip', raw_url)
 
         download_url = resolve_download_url(raw_url)
@@ -545,7 +551,8 @@ def check_cloud_update() -> dict:
             'remote_version': remote_ver
         }
 
-# 从云端下载并安装更新
+# Ask for confirmation, download, verify, install into the other slot,
+# switch to it, clean up and restart.
 def download_and_install_update() -> bool:
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
@@ -561,14 +568,11 @@ def download_and_install_update() -> bool:
     
     os.makedirs(OTA_PACKAGE_DIR, exist_ok=True)
     
-    # 判断是否是重构版，使用对应的文件名
     is_rebuild = update_info.get('is_rebuild', False)
     if is_rebuild:
-        # 如果是重构版，使用version.json中的文件名
         package_name = update_info['download_url'].split('/')[-1]
         logk.printl("ota", f"检测到重构版/新版格式，使用文件名: {package_name}", boot_time)
     else:
-        # 否则使用默认的update.zip
         package_name = OTA_PACKAGE_NAME
     
     package_path = os.path.join(OTA_PACKAGE_DIR, package_name)
@@ -582,12 +586,10 @@ def download_and_install_update() -> bool:
     if not install_update():
         return False
     
-    # 安装成功后，切换到新槽位
     if not switch_slot():
         logk.printl("ota", "切换槽位失败", boot_time)
         return False
     
-    # 清除更新包
     if cleanup_update_package():
         logk.printl("ota", "更新包已清除", boot_time)
     else:
@@ -595,11 +597,11 @@ def download_and_install_update() -> bool:
     
     logk.printl("ota", "更新已安装，正在重启系统...", boot_time)
     
-    # 重启系统
     restart_system()
     return True
 
-# 重启系统
+# Start launcher.py, or the active slot's main.py when there is no launcher,
+# then exit.
 def restart_system() -> None:
     import subprocess
     import sys
@@ -624,8 +626,9 @@ def restart_system() -> None:
         logk.printl("ota", f"重启失败: {str(e)}", boot_time)
         printk.error("重启失败，请手动重新启动系统\n")
 
-# 清空槽位目录（Windows 先 move 到临时目录再后台删除，避免文件占用；类 Unix 直接删除）。
-# 抽取自 install_update / rollback_update 的重复实现（2026-09-24 去重）。
+# Empty a slot directory.
+# Windows moves it aside and deletes it from a background thread, because files
+# there are still open; elsewhere it is removed directly.
 def _reset_slot_dir(slot_path: str, purpose: str) -> bool:
     import tempfile
     import uuid
@@ -639,9 +642,10 @@ def _reset_slot_dir(slot_path: str, purpose: str) -> bool:
                 shutil.move(slot_path, temp_dir)
                 os.makedirs(slot_path, exist_ok=True)
 
+                # Background sweeper: the moved-out slot goes away once Windows lets go of it.
                 def _delete_temp_dir():
                     try:
-                        time.sleep(2)  # 等待文件释放
+                        time.sleep(2)  # wait for the handles to be released
                         if os.path.exists(temp_dir):
                             shutil.rmtree(temp_dir, ignore_errors=True)
                     except Exception:
@@ -667,8 +671,9 @@ def _reset_slot_dir(slot_path: str, purpose: str) -> bool:
         return False
 
 
+# True when a slot already holds the core files and directories it needs to run,
+# for the lazy sync in ota_init.
 def _slot_is_ready(slot_path: str) -> bool:
-    """槽位是否已包含运行所需的核心文件/目录（用于 ota_init 惰性同步）。"""
     for file in REQUIRED_CORE_FILES:
         if not os.path.exists(os.path.join(slot_path, file)):
             return False
@@ -678,7 +683,10 @@ def _slot_is_ready(slot_path: str) -> bool:
     return True
 
 
-# 回滚到上一个版本
+# Copy the inactive slot over the active one, after verifying it when the boot
+# is locked.
+# The swap is staged and applied by secure_boot, so a failure leaves both slots
+# intact.
 def rollback_update() -> bool:
     current = get_current_slot()
     other = get_other_slot()
@@ -723,7 +731,7 @@ def rollback_update() -> bool:
     logk.printl("ota", "回滚成功，重启后生效", boot_time)
     return True
 
-# 查看更新历史
+# Print the update log of each slot, as written by install and rollback.
 def view_update_history() -> None:
     for slot in [SLOT_A, SLOT_B]:
         log_path = os.path.join(slot, UPDATE_LOG)
@@ -740,14 +748,13 @@ def view_update_history() -> None:
         else:
             print(f"\n{slot} 无更新历史")
 
-# 检查是否有更新（这个以后可以抓取云端内容检查）
+# Is an update package already sitting in the ota
+# directory? Later this may consult the cloud too.
 def check_for_update() -> bool:
-    # 首先检查默认的更新包
     package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
     if os.path.exists(package_path) and os.path.isfile(package_path):
         return True
     
-    # 如果默认更新包不存在，检查是否有其他zip文件（如重构版）
     if os.path.exists(OTA_PACKAGE_DIR):
         try:
             for filename in os.listdir(OTA_PACKAGE_DIR):
@@ -758,9 +765,9 @@ def check_for_update() -> bool:
     
     return False
 
-# 清除更新包
+# Delete the staged update package, preferring
+# update.zip and falling back to any other zip.
 def cleanup_update_package() -> bool:
-    # 首先尝试删除默认的更新包
     package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
     deleted = False
     
@@ -772,7 +779,6 @@ def cleanup_update_package() -> bool:
     except Exception as e:
         logk.printl("ota", f"删除更新包失败: {str(e)}", boot_time)
     
-    # 如果默认更新包不存在，尝试删除其他zip文件（如重构版）
     if not deleted and os.path.exists(OTA_PACKAGE_DIR):
         try:
             for filename in os.listdir(OTA_PACKAGE_DIR):
@@ -785,17 +791,16 @@ def cleanup_update_package() -> bool:
         except Exception as e:
             logk.printl("ota", f"删除更新包失败: {str(e)}", boot_time)
     
-    # 尝试删除整个ota目录（如果为空）
     try:
         if os.path.exists(OTA_PACKAGE_DIR) and not os.listdir(OTA_PACKAGE_DIR):
             os.rmdir(OTA_PACKAGE_DIR)
             logk.printl("ota", "已删除空的ota目录", boot_time)
     except Exception:
-        pass  # 忽略删除目录的错误
+        pass  # ignore failures to remove the directory
     
     return deleted
 
-# 获取指定槽位里的PySpOS版本
+# Version string of one slot, read from its version.txt.
 def get_version(slot: str) -> str:
     slot_path = os.path.join(root_dir, slot)
     version_path = os.path.join(slot_path, VERSION_FILE)
@@ -804,9 +809,9 @@ def get_version(slot: str) -> str:
             return f.read().strip()
     return "未知版本"
 
-# 获取当前槽位里PySpOS版本
+# Version of the running system: the slot's
+# version.txt first, then the root one, then a default.
 def get_current_version() -> str:
-    # 首先尝试从当前槽位的version.txt文件中读取版本信息
     current_slot = get_current_slot()
     slot_path = os.path.join(root_dir, current_slot)
     slot_version_path = os.path.join(slot_path, VERSION_FILE)
@@ -818,7 +823,6 @@ def get_current_version() -> str:
         except Exception as e:
             logk.printl("ota", f"读取槽位版本文件失败: {e}", boot_time)
     
-    # 如果槽位版本文件不存在，尝试从根目录读取
     root_version_file = os.path.join(root_dir, "version.txt")
     if os.path.exists(root_version_file):
         try:
@@ -827,10 +831,9 @@ def get_current_version() -> str:
         except Exception as e:
             logk.printl("ota", f"读取根目录版本文件失败: {e}", boot_time)
     
-    # 如果都失败了，返回一个默认版本
     return "3.0.0"
 
-# 获取更新包版本
+# Version carried by an update package, read from the version file in the zip.
 def get_update_version(package_path=None) -> str:
     package_path = package_path or _find_update_package()
     if not package_path:
@@ -847,6 +850,9 @@ def get_update_version(package_path=None) -> str:
         logk.printl("ota", f"读取更新包版本失败: {str(e)}", boot_time)
     return "未知版本"
 
+# Extract an update package into an empty staging directory.
+# Refuses path traversal, symlinks, duplicate members, oversized members or
+# volumes and anything under etc/, and skips the build-machine boot state.
 def _safe_extract_package(package_path, target_path):
     target_real = os.path.realpath(target_path)
     if not os.path.isdir(target_real) or os.path.islink(target_path):
@@ -861,7 +867,8 @@ def _safe_extract_package(package_path, target_path):
             if info.is_dir():
                 continue
             if secure_boot._is_boot_state_member(info.filename):
-                # 构建机启动状态：验签已跳过，这里也不落地
+                # Build-machine boot state: signature checking
+                # was skipped, so it is not written out either
                 continue
             if info.filename in (secure_boot.MANIFEST_NAME, secure_boot.SIGNATURE_NAME,
                                  "src/" + secure_boot.MANIFEST_NAME,
@@ -896,6 +903,8 @@ def _safe_extract_package(package_path, target_path):
     return True
 
 
+# Locate the staged update package: update.zip first, then any other zip in
+# the directory.
 def _find_update_package():
     package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
     if os.path.isfile(package_path):
@@ -908,14 +917,11 @@ def _find_update_package():
     return None
 
 
-# 将更新包安装到另一槽位
+# Install a downloaded package into a chosen slot, without switching to it.
+# Signature and anti-rollback checks always run; allow_downgrade only waives the
+# not-older comparison and has to come from an explicit user confirmation.
 def install_package_to_slot(package_path: str, slot: str,
                             allow_downgrade: bool = False) -> bool:
-    """把已下载的更新包安装到指定槽位（不切换当前槽位）。
-
-    签名验签与防回滚 floor 始终执行；allow_downgrade 只放行
-    「版本不高于当前」的新旧比较，且必须由用户显式确认后传入。
-    """
     if slot not in (SLOT_A, SLOT_B):
         raise ValueError("无效槽位")
     if not package_path or not os.path.isfile(package_path):
@@ -983,8 +989,9 @@ def install_package_to_slot(package_path: str, slot: str,
     return True
 
 
+# Local install or plain upgrade: install the staged
+# package into the other slot, then switch to it.
 def install_update() -> bool:
-    """本地安装/默认升级：把更新包目录里的包袱装到另一槽位并切换过去。"""
     package_path = _find_update_package()
     if package_path is None:
         logk.printl("ota", "未找到更新包", boot_time)
@@ -996,13 +1003,12 @@ def install_update() -> bool:
     return True
 
 
+# Download one cloud version and install it into a chosen slot, without
+# switching.
+# The entry comes from list_cloud_versions(); the caller has to confirm a downgrade
+# or same-version install before passing allow_downgrade.
 def download_and_install_version(entry: dict, slot: str,
                                  allow_downgrade: bool = False) -> bool:
-    """下载云端指定版本并安装到指定槽位（不自动切换当前槽位）。
-
-    entry 取自 list_cloud_versions() 的条目。调用方负责在降级/
-    同级时先拿到用户明确确认，再传 allow_downgrade=True。
-    """
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}", boot_time)
         return False
@@ -1024,7 +1030,8 @@ def download_and_install_version(entry: dict, slot: str,
         return False
     return install_package_to_slot(package_path, slot, allow_downgrade)
 
-# 切换槽位
+# Mark the inactive slot as the boot slot, once it is complete and, when locked,
+# signed.
 def switch_slot() -> bool:
     target = get_other_slot()
     target_path = os.path.join(root_dir, target)
@@ -1058,7 +1065,8 @@ def switch_slot() -> bool:
     logk.printl("ota", "请重启系统以加载新槽位的系统文件", boot_time)
     return True
 
-# 获取OTA更新状态
+# Snapshot of the slots, versions, lock state, anti-rollback floor and any
+# pending update.
 def get_ota_status() -> dict:
     current = get_current_slot()
     other = get_other_slot()
@@ -1079,7 +1087,7 @@ def get_ota_status() -> dict:
         "update_version": get_update_version() if check_for_update() else None
     }
 
-# 清理更新包文件
+# Delete the staged update package, reporting whether there was one.
 def clean_update_package() -> None:
     package_path = os.path.join(OTA_PACKAGE_DIR, OTA_PACKAGE_NAME)
     if os.path.exists(package_path):
@@ -1091,14 +1099,15 @@ def clean_update_package() -> None:
     else:
         logk.printl("ota", "无更新包可清理", boot_time)
 
-# 初始化OTA
+# Prepare the slot layout at boot: create the directories, the slot file and
+# version.txt.
+# Nothing is copied into a slot here; see the note at the end of this function.
 def ota_init() -> bool:
     logk.printl("ota", "正在初始化OTA槽位结构...", boot_time)
     if _boot_is_locked():
         logk.printl("ota", "锁定模式禁止从 src 自动修复或复制系统文件", boot_time)
         return True
     
-    # 创建槽位文件夹（在根目录）
     slots = [SLOT_A, SLOT_B]
     for slot in slots:
         slot_path = os.path.join(root_dir, slot)
@@ -1112,7 +1121,6 @@ def ota_init() -> bool:
         else:
             logk.printl("ota", f"槽位文件夹 {slot} 已存在", boot_time)
     
-    # 确保当前槽位文件存在
     if not os.path.exists(CURRENT_SLOT_FILE):
         try:
             set_current_slot(SLOT_A)
@@ -1124,7 +1132,6 @@ def ota_init() -> bool:
         current_slot = get_current_slot()
         logk.printl("ota", f"当前槽位已设置为: {current_slot}", boot_time)
     
-    # 确保版本文件存在（在src目录）
     src_version_file = os.path.join(script_dir, "version.txt")
     if not os.path.exists(src_version_file):
         try:
@@ -1137,10 +1144,11 @@ def ota_init() -> bool:
     else:
         logk.printl("ota", "版本文件 version.txt 已存在", boot_time)
     
-    # 槽位完整性只做检查、不做合并复制：开机自动把 src 合并进槽位，
-    # 会把新 main.py 盖到旧槽位上、而新依赖又没跟上，造出无法启动的
-    # 半成品槽位（3.2.0 的 process.py 等就是这么漏掉的）。槽位是不可
-    # 变的安装产物，只允许经由更新/回滚/force_sync 流程写入。
+    # Slot integrity is only checked, never merged: copying src over a slot
+    # at boot overwrites the old main.py with the new one while the new
+    # dependencies lag behind, producing a half-built slot that cannot boot
+    # (3.2.0's process.py was lost exactly that way). A slot is an immutable
+    # install artefact, written only by update, rollback or force_sync.
     current_slot = get_current_slot()
     current_slot_path = os.path.join(root_dir, current_slot)
     if not _slot_is_ready(current_slot_path):

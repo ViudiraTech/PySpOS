@@ -1,12 +1,19 @@
-#
-#   shell/ota_cmds.py
-#   OTA 更新命令（由 main.py 拆分而来，行为保持不变）。
-#
+'''
+ *
+ *      ota_cmds.py
+ *      Built-in OTA update shell commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import ota
 import main
 
 
+# Ask for ROOT and return False after printing the refusal.
 def _require_root(operation):
     try:
         main.require_root(operation)
@@ -16,6 +23,7 @@ def _require_root(operation):
     return True
 
 
+# Ask the cloud whether a newer version exists and report what came back.
 def cmd_ota_check():
     update_info = ota.check_cloud_update()
     if update_info:
@@ -29,11 +37,11 @@ def cmd_ota_check():
         else:
             print(f"当前已是最新版本: {update_info['current_version']}")
     else:
-        # fetch 失败（不断网重试后仍失败）时保持旧行为：静默换行
+        # when the fetch fails after the retries have given up, keep the old behaviour: print a single line
         print("无法获取云端版本信息（网络失败或 OTA 被禁用）。")
     print()
 
-# 下载并安装更新命令
+# Download and install the available update, which needs ROOT.
 def cmd_ota_update():
     if not _require_root("OTA 更新"):
         return
@@ -43,7 +51,7 @@ def cmd_ota_update():
     else:
         print("更新失败\n")
 
-# 查看OTA更新状态命令
+# Print the OTA state: enable flag, slots, signatures and rollback index.
 def cmd_ota_status():
     status = ota.get_ota_status()
     if not status.get('ota_enabled', True):
@@ -59,7 +67,7 @@ def cmd_ota_status():
         print(f"更新版本: {status['update_version']}")
     print()
 
-# 回滚到上一个版本命令
+# Roll back to the previous version, which needs ROOT.
 def cmd_ota_rollback():
     if not _require_root("OTA 回滚"):
         return
@@ -69,7 +77,7 @@ def cmd_ota_rollback():
     else:
         print("回滚失败\n")
 
-# 清理更新包
+# Delete the downloaded update packages, which needs ROOT.
 def cmd_ota_clean():
     if not _require_root("清理 OTA"):
         return

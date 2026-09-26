@@ -1,41 +1,48 @@
-# fs.py - 文件系统操作模块
-# 2026-09-24: 新增 pathlib 沙箱 helpers（safe_join/read_text/write_text/mkdir_p/touch/cat_file），
-# 历史函数保持原样以兼容旧调用。
+'''
+ *
+ *      fs.py
+ *      File system helpers, including the pathlib sandbox ones.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import shutil
 import pathlib
 
-# 获取当前工作目录
+# Return the current working directory.
 def current_dir():
     return os.getcwd()
 
-# 列出当前目录下的文件和文件夹
+# List the entries of the current directory.
 def list_dir():
     return os.listdir(current_dir())
 
-# 删除目录及其内容
+# Remove a directory and everything inside it.
 def rm_tree(name):
     shutil.rmtree(name)
 
-# 更改当前工作目录
+# Change into path when it is an existing directory, otherwise do nothing.
 def change_dir(path):
     new_path = os.path.abspath(path)
     if os.path.isdir(new_path):
         os.chdir(new_path)
 
-# 创建新目录
+# Create a directory under the current one, parents included.
 def create_dir(name):
     new_dir = os.path.join(current_dir(), name)
     os.makedirs(new_dir, exist_ok=True)
 
-# 创建新文件
+# Create a file under the current directory, overwriting existing content.
 def create_file(name, content=''):
     file_path = os.path.join(current_dir(), name)
     with open(file_path, 'w') as f:
         f.write(content)
 
-# 读取文件内容
+# Return the text of a file under the current directory, or None.
 def read_file(name):
     file_path = os.path.join(current_dir(), name)
     if os.path.isfile(file_path):
@@ -43,33 +50,33 @@ def read_file(name):
             return f.read()
     return None
 
-# 写入内容到文件
+# Write text to a file under the current directory, overwriting it.
 def write_file(name, content):
     file_path = os.path.join(current_dir(), name)
     with open(file_path, 'w') as f:
         f.write(content)
 
-# 删除文件
+# Delete a file under the current directory when it exists.
 def delete_file(name):
     file_path = os.path.join(current_dir(), name)
     if os.path.isfile(file_path):
         os.remove(file_path)
 
-# 复制文件
+# Copy a file inside the current directory, preserving metadata.
 def copy_file(src, dest):
     src_path = os.path.join(current_dir(), src)
     dest_path = os.path.join(current_dir(), dest)
     if os.path.isfile(src_path):
         shutil.copy2(src_path, dest_path)
 
-# 移动文件
+# Move a file inside the current directory when the source exists.
 def move_file(src, dest):
     src_path = os.path.join(current_dir(), src)
     dest_path = os.path.join(current_dir(), dest)
     if os.path.exists(src_path):
         shutil.move(src_path, dest_path)
 
-# 获取文件信息
+# Return size, mtime and the directory flag, or None when the path is gone.
 def get_file_info(name):
     file_path = os.path.join(current_dir(), name)
     if os.path.exists(file_path):
@@ -82,15 +89,16 @@ def get_file_info(name):
     return None
 
 
-# ---- 新增：沙箱与便捷 helpers ----
+# ---- added: sandbox and convenience helpers ----
 
+# Return the sandbox root: the working directory by default.
+# PYSPOS_JAIL picks another root and PYSPOS_JAIL_STRICT=1 forbids escaping it.
 def _jail_root():
-    """沙箱根：默认当前工作目录；严格模式（PYSPOS_JAIL_STRICT=1）下禁止逃逸。"""
     return os.path.abspath(os.environ.get("PYSPOS_JAIL", os.getcwd()))
 
 
+# Join a path and make sure it stays under base, raising ValueError otherwise.
 def safe_join(base: str, *parts: str) -> str:
-    """拼接后确保仍在 base 内，否则抛 ValueError。"""
     base_abs = os.path.abspath(base)
     target = os.path.abspath(os.path.join(base_abs, *parts))
     if os.environ.get("PYSPOS_JAIL_STRICT") == "1":
@@ -99,6 +107,7 @@ def safe_join(base: str, *parts: str) -> str:
     return target
 
 
+# Return the text of a file under the current directory, or None.
 def read_text(name: str, encoding: str = "utf-8"):
     p = pathlib.Path(current_dir()) / name
     if p.is_file():
@@ -106,21 +115,25 @@ def read_text(name: str, encoding: str = "utf-8"):
     return None
 
 
+# Write text to a file under the current directory, creating parents as needed.
 def write_text(name: str, content: str, encoding: str = "utf-8") -> None:
     p = pathlib.Path(current_dir()) / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding=encoding)
 
 
+# Create a directory under the current one, parents included.
 def mkdir_p(name: str) -> None:
     pathlib.Path(current_dir(), name).mkdir(parents=True, exist_ok=True)
 
 
+# Create an empty file under the current directory, parents included.
 def touch(name: str) -> None:
     p = pathlib.Path(current_dir()) / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.touch(exist_ok=True)
 
 
+# Return the text of a file under the current directory, or None.
 def cat_file(name: str, encoding: str = "utf-8"):
     return read_text(name, encoding)

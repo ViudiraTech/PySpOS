@@ -1,16 +1,13 @@
-#
-#   oobe.py
-#   首次开机向导（Out-Of-Box Experience），Debian-Installer 式分步问答。
-#
-#   触发：etc/.oobe_done 标记缺失（出厂重置会删掉它）→ main.main()/kernel.loop
-#   前调用 maybe_run_oobe()。向导内所有问答走 tui（curses/行式双后端），
-#   支持返回上一步；中途中止（EOF/Ctrl-C/许可证拒绝后退出）不写标记，
-#   下次启动重新进入。
-#
-#   步骤：欢迎 → 语言（立即生效）→ 许可证（必接受）→ 时区（地区/城市两级，
-#   即时预览）→ 显示名 → ROOT → Bootloader 说明 → OTA 通道 → 安全策略指引 →
-#   汇总确认 → 写入 → 完成。
-#
+'''
+ *
+ *      oobe.py
+ *      First-boot setup wizard.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 
@@ -23,14 +20,17 @@ MARKER_NAME = os.path.join("etc", ".oobe_done")
 OTA_CHANNELS = ("stable", "beta")
 
 
+# Return the path of the etc/.oobe_done marker.
 def marker_path(root_dir):
     return os.path.join(root_dir, MARKER_NAME)
 
 
+# Report whether the wizard should run, that is whether the done marker is missing.
 def should_run(root_dir):
     return not os.path.isfile(marker_path(root_dir))
 
 
+# Split the zone list into region names, with 'Other' collecting the zones that have none.
 def _regions():
     zones = syslocale.list_timezones()
     regions = sorted({z.split("/")[0] for z in zones if "/" in z})
@@ -40,6 +40,7 @@ def _regions():
     return regions, zones
 
 
+# Return the cities of one region, with the region prefix stripped off.
 def _cities_of(region, zones):
     if region == "Other":
         return sorted([z for z in zones if "/" not in z])
@@ -47,12 +48,10 @@ def _cities_of(region, zones):
     return sorted([z[len(prefix):] for z in zones if z.startswith(prefix)])
 
 
+# Run the steps in order; ctx supplies root_dir, username, locked and a
+# persist(values) callback, so the wizard is testable with the line backend and
+# a scripted stdin. Returns True when finished and written, False on abort.
 def run_wizard(ctx):
-    """ctx: {root_dir, username, locked, bootcfg_get(k, default)}.
-
-    返回 True=完成并写入，False=中止。所有持久化经 ctx 回调完成，
-    因此本函数可单测（tui 强制行式 + 预置 stdin）。
-    """
     steps = [
         "welcome", "language", "license", "tz_region", "tz_city",
         "username", "root", "bootloader", "ota", "token", "summary",
@@ -87,6 +86,7 @@ def run_wizard(ctx):
     return True
 
 
+# Run one wizard step and return 'next', 'back' or 'abort'.
 def _run_step(step, ctx, values, i, n):
     if step == "welcome":
         r = tui.note(_("oobe.welcome_t"), _("oobe.welcome_b"), i, n)
@@ -196,6 +196,7 @@ def _run_step(step, ctx, values, i, n):
     return "next"
 
 
+# Build the real context: read the system user, bootcfg and secure boot state from the running system.
 def _live_ctx(root_dir):
     import btcfg
     import kernel
@@ -215,6 +216,8 @@ def _live_ctx(root_dir):
     except Exception:
         locked = bool(cfg.get("locked", False))
 
+# Write the collected values into bootcfg, apply the locale and create the
+# done marker; ROOT is only persisted when the bootloader is unlocked.
     def persist(values):
         import main
         effective_root = bool(values["root"] and not locked)
@@ -241,13 +244,10 @@ def _live_ctx(root_dir):
             "locked": bool(locked), "persist": persist}
 
 
+# Boot entry point: True when the wizard is not needed, otherwise run it;
+# an abort also returns False. The terminal is always restored, since a Ctrl-C
+# (TUIAbort) skips the curses teardown and would leave readline reading junk.
 def maybe_run_oobe(root_dir):
-    """开机入口：无需向导返回 True；需要则运行， abort 也返回 False 但不崩。
-
-    无论成功/取消/异常，都必须把终端恢复到可正常 input() 的状态——
-    向导中途 Ctrl-C（TUIAbort）会跳过 curses 的正常收尾，不恢复的话
-    后续 shell 的 readline 会一直卡在异常终端状态。
-    """
     try:
         import secure_boot
         locked = secure_boot.read_locked(root_dir)

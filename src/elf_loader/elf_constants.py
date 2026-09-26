@@ -1,37 +1,39 @@
-#
-#   elf_loader/elf_constants.py
-#   ELF 格式常量定义
-#   参考了 ELF Specification Version 1.2
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
-
+'''
+ *
+ *      elf_constants.py
+ *      ELF structure constants and enumerations.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 from enum import IntEnum, IntFlag
 
-# ==================== ELF 魔数和标识 ====================
-ELFMAG = b'\x7fELF'  # ELF 魔数
-SELFMAG = 4          # 魔数长度
+# ==================== ELF magic and identification ====================
+ELFMAG = b'\x7fELF'  # ELF magic number
+SELFMAG = 4          # magic number length
 
-# 文件类别
+# file class
 class ELFClass(IntEnum):
-    ELFCLASSNONE = 0      # 无效类别
-    ELFCLASS32 = 1        # 32 位对象
-    ELFCLASS64 = 2        # 64 位对象
+    ELFCLASSNONE = 0      # invalid class
+    ELFCLASS32 = 1        # 32-bit object
+    ELFCLASS64 = 2        # 64-bit object
 
-# 数据编码
+# data encoding
 class ELFData(IntEnum):
-    ELFDATANONE = 0       # 无效数据编码
-    ELFDATA2LSB = 1       # 小端模式
-    ELFDATA2MSB = 2       # 大端模式
+    ELFDATANONE = 0       # invalid data encoding
+    ELFDATA2LSB = 1       # little-endian
+    ELFDATA2MSB = 2       # big-endian
 
-# 操作系统/ABI 标识
+# OS/ABI identification
 class ELFOSABI(IntEnum):
     ELFOSABI_NONE = 0         # UNIX System V ABI
     ELFOSABI_HPUX = 1         # HP-UX
     ELFOSABI_NETBSD = 2       # NetBSD
-    ELFOSABI_GNU = 3          # GNU/Linux，带GNU的Linux
-    ELFOSABI_LINUX = 3        # Linux (历史别名，现在应该是 ELFOSABI_GNU)
+    ELFOSABI_GNU = 3          # GNU/Linux, the Linux that carries the GNU brand
+    ELFOSABI_LINUX = 3        # Linux (historic alias, should be ELFOSABI_GNU today)
     ELFOSABI_SOLARIS = 6      # Solaris
     ELFOSABI_AIX = 7          # IBM AIX
     ELFOSABI_IRIX = 8         # IRIX
@@ -43,21 +45,21 @@ class ELFOSABI(IntEnum):
     ELFOSABI_ARM = 97         # ARM
     ELFOSABI_STANDALONE = 255 # Standalone (embedded) application
 
-# ==================== 文件类型 ====================
+# ==================== file types ====================
 class ELFType(IntEnum):
-    ET_NONE = 0        # 无文件类型
-    ET_REL = 1         # 可重定位文件
-    ET_EXEC = 2        # 可执行文件（无敌之常见）
-    ET_DYN = 3         # 共享目标文件
-    ET_CORE = 4        # 核心文件
-    ET_LOOS = 0xfe00   # 操作系统特定范围开始
-    ET_HIOS = 0xfeff   # 操作系统特定范围结束
-    ET_LOPROC = 0xff00 # 处理器特定范围开始
-    ET_HIPROC = 0xffff # 处理器特定范围结束
+    ET_NONE = 0        # no file type
+    ET_REL = 1         # relocatable file
+    ET_EXEC = 2        # executable file (the one that actually runs)
+    ET_DYN = 3         # shared object file
+    ET_CORE = 4        # core file
+    ET_LOOS = 0xfe00   # OS-specific range begin
+    ET_HIOS = 0xfeff   # OS-specific range end
+    ET_LOPROC = 0xff00 # processor-specific range begin
+    ET_HIPROC = 0xffff # processor-specific range end
 
-# ==================== 机器架构 ====================
+# ==================== machine architectures ====================
 class ELFMachine(IntEnum):
-    EM_NONE = 0          # 无机器
+    EM_NONE = 0          # no machine
     EM_M32 = 1           # AT&T WE 32100
     EM_SPARC = 2         # SPARC
     EM_386 = 3           # Intel 80386
@@ -240,61 +242,61 @@ class ELFMachine(IntEnum):
     EM_AMDGPU = 224      # AMD GPU architecture
     EM_RISCV = 243       # RISC-V
 
-# ==================== 段类型 (p_type) ====================
+# ==================== segment types (p_type) ====================
 class ProgramHeaderType(IntEnum):
-    PT_NULL = 0          # 未使用条目
-    PT_LOAD = 1          # 可加载段
-    PT_DYNAMIC = 2       # 动态链接信息
-    PT_INTERP = 3        # 解释器路径
-    PT_NOTE = 4          # 辅助信息
-    PT_SHLIB = 5         # 保留
-    PT_PHDR = 6          # 程序头表位置
-    PT_TLS = 7           # 线程局部存储段
-    PT_LOOS = 0x60000000 # 操作系统特定范围开始
-    PT_HIOS = 0x6fffffff # 操作系统特定范围结束
-    PT_LOPROC = 0x70000000 # 处理器特定范围开始
-    PT_HIPROC = 0x7fffffff # 处理器特定范围结束
+    PT_NULL = 0          # unused entry
+    PT_LOAD = 1          # loadable segment
+    PT_DYNAMIC = 2       # dynamic linking information
+    PT_INTERP = 3        # interpreter path
+    PT_NOTE = 4          # auxiliary information
+    PT_SHLIB = 5         # reserved
+    PT_PHDR = 6          # program header table offset
+    PT_TLS = 7           # thread-local storage segment
+    PT_LOOS = 0x60000000 # OS-specific range begin
+    PT_HIOS = 0x6fffffff # OS-specific range end
+    PT_LOPROC = 0x70000000 # processor-specific range begin
+    PT_HIPROC = 0x7fffffff # processor-specific range end
 
-# GNU 堆栈段类型
+# GNU stack segment types
 PT_GNU_STACK = 0x6474e551
 PT_GNU_RELRO = 0x6474e552
 PT_GNU_PROPERTY = 0x6474e553
 
-# ==================== 段标志 (p_flags) ====================
+# ==================== segment flags (p_flags) ====================
 class ProgramHeaderFlags(IntFlag):
-    PF_X = 1             # 可执行
-    PF_W = 2             # 可写
-    PF_R = 4             # 可读
-    PF_MASKOS = 0x0ff00000  # 操作系统特定掩码
-    PF_MASKPROC = 0xf0000000 # 处理器特定掩码
+    PF_X = 1             # executable
+    PF_W = 2             # writable
+    PF_R = 4             # readable
+    PF_MASKOS = 0x0ff00000  # OS-specific mask
+    PF_MASKPROC = 0xf0000000 # processor-specific mask
 
-# ==================== 节区类型 (sh_type) ====================
+# ==================== section types (sh_type) ====================
 class SectionHeaderType(IntEnum):
-    SHT_NULL = 0              # 未使用节区
-    SHT_PROGBITS = 1          # 程序数据
-    SHT_SYMTAB = 2            # 符号表
-    SHT_STRTAB = 3            # 字符串表
-    SHT_RELA = 4              # 带加数的重定位表
-    SHT_HASH = 5              # 符号哈希表
-    SHT_DYNAMIC = 6           # 动态链接信息
-    SHT_NOTE = 7              # 注释信息
-    SHT_NOBITS = 8            # 不占空间的节区(BSS)
-    SHT_REL = 9               # 重定位表
-    SHT_SHLIB = 10            # 保留
-    SHT_DYNSYM = 11           # 动态符号表
-    SHT_INIT_ARRAY = 14       # 初始化函数指针数组
-    SHT_FINI_ARRAY = 15       # 终止函数指针数组
-    SHT_PREINIT_ARRAY = 16    # 预初始化函数指针数组
-    SHT_GROUP = 17            # 节区组
-    SHT_SYMTAB_SHNDX = 18     # 扩展节区索引
-    SHT_LOOS = 0x60000000     # 操作系统特定范围开始
-    SHT_HIOS = 0x6fffffff     # 操作系统特定范围结束
-    SHT_LOPROC = 0x70000000   # 处理器特定范围开始
-    SHT_HIPROC = 0x7fffffff   # 处理器特定范围结束
-    SHT_LOUSER = 0x80000000   # 应用程序特定范围开始
-    SHT_HIUSER = 0xffffffff   # 应用程序特定范围结束
+    SHT_NULL = 0              # unused section
+    SHT_PROGBITS = 1          # program data
+    SHT_SYMTAB = 2            # symbol table
+    SHT_STRTAB = 3            # string table
+    SHT_RELA = 4              # relocation table with addends
+    SHT_HASH = 5              # symbol hash table
+    SHT_DYNAMIC = 6           # dynamic linking information
+    SHT_NOTE = 7              # comment information
+    SHT_NOBITS = 8            # space-occuping-free section (BSS)
+    SHT_REL = 9               # relocation table
+    SHT_SHLIB = 10            # reserved
+    SHT_DYNSYM = 11           # dynamic symbol table
+    SHT_INIT_ARRAY = 14       # array of init function pointers
+    SHT_FINI_ARRAY = 15       # array of fini function pointers
+    SHT_PREINIT_ARRAY = 16    # array of preinit function pointers
+    SHT_GROUP = 17            # section group
+    SHT_SYMTAB_SHNDX = 18     # extended section index
+    SHT_LOOS = 0x60000000     # OS-specific range begin
+    SHT_HIOS = 0x6fffffff     # OS-specific range end
+    SHT_LOPROC = 0x70000000   # processor-specific range begin
+    SHT_HIPROC = 0x7fffffff   # processor-specific range end
+    SHT_LOUSER = 0x80000000   # application-specific range begin
+    SHT_HIUSER = 0xffffffff   # application-specific range end
 
-# GNU 属性节区
+# GNU attribute sections
 SHT_GNU_ATTRIBUTES = 0x6ffffff5
 SHT_GNU_HASH = 0x6ffffff6
 SHT_GNU_LIBLIST = 0x6ffffff7
@@ -303,68 +305,68 @@ SHT_GNU_VERDEF = 0x6ffffffd
 SHT_GNU_VERNEED = 0x6ffffffe
 SHT_GNU_VERSYM = 0x6fffffff
 
-# ==================== 节区标志 (sh_flags) ====================
+# ==================== section flags (sh_flags) ====================
 class SectionHeaderFlags(IntFlag):
-    SHF_WRITE = 0x1           # 可写
-    SHF_ALLOC = 0x2           # 占用内存
-    SHF_EXECINSTR = 0x4       # 可执行指令
-    SHF_MERGE = 0x10          # 可合并
-    SHF_STRINGS = 0x20        # 包含空终止字符串
-    SHF_INFO_LINK = 0x40      # sh_info 包含节区索引
-    SHF_LINK_ORDER = 0x80     # 保留链接顺序
-    SHF_OS_NONCONFORMING = 0x100  # 非标准操作系统特定处理
-    SHF_GROUP = 0x200         # 节区是组的一部分
-    SHF_TLS = 0x400           # 线程局部存储
-    SHF_COMPRESSED = 0x800    # 压缩节区
-    SHF_MASKOS = 0x0ff00000   # 操作系统特定掩码
-    SHF_MASKPROC = 0xf0000000 # 处理器特定掩码
+    SHF_WRITE = 0x1           # writable
+    SHF_ALLOC = 0x2           # occupies memory
+    SHF_EXECINSTR = 0x4       # executable instructions
+    SHF_MERGE = 0x10          # mergeable
+    SHF_STRINGS = 0x20        # holds null-terminated strings
+    SHF_INFO_LINK = 0x40      # sh_info holds a section index
+    SHF_LINK_ORDER = 0x80     # preserve link order
+    SHF_OS_NONCONFORMING = 0x100  # non-standard OS-specific handling
+    SHF_GROUP = 0x200         # section belongs to a group
+    SHF_TLS = 0x400           # thread-local storage
+    SHF_COMPRESSED = 0x800    # compressed section
+    SHF_MASKOS = 0x0ff00000   # OS-specific mask
+    SHF_MASKPROC = 0xf0000000 # processor-specific mask
 
-# ==================== 动态标签 (d_tag) ====================
+# ==================== dynamic tags (d_tag) ====================
 class DynamicTag(IntEnum):
-    DT_NULL = 0              # 标记 _DYNAMIC 数组结束
-    DT_NEEDED = 1            # 所需库的名称字符串表偏移
-    DT_PLTRELSZ = 2          # PLT 重定位表大小
-    DT_PLTGOT = 3            # PLT/GOT 地址
-    DT_HASH = 4              # 符号哈希表地址
-    DT_STRTAB = 5            # 字符串表地址
-    DT_SYMTAB = 6            # 符号表地址
-    DT_RELA = 7              # Rela 重定位表地址
-    DT_RELASZ = 8            # Rela 重定位表大小
-    DT_RELAENT = 9           # Rela 重定位表条目大小
-    DT_STRSZ = 10            # 字符串表大小
-    DT_SYMENT = 11           # 符号表条目大小
-    DT_INIT = 12             # 初始化函数地址
-    DT_FINI = 13             # 终止函数地址
-    DT_SONAME = 14           # 共享对象名称字符串表偏移
-    DT_RPATH = 15            # 库搜索路径字符串表偏移
-    DT_SYMBOLIC = 16         # 符号链接标志
-    DT_REL = 17              # Rel 重定位表地址
-    DT_RELSZ = 18            # Rel 重定位表大小
-    DT_RELENT = 19           # Rel 重定位表条目大小
-    DT_PLTREL = 20           # PLT 重定位类型
-    DT_DEBUG = 21            # 调试信息
-    DT_TEXTREL = 22          # 文本重定位标志
-    DT_JMPREL = 23           # PLT 重定位表地址
-    DT_BIND_NOW = 24         # 立即绑定标志
-    DT_INIT_ARRAY = 25       # 初始化函数指针数组地址
-    DT_FINI_ARRAY = 26       # 终止函数指针数组地址
-    DT_INIT_ARRAYSZ = 27     # 初始化函数指针数组大小
-    DT_FINI_ARRAYSZ = 28     # 终止函数指针数组大小
-    DT_RUNPATH = 29          # 运行时库搜索路径
-    DT_FLAGS = 30            # 标志
-    DT_ENCODING = 32         # 编码值开始
-    DT_PREINIT_ARRAY = 32    # 预初始化函数指针数组地址
-    DT_PREINIT_ARRAYSZ = 33  # 预初始化函数指针数组大小
-    DT_SYMTAB_SHNDX = 34     # 符号表节区索引
-    DT_LOOS = 0x6000000d     # 操作系统特定范围开始
-    DT_HIOS = 0x6ffff000     # 操作系统特定范围结束
-    DT_LOPROC = 0x70000000   # 处理器特定范围开始
-    DT_HIPROC = 0x7fffffff   # 处理器特定范围结束
+    DT_NULL = 0              # marks the end of the _DYNAMIC array
+    DT_NEEDED = 1            # string table offset of the needed library names
+    DT_PLTRELSZ = 2          # size of the PLT relocation table
+    DT_PLTGOT = 3            # PLT/GOT address
+    DT_HASH = 4              # symbol hash table address
+    DT_STRTAB = 5            # string table address
+    DT_SYMTAB = 6            # symbol table address
+    DT_RELA = 7              # Rela relocation table address
+    DT_RELASZ = 8            # size of the Rela relocation table
+    DT_RELAENT = 9           # size of one Rela relocation entry
+    DT_STRSZ = 10            # size of the string table
+    DT_SYMENT = 11           # size of one symbol table entry
+    DT_INIT = 12             # init function address
+    DT_FINI = 13             # fini function address
+    DT_SONAME = 14           # string table offset of the shared object name
+    DT_RPATH = 15            # string table offset of the library search path
+    DT_SYMBOLIC = 16         # symbolic linking flag
+    DT_REL = 17              # Rel relocation table address
+    DT_RELSZ = 18            # size of the Rel relocation table
+    DT_RELENT = 19           # size of one Rel relocation entry
+    DT_PLTREL = 20           # PLT relocation type
+    DT_DEBUG = 21            # debug information
+    DT_TEXTREL = 22          # text relocation flag
+    DT_JMPREL = 23           # PLT relocation table address
+    DT_BIND_NOW = 24         # bind-now flag
+    DT_INIT_ARRAY = 25       # address of the init function pointer array
+    DT_FINI_ARRAY = 26       # address of the fini function pointer array
+    DT_INIT_ARRAYSZ = 27     # size of the init function pointer array
+    DT_FINI_ARRAYSZ = 28     # size of the fini function pointer array
+    DT_RUNPATH = 29          # runtime library search path
+    DT_FLAGS = 30            # flags
+    DT_ENCODING = 32         # encoded value begin
+    DT_PREINIT_ARRAY = 32    # address of the preinit function pointer array
+    DT_PREINIT_ARRAYSZ = 33  # size of the preinit function pointer array
+    DT_SYMTAB_SHNDX = 34     # section index of the symbol table
+    DT_LOOS = 0x6000000d     # OS-specific range begin
+    DT_HIOS = 0x6ffff000     # OS-specific range end
+    DT_LOPROC = 0x70000000   # processor-specific range begin
+    DT_HIPROC = 0x7fffffff   # processor-specific range end
 
-# DT_FLAGS 常量（从 DynamicTag 中提取）
+# the DT_FLAGS constant, lifted out of DynamicTag
 DT_FLAGS = 30
 
-# GNU 特定动态标签
+# GNU-specific dynamic tags
 DT_GNU_HASH = 0x6ffffef5
 DT_TLSDESC_PLT = 0x6ffffef6
 DT_TLSDESC_GOT = 0x6ffffef7
@@ -385,123 +387,123 @@ DT_VERDEFNUM = 0x6ffffffd
 DT_VERNEED = 0x6ffffffe
 DT_VERNEEDNUM = 0x6fffffff
 
-# ==================== 符号绑定 (st_info 高 4 位) ====================
+# ==================== symbol bindings (high 4 bits of st_info) ====================
 class SymbolBinding(IntEnum):
-    STB_LOCAL = 0     # 局部符号
-    STB_GLOBAL = 1    # 全局符号
-    STB_WEAK = 2      # 弱符号
-    STB_LOOS = 10     # 操作系统特定范围开始
-    STB_HIOS = 12     # 操作系统特定范围结束
-    STB_LOPROC = 13   # 处理器特定范围开始
-    STB_HIPROC = 15   # 处理器特定范围结束
+    STB_LOCAL = 0     # local symbol
+    STB_GLOBAL = 1    # global symbol
+    STB_WEAK = 2      # weak symbol
+    STB_LOOS = 10     # OS-specific range begin
+    STB_HIOS = 12     # OS-specific range end
+    STB_LOPROC = 13   # processor-specific range begin
+    STB_HIPROC = 15   # processor-specific range end
 
-# ==================== 符号类型 (st_info 低 4 位) ====================
+# ==================== symbol types (low 4 bits of st_info) ====================
 class SymbolType(IntEnum):
-    STT_NOTYPE = 0    # 未指定类型
-    STT_OBJECT = 1    # 数据对象
-    STT_FUNC = 2      # 函数
-    STT_SECTION = 3   # 节区
-    STT_FILE = 4      # 文件名
-    STT_COMMON = 5    # 公共数据
-    STT_TLS = 6       # 线程局部存储
-    STT_LOOS = 10     # 操作系统特定范围开始
-    STT_HIOS = 12     # 操作系统特定范围结束
-    STT_LOPROC = 13   # 处理器特定范围开始
-    STT_HIPROC = 15   # 处理器特定范围结束
+    STT_NOTYPE = 0    # unspecified type
+    STT_OBJECT = 1    # data object
+    STT_FUNC = 2      # function
+    STT_SECTION = 3   # section
+    STT_FILE = 4      # file name
+    STT_COMMON = 5    # common data
+    STT_TLS = 6       # thread-local storage
+    STT_LOOS = 10     # OS-specific range begin
+    STT_HIOS = 12     # OS-specific range end
+    STT_LOPROC = 13   # processor-specific range begin
+    STT_HIPROC = 15   # processor-specific range end
 
-# ==================== 重定位类型 (x86_64) ====================
+# ==================== relocation types (x86_64) ====================
 class RelocationTypeX86_64(IntEnum):
-    R_X86_64_NONE = 0           # 无重定位
-    R_X86_64_64 = 1             # 直接 64 位
-    R_X86_64_PC32 = 2           # PC 相对 32 位有符号
-    R_X86_64_GOT32 = 3          # 32 位 GOT 条目
-    R_X86_64_PLT32 = 4          # 32 位 PLT 地址
-    R_X86_64_COPY = 5           # 复制重定位
-    R_X86_64_GLOB_DAT = 6       # 创建 GOT 条目
-    R_X86_64_JUMP_SLOT = 7      # 创建 PLT 条目
-    R_X86_64_RELATIVE = 8       # 基址相对地址
-    R_X86_64_GOTPCREL = 9       # 32 位有符号 PC 相对偏移到 GOT
-    R_X86_64_32 = 10            # 直接 32 位零扩展
-    R_X86_64_32S = 11           # 直接 32 位符号扩展
-    R_X86_64_16 = 12            # 直接 16 位零扩展
-    R_X86_64_PC16 = 13          # 16 位有符号 PC 相对
-    R_X86_64_8 = 14             # 直接 8 位零扩展
-    R_X86_64_PC8 = 15           # 8 位有符号 PC 相对
+    R_X86_64_NONE = 0           # no relocation
+    R_X86_64_64 = 1             # direct 64-bit
+    R_X86_64_PC32 = 2           # PC-relative 32-bit signed
+    R_X86_64_GOT32 = 3          # 32-bit GOT entry
+    R_X86_64_PLT32 = 4          # 32-bit PLT address
+    R_X86_64_COPY = 5           # copy relocation
+    R_X86_64_GLOB_DAT = 6       # create GOT entry
+    R_X86_64_JUMP_SLOT = 7      # create PLT entry
+    R_X86_64_RELATIVE = 8       # base-relative address
+    R_X86_64_GOTPCREL = 9       # 32-bit signed PC-relative offset to the GOT
+    R_X86_64_32 = 10            # direct 32-bit zero-extended
+    R_X86_64_32S = 11           # direct 32-bit sign-extended
+    R_X86_64_16 = 12            # direct 16-bit zero-extended
+    R_X86_64_PC16 = 13          # 16-bit signed PC-relative
+    R_X86_64_8 = 14             # direct 8-bit zero-extended
+    R_X86_64_PC8 = 15           # 8-bit signed PC-relative
     R_X86_64_DTPMOD64 = 16      # ID of module containing symbol
     R_X86_64_DTPOFF64 = 17      # Offset in module's TLS block
     R_X86_64_TPOFF64 = 18       # Offset in initial TLS block
-    R_X86_64_TLSGD = 19         # 32 位有符号 PC 相对偏移到两个 GOT 条目
-    R_X86_64_TLSLD = 20         # 32 位有符号 PC 相对偏移到两个 GOT 条目
+    R_X86_64_TLSGD = 19         # 32-bit signed PC-relative offset to two GOT entries
+    R_X86_64_TLSLD = 20         # 32-bit signed PC-relative offset to two GOT entries
     R_X86_64_DTPOFF32 = 21      # Offset in TLS block
-    R_X86_64_GOTTPOFF = 22      # 32 位有符号 PC 相对偏移到 GOT 条目
+    R_X86_64_GOTTPOFF = 22      # 32-bit signed PC-relative offset to a GOT entry
     R_X86_64_TPOFF32 = 23       # Offset in initial TLS block
-    R_X86_64_PC64 = 24          # PC 相对 64 位
-    R_X86_64_GOTOFF64 = 25      # 64 位 GOT 相对偏移
-    R_X86_64_GOTPC32 = 26       # 32 位有符号 PC 相对偏移到 GOT
-    R_X86_64_GOT64 = 27         # 64 位 GOT 条目偏移
-    R_X86_64_GOTPCREL64 = 28    # 64 位 PC 相对偏移到 GOT 条目
-    R_X86_64_GOTPC64 = 29       # 64 位 PC 相对偏移到 GOT
-    R_X86_64_GOTPLT64 = 30      # 64 位 GOT 条目用于 PLT
-    R_X86_64_PLTOFF64 = 31      # 64 位 GOT 相对偏移到 PLT 条目
-    R_X86_64_SIZE32 = 32        # 32 位符号大小
-    R_X86_64_SIZE64 = 33        # 64 位符号大小
-    R_X86_64_GOTPC32_TLSDESC = 34 # 32 位有符号 PC 相对偏移到 TLS 描述符
-    R_X86_64_TLSDESC_CALL = 35  # TLS 描述符重定位标记
-    R_X86_64_TLSDESC = 36       # 2x64 位 TLS 描述符
-    R_X86_64_IRELATIVE = 37     # 调整间接程序地址
+    R_X86_64_PC64 = 24          # PC-relative 64-bit
+    R_X86_64_GOTOFF64 = 25      # 64-bit GOT-relative offset
+    R_X86_64_GOTPC32 = 26       # 32-bit signed PC-relative offset to the GOT
+    R_X86_64_GOT64 = 27         # 64-bit GOT entry offset
+    R_X86_64_GOTPCREL64 = 28    # 64-bit PC-relative offset to a GOT entry
+    R_X86_64_GOTPC64 = 29       # 64-bit PC-relative offset to the GOT
+    R_X86_64_GOTPLT64 = 30      # 64-bit GOT entry for the PLT
+    R_X86_64_PLTOFF64 = 31      # 64-bit GOT-relative offset to a PLT entry
+    R_X86_64_SIZE32 = 32        # 32-bit symbol size
+    R_X86_64_SIZE64 = 33        # 64-bit symbol size
+    R_X86_64_GOTPC32_TLSDESC = 34 # 32-bit signed PC-relative offset to a TLS descriptor
+    R_X86_64_TLSDESC_CALL = 35  # TLS descriptor relocation marker
+    R_X86_64_TLSDESC = 36       # two 64-bit TLS descriptor words
+    R_X86_64_IRELATIVE = 37     # adjust indirect program address
 
-# ==================== 重定位类型 (i386) ====================
+# ==================== relocation types (i386) ====================
 class RelocationTypeI386(IntEnum):
-    R_386_NONE = 0          # 无重定位
-    R_386_32 = 1            # 直接 32 位
-    R_386_PC32 = 2          # PC 相对 32 位
-    R_386_GOT32 = 3         # 32 位 GOT 条目
-    R_386_PLT32 = 4         # 32 位 PLT 地址
-    R_386_COPY = 5          # 复制重定位
-    R_386_GLOB_DAT = 6      # 创建 GOT 条目
-    R_386_JMP_SLOT = 7      # 创建 PLT 条目
-    R_386_RELATIVE = 8      # 基址相对地址
-    R_386_GOTOFF = 9        # 32 位 GOT 相对偏移
-    R_386_GOTPC = 10        # 32 位 PC 相对偏移到 GOT
-    R_386_32PLT = 11        # 32 位 PLT 偏移
-    R_386_TLS_TPOFF = 14    # 线程局部存储偏移
-    R_386_TLS_IE = 15       # TLS 初始可执行地址
-    R_386_TLS_GOTIE = 16    # TLS GOT 条目
-    R_386_TLS_LE = 17       # TLS 局部可执行地址
-    R_386_TLS_GD = 18       # TLS 全局动态地址
-    R_386_TLS_LDM = 19      # TLS 局部动态地址
-    R_386_16 = 20           # 直接 16 位
-    R_386_PC16 = 21         # PC 相对 16 位
-    R_386_8 = 22            # 直接 8 位
-    R_386_PC8 = 23          # PC 相对 8 位
-    R_386_TLS_GD_32 = 24    # 32 位 TLS GD 偏移
-    R_386_TLS_GD_PUSH = 25  # TLS GD 压栈指令
-    R_386_TLS_GD_CALL = 26  # TLS GD 调用指令
-    R_386_TLS_GD_POP = 27   # TLS GD 弹栈指令
-    R_386_TLS_LDM_32 = 28   # 32 位 TLS LDM 偏移
-    R_386_TLS_LDM_PUSH = 29 # TLS LDM 压栈指令
-    R_386_TLS_LDM_CALL = 30 # TLS LDM 调用指令
-    R_386_TLS_LDM_POP = 31  # TLS LDM 弹栈指令
-    R_386_TLS_LDO_32 = 32   # 32 位 TLS LDO 偏移
-    R_386_TLS_IE_32 = 33    # 32 位 TLS IE 偏移
-    R_386_TLS_LE_32 = 34    # 32 位 TLS LE 偏移
-    R_386_TLS_DTPMOD32 = 35 # 32 位 TLS DTPMOD 偏移
-    R_386_TLS_DTPOFF32 = 36 # 32 位 TLS DTPOFF 偏移
-    R_386_TLS_TPOFF32 = 37  # 32 位 TLS TPOFF 偏移
-    R_386_SIZE32 = 38       # 32 位符号大小
-    R_386_TLS_GOTDESC = 39  # TLS GOT 描述符
-    R_386_TLS_DESC_CALL = 40 # TLS 描述符调用
-    R_386_TLS_DESC = 41     # TLS 描述符
-    R_386_IRELATIVE = 42    # 调整间接程序地址
-    R_386_GOT32X = 43       # 32 位 GOT 条目
+    R_386_NONE = 0          # no relocation
+    R_386_32 = 1            # direct 32-bit
+    R_386_PC32 = 2          # PC-relative 32-bit
+    R_386_GOT32 = 3         # 32-bit GOT entry
+    R_386_PLT32 = 4         # 32-bit PLT address
+    R_386_COPY = 5          # copy relocation
+    R_386_GLOB_DAT = 6      # create GOT entry
+    R_386_JMP_SLOT = 7      # create PLT entry
+    R_386_RELATIVE = 8      # base-relative address
+    R_386_GOTOFF = 9        # 32-bit GOT-relative offset
+    R_386_GOTPC = 10        # 32-bit PC-relative offset to the GOT
+    R_386_32PLT = 11        # 32-bit PLT offset
+    R_386_TLS_TPOFF = 14    # thread-local storage offset
+    R_386_TLS_IE = 15       # TLS initial-executable address
+    R_386_TLS_GOTIE = 16    # TLS GOT entry
+    R_386_TLS_LE = 17       # TLS local-executable address
+    R_386_TLS_GD = 18       # TLS global-dynamic address
+    R_386_TLS_LDM = 19      # TLS local-dynamic address
+    R_386_16 = 20           # direct 16-bit
+    R_386_PC16 = 21         # PC-relative 16-bit
+    R_386_8 = 22            # direct 8-bit
+    R_386_PC8 = 23          # PC-relative 8-bit
+    R_386_TLS_GD_32 = 24    # 32-bit TLS GD offset
+    R_386_TLS_GD_PUSH = 25  # TLS GD push instruction
+    R_386_TLS_GD_CALL = 26  # TLS GD call instruction
+    R_386_TLS_GD_POP = 27   # TLS GD pop instruction
+    R_386_TLS_LDM_32 = 28   # 32-bit TLS LDM offset
+    R_386_TLS_LDM_PUSH = 29 # TLS LDM push instruction
+    R_386_TLS_LDM_CALL = 30 # TLS LDM call instruction
+    R_386_TLS_LDM_POP = 31  # TLS LDM pop instruction
+    R_386_TLS_LDO_32 = 32   # 32-bit TLS LDO offset
+    R_386_TLS_IE_32 = 33    # 32-bit TLS IE offset
+    R_386_TLS_LE_32 = 34    # 32-bit TLS LE offset
+    R_386_TLS_DTPMOD32 = 35 # 32-bit TLS DTPMOD offset
+    R_386_TLS_DTPOFF32 = 36 # 32-bit TLS DTPOFF offset
+    R_386_TLS_TPOFF32 = 37  # 32-bit TLS TPOFF offset
+    R_386_SIZE32 = 38       # 32-bit symbol size
+    R_386_TLS_GOTDESC = 39  # TLS GOT descriptor
+    R_386_TLS_DESC_CALL = 40 # TLS descriptor call
+    R_386_TLS_DESC = 41     # TLS descriptor
+    R_386_IRELATIVE = 42    # adjust indirect program address
+    R_386_GOT32X = 43       # 32-bit GOT entry
 
-# ==================== 特殊节区索引 ====================
+# ==================== special section indices ====================
 class SpecialSectionIndex(IntEnum):
-    SHN_UNDEF = 0           # 未定义/缺失/无关的引用
-    SHN_LORESERVE = 0xff00  # 保留索引范围开始
-    SHN_LOPROC = 0xff00     # 处理器特定范围开始
-    SHN_HIPROC = 0xff1f     # 处理器特定范围结束
-    SHN_LIVEPATCH = 0xff20  # 实时补丁节区
-    SHN_ABS = 0xfff1        # 绝对值
-    SHN_COMMON = 0xfff2     # 公共符号
-    SHN_HIRESERVE = 0xffff  # 保留索引范围结束
+    SHN_UNDEF = 0           # undefined, missing or irrelevant reference
+    SHN_LORESERVE = 0xff00  # reserved index range begin
+    SHN_LOPROC = 0xff00     # processor-specific range begin
+    SHN_HIPROC = 0xff1f     # processor-specific range end
+    SHN_LIVEPATCH = 0xff20  # live-patch section
+    SHN_ABS = 0xfff1        # absolute value
+    SHN_COMMON = 0xfff2     # common symbol
+    SHN_HIRESERVE = 0xffff  # reserved index range end

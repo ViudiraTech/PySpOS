@@ -1,14 +1,14 @@
-#
-#   pyspos.py
-#   PySpOS Base information file
-#
-#   2026/1/31 By GoutouStdio
-#   @2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      pyspos.py
+ *      PySpOS version numbers and build switches.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-#   2026/1/31 update log: add this file to store base information of PySpOS!!!
-#   2026/1/31 update 2 log: add null value definition, add spui,sunglass definitions
-
-# Null value.
 NULL = 0
 
 # OS Name.
@@ -45,10 +45,10 @@ OS_COPYRIGHT = "@2022~2026 GoutouStdio. Open all rights."
 SPF_ENABLED = True
 
 # SPF parser version.
-SPF_VERSION = "2.0" # 0.1: 仅 putchar/exit；2.0: 新增 var/set/add/print/input/include/sleep
+SPF_VERSION = "2.0" # 0.1 had only putchar and exit; 2.0 adds var, set, add, print, input, include and sleep
 
 # Select whether to enable SpaceConfig.
-SPC_ENABLED = True # SpaceConfig（.spc）v2 已可用：类型系统+Schema 校验+工具命令
+SPC_ENABLED = True # SpaceConfig (.spc) v2 is available: a type system, schema validation and tool commands
 
 # SpaceConfig Version.
 SPC_VERSION = "2.0"
@@ -75,13 +75,13 @@ else:
 DEVELOPER_MODE = False # Developer mode is disabled by default. You can enable it for development and testing purposes.
 
 # OTA master switch.
-#   2026-09-24 曾因服务器故障临时禁用；云端已迁移到
-#   goutoustdio.rainyland.top，服务恢复后改回 True。
-#   禁用后：check_cloud_update / download_and_install_update 直接返回降级提示，
-#   不发任何网络请求；本地安装 install_update / 回滚 rollback / 状态查询不受影响。
+# temporarily disabled on 2026-09-24 after a server failure; the cloud host has moved to
+# goutoustdio.rainyland.top, and it was set back to True once the service recovered.
+# while disabled, check_cloud_update and download_and_install_update return a degraded notice straight away,
+# without sending any network request; the local install_update, rollback and status queries are unaffected.
 OTA_ENABLED = True
 OTA_DISABLE_REASON = "OTA 服务器维护中，云端更新已临时禁用（本地安装/回滚不受影响）"
 
 # OTA update channel: "stable" / "beta" / "nightly".
-#   check_cloud_update 会优先匹配同 channel 的 changelog 条目。
+# check_cloud_update prefers changelog entries from the same channel.
 OTA_CHANNEL = "beta"

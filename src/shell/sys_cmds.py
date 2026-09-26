@@ -1,8 +1,13 @@
-#
-#   shell/sys_cmds.py
-#   系统/文件类 shell 命令（由 main.py 拆分而来，行为保持不变）。
-#   跨模块共享状态一律经 main.* 读取（main.py facade 保证先初始化）。
-#
+'''
+ *
+ *      sys_cmds.py
+ *      Built-in system and file shell commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import platform
@@ -10,7 +15,7 @@ import printk
 import fs
 import kernel
 import recovery
-import process as proc  # 进程管理以 process.py（PCB + EEVDF）为准，proc.py 仅为兼容垫片
+import process as proc  # process management lives in process.py (PCB + EEVDF); proc.py is only a compatibility shim
 import spc
 import pyspos
 import main
@@ -18,12 +23,15 @@ import main
 if pyspos.SPF_ENABLED:
     import parse_spf
 else:
+    # Placeholder used when the build has SPF support compiled out.
     class parse_spf:
+        # Always raise: SPF support is disabled in this build.
         @staticmethod
         def run_spf(spf_path):
             raise NotImplementedError("SPF support is disabled in this build. spf path: " + spf_path)
 
 
+# Easter egg behind shb, printed once per CPU core.
 def print_sunhb():
     cores = kernel.cores
     print(f"'shb'程序将打印孙浩博是小可爱！{cores}次。\n")
@@ -31,12 +39,10 @@ def print_sunhb():
     print("小可爱！ " * cores)
     print()
 
-# 命令处理函数
+# help lists the commands per group; help <command> shows the detail of one.
+# The text comes from the registry metadata in commands.py, so a new command
+# needs no hand-written help here.
 def cmd_help(args: str = ""):
-    """help：按分组列出命令；help <命令> 显示单命令详情。
-
-    帮助文本由 commands.py 注册表元数据自动生成，新增命令无需再手写这里。
-    """
     import commands as _reg
     _reg.register_discovered()
     topic = (args or "").strip()
@@ -45,7 +51,7 @@ def cmd_help(args: str = ""):
         return
     print(_reg.render_help())
 
-# 打印指定字符串
+# echo prints its text, honouring -n for no newline and -e for escapes.
 def cmd_echo(text: str = ""):
     import shlex
     try:
@@ -67,20 +73,23 @@ def cmd_echo(text: str = ""):
     else:
         print(out, end="")
 
-# 显示PySpOS版本
+# Print the PySpOS version, its develop stage and the Python version.
 def cmd_osver():
     print(f"PySpOS 版本: {pyspos.OS_VERSION}, 开发阶段: {pyspos.OS_DEVELOP_STAGE}")
     print(f"Python 版本: {platform.python_version()}\n")
 
+# Shut PySpOS down through the kernel.
 def cmd_shutdown():
     kernel.exit()
 
+# Clear the screen, picking the command that fits the host OS.
 def cmd_clear():
     if os.name == "nt":
         os.system("cls")
     else:
         os.system("clear")
 
+# Start the host Python interpreter, asking for ROOT when the boot is locked.
 def cmd_python():
     try:
         if main.boot_locked:
@@ -91,6 +100,7 @@ def cmd_python():
     os.system("python")
     print()
 
+# Enter recovery mode, asking for ROOT when the boot is locked.
 def cmd_recovery():
     try:
         if main.boot_locked:
@@ -100,45 +110,48 @@ def cmd_recovery():
         return
     recovery.recovery_main("kernel_jump")
 
+# Easter egg: print the banner plus a code point and its reverse lookup.
 def cmd_shb():
     print_sunhb()
     char = '你'
     print(f"字符：{char}")
-    print(f"十六进制编码：U+{ord(char):04X}")  # 输出 U+AFAF
-    print(f"十进制编码：{ord(char)}")          # 输出 44975
+    print(f"十六进制编码：U+{ord(char):04X}")  # prints U+AFAF
+    print(f"十进制编码：{ord(char)}")          # prints 44975
 
-    # 2. 反向：从编码找字符
+    # 2. the reverse direction: from a code point back to the character
     code = ord(char)
-    print(f"编码0x{code:04X}对应的字符：{chr(code)}")  # 输出 你
+    print(f"编码0x{code:04X}对应的字符：{chr(code)}")  # prints that character
 
+# List the entries of the current directory.
 def cmd_ls():
     items = fs.list_dir()
     for item in items:
         print(item)
     print()
 
+# Change the working directory, keeping OLDPWD so cd - works.
 def cmd_cd(path: str = None):
-    #切换工作目录
+    # change the working directory
     if path is None or path.strip() == "":
-        # 如果没有参数，切换到用户主目录
+        # with no argument, go to the home directory
         path = os.path.expanduser("~")
     
-    # 处理特殊路径
+    # handle the special paths
     if path == "-":
-        # 切换到上一个目录
+        # go back to the previous directory
         path = os.environ.get("OLDPWD", os.getcwd())
     elif path == "~":
         path = os.path.expanduser("~")
     
-    # 保存当前目录
+    # remember the current directory
     old_cwd = os.getcwd()
     
     try:
-        # 尝试切换目录
+        # try to change directory
         os.chdir(path)
-        # 更新 OLDPWD 环境变量
+        # update the OLDPWD environment variable
         os.environ["OLDPWD"] = old_cwd
-        # 打印当前目录
+        # print the current directory
         print(os.getcwd())
         return 0
     except FileNotFoundError:
@@ -151,14 +164,15 @@ def cmd_cd(path: str = None):
         printk.error(f"cd: 错误: {e}\n")
     return 1
 
+# Finfo prints the size, mtime and directory flag of a path.
 def cmd_finfo(filename: str):
-    info = fs.get_file_info(filename) # 获取文件信息
+    info = fs.get_file_info(filename) # fetch file information
     if info:    
         print(f"{filename} 的文件信息\n大小: {info['size']} 字节, 修改时间: {info['modified']}, 是否为目录: {info['is_dir']}\n")
     else:
         print(f"未找到文件或目录: {filename}\n")
 
-# 删除文件或文件夹
+# rm deletes a file, or a directory only with -r; -f skips the confirmation.
 def cmd_rm(target: str, recursive: bool = False, force: bool = False):
     if not target or target.strip() == "":
         printk.error("rm: 缺少操作数\n")
@@ -166,23 +180,23 @@ def cmd_rm(target: str, recursive: bool = False, force: bool = False):
     
     target = target.strip()
     
-    # 安全检查
+    # safety check
     if not main.is_safe_filename(target):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
         return
     
-    # 获取完整路径
+    # resolve the absolute path
     full_path = os.path.abspath(target)
     
-    # 检查文件/文件夹是否存在
+    # check whether the file or directory exists
     if not os.path.exists(full_path):
         printk.error(f"rm: 无法删除 '{target}': 没有那个文件或目录\n")
         return
     
     try:
-        # 判断是文件还是目录
+        # decide whether it is a file or a directory
         if os.path.isfile(full_path):
-            # 删除文件
+            # delete a file
             if not force:
                 if not printk.confirm(f"确认删除文件 '{target}'?"):
                     print("操作已取消\n")
@@ -191,7 +205,7 @@ def cmd_rm(target: str, recursive: bool = False, force: bool = False):
             printk.ok(f"已删除文件: {target}\n")
             
         elif os.path.isdir(full_path):
-            # 删除目录
+            # delete the directory
             if not recursive:
                 printk.error(f"rm: 无法删除 '{target}': 是一个目录\n")
                 print("提示: 使用 'rm -r <目录>' 递归删除目录及其内容\n")
@@ -211,6 +225,7 @@ def cmd_rm(target: str, recursive: bool = False, force: bool = False):
     except Exception as e:
         printk.error(f"rm: 无法删除 '{target}': {str(e)}\n")
 
+# Report whether ROOT privileges are currently active.
 def cmd_testroot():
     if main.rootstate:
         print("当前处于 ROOT 权限状态。")
@@ -220,6 +235,8 @@ def cmd_testroot():
         print(f"rootstate 变量值为: {main.rootstate}\n")
 
 
+# Print the trust domain, signature state, slot and anti-rollback floor.
+# Needs ROOT, and ROOT only affects runtime permissions, never the OEM keys or the policy signature.
 def cmd_bootloader_status():
     try:
         main.require_root("查看 Bootloader 状态")
@@ -259,6 +276,7 @@ def cmd_bootloader_status():
         printk.error(f"Bootloader 状态不可用: {exc}\n")
 
 
+# Run an app from apps/ as a forked child and wait for it.
 def cmd_open(app_name: str):
 
     if not app_name.endswith(".py"):
@@ -278,6 +296,7 @@ def cmd_open(app_name: str):
     proc.reap_children(pcb.ppid)
 
 
+# Run an spf script from spfapps/ as a forked child and wait for it.
 def cmd_openspf(app_name: str):
     if not app_name.endswith(".spf"):
         app_name += ".spf"
@@ -296,10 +315,12 @@ def cmd_openspf(app_name: str):
     proc.reap_children(pcb.ppid)
 
 
+# Print the current working directory.
 def cmd_pwd():
     print(os.getcwd() + "\n")
 
 
+# Print the system user name.
 def cmd_whoami():
     try:
         print(kernel.get_system_username() + "\n")
@@ -307,6 +328,7 @@ def cmd_whoami():
         printk.error(f"whoami: {e}\n")
 
 
+# Cat prints files, or the piped input when given no argument and stdin is not a terminal.
 def cmd_cat(args: str = ""):
     import shlex
     try:
@@ -332,6 +354,8 @@ def cmd_cat(args: str = ""):
     print()
 
 
+# Grep [-ivncq] filters lines by substring; without a file it reads piped input.
+# With -q it stops at the first match, which is what makes grep -q close a pipe early.
 def cmd_grep(args: str = ""):
     import shlex
     try:
@@ -397,6 +421,7 @@ def cmd_grep(args: str = ""):
     return 0 if hits else 1
 
 
+# Create directories; -p is accepted and ignored since parents are always made.
 def cmd_mkdir(args: str):
     import shlex
     try:
@@ -418,6 +443,7 @@ def cmd_mkdir(args: str):
             printk.error(f"mkdir: {e}\n")
 
 
+# Create an empty file, making the parent directory if needed.
 def cmd_touch(args: str):
     name = (args or "").strip()
     if not name:
@@ -433,6 +459,7 @@ def cmd_touch(args: str):
         printk.error(f"touch: {e}\n")
 
 
+# Shared body of cp and mv: exactly two arguments, and cp copies a tree when the source is a directory.
 def _copy_move(args: str, op: str):
     import shlex
     import shutil
@@ -461,14 +488,17 @@ def _copy_move(args: str, op: str):
         printk.error(f"{op}: {e}\n")
 
 
+# Copy the source to the destination, copying a tree when the source is a directory.
 def cmd_cp(args: str):
     _copy_move(args, "cp")
 
 
+# Move the source to the destination.
 def cmd_mv(args: str):
     _copy_move(args, "mv")
 
 
+# List the recorded command history, most recent last.
 def cmd_history():
     for i, c in enumerate(main._cmd_history, 1):
         print(f"{i:4d}  {c}")
@@ -476,6 +506,7 @@ def cmd_history():
 
 
 
+# Print the live boot configuration in SpaceConfig form.
 def cmd_spc_show():
     try:
         data = spc.bootcfg_to_spc(main.bootcfg)
@@ -484,6 +515,7 @@ def cmd_spc_show():
         printk.error(f"spc_show: {e}\n")
 
 
+# Write the live boot configuration to an .spc file.
 def cmd_spc_export(args: str):
     path = (args or "").strip() or os.path.join("etc", "bootcfg.spc")
     try:
@@ -493,12 +525,13 @@ def cmd_spc_export(args: str):
         printk.error(f"spc_export: {e}\n")
 
 
+# Return the default .spc path, etc/bootcfg.spc under the boot root.
 def _default_spc_path() -> str:
     return os.path.join(main.root_dir, "etc", "bootcfg.spc")
 
 
+# Usage: spc_validate [path] - parse and check the .spc against BOOTCFG_SCHEMA, with line numbers.
 def cmd_spc_validate(args: str):
-    """用法: spc_validate [path] —— 语法解析 + BOOTCFG_SCHEMA 校验，带行号。"""
     path = (args or "").strip() or _default_spc_path()
     if not os.path.isfile(path):
         printk.error(f"spc_validate: 找不到文件: {path}（可先用 spc_migrate 生成）\n")
@@ -524,8 +557,9 @@ def cmd_spc_validate(args: str):
         print(f"校验完成：{len(errs)} 个错误，{len(warns)} 个警告\n")
 
 
+# Usage: spc_get <section.key> [path] - read a key, falling back to the live boot
+# configuration when the default .spc file is missing.
 def cmd_spc_get(args: str):
-    """用法: spc_get <section.key> [path] —— 无 path 时读默认 spc，缺文件则回退实时 bootcfg。"""
     import shlex
     try:
         tokens = shlex.split(args) if args else []
@@ -559,10 +593,11 @@ def cmd_spc_get(args: str):
     print(f"{sec}.{key} = {spc.format_value(data[sec][key])}  # 来源：{src}\n")
 
 
+# Usage: spc_set <section.key> <value> [path] - parse the value with spc syntax and
+# write it back to the file. A value with spaces can be written directly; the last token
+# is treated as a path only when it is an existing file or looks like one, otherwise it
+# joins the value and the default path is used.
 def cmd_spc_set(args: str):
-    """用法: spc_set <section.key> <value> [path] —— value 按 spc 语法解析后写回文件。
-    value 含空格可直接写（spc_set nums.list [1, 2]）；末 token 仅在“已存在文件、
-    或像路径（.spc 后缀/含 /）”时才被当作 path，否则并入 value 用默认路径。"""
     import shlex
     try:
         tokens = shlex.split(args) if args else []
@@ -603,10 +638,11 @@ def cmd_spc_set(args: str):
         printk.error(f"spc_set: 写回失败: {e}\n")
 
 
+# Usage: spc_migrate [json2spc|spc2json] [src] [dst]
+# The default json2spc turns etc/bootcfg.json into etc/bootcfg.spc with a validation
+# report; spc2json goes the other way and recomputes the checksum. Only files change,
+# never the running configuration.
 def cmd_spc_migrate(args: str):
-    """用法: spc_migrate [json2spc|spc2json] [src] [dst]
-    默认 json2spc：etc/bootcfg.json → etc/bootcfg.spc（带校验报告）；
-    spc2json 反向写回（含 checksum 重算）。只动文件，不动运行中配置。"""
     import json as _json
     tokens = (args or "").strip().split()
     direction = tokens[0] if tokens else "json2spc"
@@ -659,13 +695,15 @@ def cmd_spc_migrate(args: str):
             printk.error(f"spc_migrate: 写回失败: {e}\n")
 
 
+# Trigger a hot restart of the system.
 def cmd_hotreset():
     import hotreset_env
     hotreset_env.trigger()
 
 
+# Re-run the first-boot wizard by hand; at boot it only runs automatically while
+# etc/.oobe_done is missing.
 def cmd_oobe():
-    """手动重跑首次开机向导（开机仅在 etc/.oobe_done 缺失时自动进入）。"""
     import oobe
     ok = oobe.run_wizard(oobe._live_ctx(main.root_dir))
     if ok:
@@ -675,8 +713,9 @@ def cmd_oobe():
     print()
 
 
+# Show or switch the language, timezone and display name.
+# Changes take effect at once and are persisted to the boot configuration.
 def cmd_locale(args: str = ""):
-    """查看/切换语言、时区、显示名，立即生效并持久化到 bootcfg。"""
     import syslocale
     from syslocale import _
     import btcfg

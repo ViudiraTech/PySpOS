@@ -1,20 +1,13 @@
-#
-#   main.py
-#   PySpOS 入口（facade / 兼容层）
-#
-#   2026-09-24 重构：1217 行的单体 main.py 已拆分为 shell/* 包：
-#     shell/util.py      路径/文件名 helpers
-#     shell/sys_cmds.py  系统/文件类命令（help/echo/ls/cd/rm/open/cat/…）
-#     shell/elf_cmd.py   ELF 运行命令（unicorn 默认 + 自研引擎兜底）
-#     shell/ota_cmds.py  OTA 更新命令
-#     shell/proc_cmds.py 进程/系统状态命令（ps/kill/signal/sysmon）
-#     shell/dispatch.py  命令分发（注册表 + 重定向/管道 + handle_command）
-#   本文件仅保留：启动检查、全局状态（bootcfg/rootstate/boot_time/root_dir）、
-#   槽位切换、main() 入口，并逐一重导出 shell 符号，保证 kernel / recovery /
-#   apps/api / parse_spf / tests 等历史调用方零改动。
-#
-#   By GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      main.py
+ *      Compatibility facade that boots PySpOS.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import sys
@@ -22,32 +15,31 @@ import btcfg
 import logk
 import kernel
 
-# 检查是否通过启动器启动
+# Refuse to run unless the launcher started us.
 if not hasattr(sys, '_launcher_detected'):
     raise RuntimeError("请使用启动器（launcher）启动PySpOS！")
     sys.exit(1)
 
-# 标记已通过启动器启动
 sys._launcher_detected = True
 
-# 设置 apps 目录为模块搜索路径
+# Put the apps directory on the module search path.
 current_dir = os.getcwd()
 apps_dir = os.path.join(current_dir, 'apps')
 sys.path.append(apps_dir)
 
-# 全局变量定义处
 bootcfg = btcfg.load_bootcfg()
 boot_locked = os.environ.get("PYSPOS_BOOT_LOCKED") == "1"
 bootcfg["locked"] = boot_locked
 rootstate = bool(btcfg.get_bootcfg('rootstate')) and not boot_locked
 boot_time = logk.get_boot_time()
 
-# 进程树顶层（Linux 语义）：0=idle(swapper) / 1=init / 2=shell
-# 必须在 shell 之外建立：import 时即登记，任何命令执行前 ps 就能看到 init。
+# Top of the process tree (Linux semantics): 0=idle(swapper)
+# / 1=init / 2=shell Created outside the shell: registering at
+# import time means ps already shows init before any command runs.
 import process as _process
 _process.boot_system()
 
-# 获取根目录和已验证的启动上下文
+# Resolve the root directory and the verified boot context.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 boot_root = os.environ.get("PYSPOS_BOOT_ROOT")
 boot_system = os.environ.get("PYSPOS_BOOT_SYSTEM")
@@ -69,18 +61,19 @@ if boot_system and os.path.isdir(boot_system):
         os.chdir(current_dir)
 
 
+# True when the shell currently has root; a locked boot never counts as root.
 def is_root():
     return bool(rootstate or (not boot_locked and bootcfg.get('rootstate', False)))
 
 
+# Raise PermissionError naming the operation unless the shell has root.
 def require_root(operation):
     if not is_root():
         raise PermissionError(f"{operation} 需要 ROOT 权限")
 
 
-# 主函数
 
-# 主函数
+# Boot PySpOS: report the trust state, offer OOBE, then enter the command loop.
 def main():
     import syslocale
     from syslocale import _
@@ -90,18 +83,18 @@ def main():
     logk.printl("main", f"{_('boot.loaded')}{sys.platform}", boot_time)
     logk.printl("main", _("boot.root_enabled") if rootstate else _("boot.root_disabled"), boot_time)
 
-    # OOBE 实际在 kernel.loop() 里触发（覆盖 hotreset_env 直连路径），此处保留
-    # 仅为直接以 `python main.py` 启动的兼容场景。
+    # OOBE really runs inside kernel.loop() (that also covers the hotreset_env path); the call
+    # here only serves the compatibility case of starting with `python main.py`.
     import oobe
     oobe.maybe_run_oobe(root_dir)
 
     kernel.loop()
 
-# ---- shell 包：分发与命令实现 ----
+# ---- shell package: dispatch and command implementations ----
 from shell.util import get_app_path, get_spf_path, is_safe_filename
 from shell.dispatch import handle_command, COMMANDS, _cmd_history
 
-# ---- 历史调用方兼容：重导出全部 cmd_* ----
+# ---- legacy callers: re-export every cmd_* ----
 from shell.sys_cmds import (
     print_sunhb,
     cmd_help, cmd_echo, cmd_osver, cmd_shutdown, cmd_clear, cmd_python,
