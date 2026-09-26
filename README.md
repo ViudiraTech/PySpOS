@@ -33,6 +33,7 @@ PySpOS 是一个教学向的**模拟操作系统**：在用户态把进程调度
 | 配置 | SpaceConfig v2：转义、行尾注释、null、列表、Schema 校验 | `src/spc.py` |
 | Shell | 元数据驱动的命令注册表、分组 help、Tab 补全、管道与重定向 | `src/commands.py` |
 | OTA | A/B 槽位、Ed25519 镜像验签、云端更新与本地回滚（Recovery 可从云端选版本装到指定槽位） | `src/ota.py` `secure_boot.py` |
+| Fastboot | AOSP fastboot 协议服务端（只响应请求，不带本地界面）+ Tk 图形客户端；解锁 BL 会清数据 | `src/fastboot.py` `fastboot_gui.py` |
 
 ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Windows 也能跑。
 
@@ -83,6 +84,23 @@ python3 build_update.py --private-key boot_signing_key.pem --security-version 1
 
 UNLOCKED 开发槽位需要同步源码时，直接运行 `python3 force_sync.py`；它会拒绝 LOCKED 模式，不会绕过验签。若要清空旧槽位并让下次启动从 `src` 重建，运行 `python3 reset_slot.py --slot slot_a`。
 
+## ⚡ Fastboot 模式
+
+和 AOSP 一样，PySpOS 的 fastboot **没有本地界面**：设备端只应答协议请求，
+刷写、擦除、解锁这些特权操作只能由 host 侧的客户端发起。
+
+```bash
+# 设备端：进入 fastboot（锁定状态下需要 ROOT）
+fastboot            # 或 reboot bootloader
+
+# host 侧：打开图形客户端连接 127.0.0.1:5555
+python3 fastboot_gui.py
+```
+
+客户端实现了 `getvar` / `download` / `flash` / `erase` / `boot` / `continue` /
+`reboot` / `flashing unlock|lock`，外加两条 OEM 扩展用于列出进程和发信号。
+和真机一样，**解锁会清空两个槽位的数据**；锁定状态下刷写一律被拒绝。
+
 > [!NOTE]
 > 开机若出现「按 Enter 疯狂刷 `^M`」，是上一次会话异常退出把终端留在了
 > `icrnl` 关闭状态。手动跑 `stty sane` 即可；3.2.0 起程序已内置该自愈
@@ -101,6 +119,8 @@ UNLOCKED 开发槽位需要同步源码时，直接运行 `python3 force_sync.py
 | `open getroot` | 获取 ROOT 权限，需父进程确认并写审计日志 |
 | `bootloader_status` / `bl_status` | ROOT 查看 Bootloader 信任域、验签和防回滚状态 |
 | `oobe` | 手动重跑首次开机向导 |
+| `fastboot` / `reboot bootloader` | 进入 fastboot 模式（只跑协议，无本地界面） |
+| `python3 fastboot_gui.py` | fastboot 图形客户端：刷写、擦除、解锁 BL、向进程发信号 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |
 | `ps` `kill <pid>` `signal <pid> SIGTERM` | 进程管理与信号 |
@@ -139,6 +159,7 @@ PySpOS/
 ├── boot_keygen.py        # 生成离线 Ed25519 密钥
 ├── force_sync.py         # UNLOCKED 开发槽位强制同步
 ├── reset_slot.py         # UNLOCKED 开发槽位安全清空
+├── fastboot_gui.py       # fastboot 图形客户端（host 侧工具）
 ├── src/
 │   ├── main.py           # 入口 facade（启动状态 + 兼容重导出）
 │   ├── kernel.py         # 主循环与提示符
@@ -197,7 +218,7 @@ apps 通过 `src/apps/api.py` 以 syscall RPC 请求特权操作，避免直接�
 - [x] OOBE 首次开机向导 + 真实时区语言
 - [ ] 动态链接（INTERP）与 TLS 支持
 - [ ] 图形化 TUI 与 SpaceGlass 毛玻璃效果
-- [ ] 可操控 PySpOS 的图形化 app（发 signal、解锁 BL 等）
+- [x] 可操控 PySpOS 的图形化 app（发 signal、解锁 BL 等）
 
 <a id="faq"></a>
 

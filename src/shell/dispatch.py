@@ -166,6 +166,10 @@ _REG = [
      "run [--stats] [--map] [--strace] [--disasm [N]] [--engine auto|unicorn|native] <elf>", "run", [], True),
     ("hotreset", sys_cmds.cmd_hotreset, "热重启系统", "hotreset", "run", [], False),
     ("recovery", sys_cmds.cmd_recovery, "进入恢复模式", "recovery", "ota", [], False),
+    ("fastboot", sys_cmds.cmd_fastboot, "进入 fastboot 模式（由图形客户端操作）",
+     "fastboot [--port N]", "ota", [], False),
+    ("reboot", sys_cmds.cmd_reboot, "重启系统（bootloader 进入 fastboot）",
+     "reboot [bootloader|system|poweroff]", "ota", [], False),
     # config
     ("spc_show", sys_cmds.cmd_spc_show, "打印 SpaceConfig", "spc_show", "config", [], False),
     ("spc_export", sys_cmds.cmd_spc_export, "导出 bootcfg 为 .spc", "spc_export [路径]", "config", [], True),

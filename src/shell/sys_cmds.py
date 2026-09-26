@@ -12,6 +12,7 @@
 import os
 import platform
 import printk
+import fastboot
 import fs
 import kernel
 import recovery
@@ -109,6 +110,44 @@ def cmd_recovery():
         printk.error(f"{exc}\n")
         return
     recovery.recovery_main("kernel_jump")
+
+# Enter fastboot mode, asking for ROOT when the boot is locked. The mode has
+# no local UI on purpose: it only serves the protocol, so every privileged
+# action has to come from the host-side graphical client.
+def cmd_fastboot(args: str = ""):
+    try:
+        if main.boot_locked:
+            main.require_root("fastboot")
+    except PermissionError as exc:
+        printk.error(f"{exc}\n")
+        return
+    port = fastboot.DEFAULT_PORT
+    text = (args or "").strip()
+    if text:
+        if text.startswith("--port"):
+            text = text[6:].strip()
+        try:
+            port = int(text)
+        except ValueError:
+            printk.error("用法：fastboot [--port 端口号]\n")
+            return
+    fastboot.fastboot_main("kernel_jump", port)
+
+# Reboot the device, or jump into fastboot with "reboot bootloader".
+def cmd_reboot(args: str = ""):
+    target = (args or "").strip() or "system"
+    if target == "bootloader":
+        fastboot.fastboot_main("reboot_bootloader")
+        return
+    if target not in ("system", "poweroff"):
+        printk.error("用法：reboot [bootloader|system|poweroff]\n")
+        return
+    if target == "poweroff":
+        kernel.exit()
+        return
+    printk.info("正在重启 PySpOS...\n")
+    import hotreset_env
+    hotreset_env.trigger()
 
 # Easter egg: print the banner plus a code point and its reverse lookup.
 def cmd_shb():

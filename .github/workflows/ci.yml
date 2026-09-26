@@ -39,7 +39,7 @@ jobs:
       # 故意不启用 F401 未用导入：main.py 是兼容 facade，重导出是有意为之，
       # 全开会产生大量误报。风格类规则留给本地按需开启。
       - name: Ruff
-        run: python -m ruff check --no-cache src/ tests/ launcher.py build_update.py secure_boot.py boot_policy.py boot_keygen.py force_sync.py reset_slot.py
+        run: python -m ruff check --no-cache src/ tests/ launcher.py build_update.py secure_boot.py boot_policy.py boot_keygen.py force_sync.py reset_slot.py fastboot_gui.py
 
   # 官网是纯静态站，没有测试框架兜底——死链、标签不配平、设计 token
   # 漂移都只能靠机器查。这里把它们变成会红的检查，而不是靠眼睛。

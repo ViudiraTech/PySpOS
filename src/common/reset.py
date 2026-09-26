@@ -47,7 +47,10 @@ def _remove(path):
 # Wipe the device state the next OOBE run judges, shared by recovery
 # erase and the tests. Per-item failures are reported as
 # {category: (ok, note)} for the caller to display.
-def factory_reset(root_dir, include_host_history=True):
+# preserve_slots keeps the signed A/B system images. Recovery erase wants them
+# gone on a dev device, but fastboot must never remove the system it boots
+# from, so it asks for them to be kept.
+def factory_reset(root_dir, include_host_history=True, preserve_slots=False):
     report = {}
     try:
         import secure_boot
@@ -89,7 +92,9 @@ def factory_reset(root_dir, include_host_history=True):
     # 3. slot_a/ and slot_b/: the per-slot system files
     for slot in ("slot_a", "slot_b"):
         slot_path = os.path.join(root_dir, slot)
-        if locked:
+        if preserve_slots:
+            report[f"slot_{slot}"] = (True, f"保留已验证槽位 {slot}")
+        elif locked:
             report[f"slot_{slot}"] = (True, f"锁定模式保留已验证槽位 {slot}")
         elif _rmtree(slot_path):
             report[f"slot_{slot}"] = (True, f"已删除槽位 {slot}")
@@ -100,7 +105,11 @@ def factory_reset(root_dir, include_host_history=True):
 
     # 4. current_slot: reset to the default slot
     slot_file = os.path.join(root_dir, "current_slot")
-    if locked:
+    if preserve_slots and os.path.isfile(slot_file):
+        # Keeping the signed slots means keeping the pointer to a slot that
+        # still exists; rewriting it would aim the next boot at a fresh one.
+        report["current_slot"] = (True, "保留当前槽位选择")
+    elif locked:
         report["current_slot"] = (True, "锁定模式保留当前槽位选择")
     else:
         try:
