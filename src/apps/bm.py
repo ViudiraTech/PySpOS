@@ -1,6 +1,18 @@
+'''
+ *
+ *      bm.py
+ *      Interactive runtime permission manager app.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import api
 
 
+# Run the interactive bm> prompt that toggles ROOT and shows the trust state.
 def main():
     print("BM：运行时权限管理器")
     print("ROOT 只影响运行时操作，不会改变 Bootloader 信任域或 OEM 签名。")

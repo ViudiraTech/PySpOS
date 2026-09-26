@@ -1,9 +1,14 @@
-#!/usr/bin/env python3
-"""pty 实测前台交互：把答案真正喂进子进程 stdin。
+'''
+ *
+ *      pty_stdin_relay.py
+ *      Manual pty check that the foreground stdin relay really delivers keystrokes to a child.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-验证 stdin 中继（裸 os.pipe 字节流）端到端可用：父终端按键 →
-_pump_in 逐字节写管道 → 子进程 os.fdopen(stdin).readline() 拿到数据。
-"""
 import os
 import pty
 import select
@@ -28,6 +33,7 @@ sys.stdout.flush()
 """
 
 
+# Return whatever bytes are ready within the timeout; empty means nothing arrived.
 def read_avail(fd, timeout=0.4):
     r, _, _ = select.select([fd], [], [], timeout)
     if not r:
@@ -38,6 +44,7 @@ def read_avail(fd, timeout=0.4):
         return b""
 
 
+# Run the child under a pty, feed it two answers and report whether the stdin relay delivered them end to end.
 def main():
     pid, fd = pty.fork()
     if pid == 0:
@@ -54,7 +61,7 @@ def main():
             out += chunk
         if fed < 2 and NEEDLE in out:
             time.sleep(0.2)
-            # 猜 50：命中就说恭喜，不中会说猜大了/猜小了，两种都能验证读到
+            # Guess 50: a hit says congratulations, a miss says too high or too low, and either proves the read landed
             os.write(fd, b"50\n")
             fed += 1
         if b"FINAL" in out:

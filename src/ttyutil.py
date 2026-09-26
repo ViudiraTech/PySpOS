@@ -1,18 +1,19 @@
-#
-#   ttyutil.py
-#   终端输入防御层（标准库 only，可被 launcher.py 直接 import）。
-#
-#   背景：curses 会话若异常退出（Ctrl-C 漏网、SIGKILL、子进程 os._exit），
-#   tty 会留在 cbreak/icrnl-关闭 的坏状态——回车发出的 \r 不被翻译成 \n，
-#   终端直接回显 ^M，之后所有 input() 都读到垃圾并无限重试。
-#   成熟做法（vim/less/dialog/reset）：启动时先恢复 sane 状态，
-#   输入统一归一化，重试必须有上限。
-#
+'''
+ *
+ *      ttyutil.py
+ *      Defensive terminal input handling for curses and prompts.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import os
 import sys
 
 
+# Report whether a stream is an interactive terminal.
 def is_tty(stream=None) -> bool:
     try:
         return (stream or sys.stdin).isatty()
@@ -20,20 +21,16 @@ def is_tty(stream=None) -> bool:
         return False
 
 
+# Restore stdin to cooked mode with echo and CR translation, via stty sane.
 def ensure_sane_tty() -> bool:
-    """把 stdin 恢复到 cooked/回显/CR转NL 的 sane 状态。
-
-    返回 True 表示执行过恢复。非 tty / 非 POSIX / 失败一律静默返回 False，
-    调用方无需处理——这是防御性调用，不是必须成功的契约。
-    """
     try:
         if not is_tty():
             return False
         if os.name != "posix":
             return False
         import subprocess
-        # stty sane 正是 reset(1) 恢复输入模式的做法，比手调 termios 全面
-        # （icanon/echo/icrnl/ixon/isig 一次修好）。
+# stty sane is exactly how reset(1) restores the input modes, and is more complete than
+# hand-editing termios, since it fixes icanon, echo, icrnl, ixon and isig at once.
         r = subprocess.run(["stty", "sane"],
                            stdin=sys.stdin, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, timeout=5)
@@ -42,30 +39,20 @@ def ensure_sane_tty() -> bool:
         return False
 
 
+# Read one line with newlines normalised and trailing whitespace stripped.
 def read_line(prompt: str = "") -> str:
-    """input() 的归一化封装：统一处理 \\r\\n/\\r，剥掉行尾空白。
-
-    EOFError / KeyboardInterrupt 原样上抛，由调用方决定语义
-    （launcher 视为默认、shell 视为取消），不吞异常。
-    """
     s = input(prompt)
-    # 坏终端/管道可能送来裸 \r；universal newline 通常已处理，这里是兜底。
-    # 关键：先归一化再剥空白，否则 "^M" 会被 strip 吃掉尾巴、又被 input
-    # 的 universal-newline 重复处理，导致读回来的是 "^" 这种半截串。
+# A broken terminal or a pipe can send a bare \r; universal newlines normally handles it, this is the backstop.
+# The point: normalise before stripping, otherwise strip eats the tail of a stray ^M and input's
+# own universal-newline handling mangles it again, leaving a truncated string such as ^.
     s = s.replace("\r\n", "\n").replace("\r", "\n")
-    # 只去行尾换行与空白，保留行首空格（缩进/密码前缀的语义）
+# Only trailing newline and whitespace go; leading spaces are kept, since indentation and password prefixes are meaningful.
     return s.strip("\n").rstrip()
 
 
+# Ask a yes/no style question, retrying up to a limit and then taking the default.
 def read_choice(prompt: str, valid=("y", "n"), default="n",
                 max_retries: int = 0) -> str:
-    """y/n 类选择的循环读取。
-
-    - 空输入直接取 default（launcher/confirm 的通用语义）；
-    - 大小写不敏感，yes/no 全写也接受；
-    - max_retries > 0 时，连续无效超过上限返回 default，避免坏终端下死循环；
-    - max_retries = 0 表示无限重试（仅用于确信 tty 正常的场景）。
-    """
     valid = tuple(v.lower() for v in valid)
     default = default.lower()
     if default not in valid:
@@ -77,7 +64,7 @@ def read_choice(prompt: str, valid=("y", "n"), default="n",
             return default
         if s in valid:
             return s
-        # 接受全写
+# accept the fully written form
         for v in valid:
             if s == v:
                 return v

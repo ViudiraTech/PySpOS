@@ -1,8 +1,14 @@
-"""云端 OTA（已恢复）：版本列表、地址归一化、指定槽位安装门控。
+'''
+ *
+ *      test_ota_cloud.py
+ *      Cloud OTA, all stubbed: version list, URL normalization and per-slot install gating.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-全部用桩，不发任何网络请求。服务器地址断言在
-test_ota_server_host 里，防止切回旧域名。
-"""
 import sys
 
 import pytest
@@ -33,15 +39,18 @@ FAKE_REMOTE = {
 }
 
 
+# Cloud OTA has to stay enabled; this switch gates the whole feature.
 def test_switch_is_on():
     assert pyspos.OTA_ENABLED is True
 
 
+# The OTA host is the current domain and not the retired one.
 def test_ota_server_host():
     assert ota.OTA_SERVER_URL == "https://goutoustdio.rainyland.top/ota/"
     assert "pyspos.us.ci" not in ota.OTA_SERVER_URL
 
 
+# A bare filename resolves under the OTA base URL, and an absolute URL passes through untouched.
 def test_resolve_download_url():
     assert ota.resolve_download_url("") \
         == "https://goutoustdio.rainyland.top/ota/PySpOS.zip"
@@ -51,6 +60,7 @@ def test_resolve_download_url():
     assert ota.resolve_download_url(abs_url) == abs_url
 
 
+# The changelog becomes a newest-first list whose relative names are expanded to absolute URLs and keep their per-version notes.
 def test_list_cloud_versions(monkeypatch):
     monkeypatch.setattr(ota, "fetch_remote_version", lambda: dict(FAKE_REMOTE))
     entries = ota.list_cloud_versions()
@@ -61,6 +71,7 @@ def test_list_cloud_versions(monkeypatch):
     assert entries[0]["notes"] == ["a", "b"]
 
 
+# With no changelog the current version alone becomes the only entry.
 def test_list_cloud_versions_fallback_single(monkeypatch):
     data = dict(FAKE_REMOTE)
     data.pop("changelog")
@@ -69,23 +80,26 @@ def test_list_cloud_versions_fallback_single(monkeypatch):
     assert len(entries) == 1 and entries[0]["version"] == "3.2.0"
 
 
+# Disabling OTA yields an empty list and refuses to download, without touching the network.
 def test_list_empty_when_disabled(monkeypatch):
     monkeypatch.setattr(pyspos, "OTA_ENABLED", False)
     assert ota.list_cloud_versions() == []
     assert ota.download_and_install_version({"download_url": "x"}, "slot_a") is False
 
 
+# An unknown slot name is a caller bug and must raise rather than write anywhere.
 def test_install_to_slot_rejects_bad_slot(tmp_path):
     with pytest.raises(ValueError):
         ota.install_package_to_slot(str(tmp_path / "u.zip"), "slot_c")
 
 
+# A package that is not there fails softly with False instead of raising.
 def test_install_to_slot_missing_package():
     assert ota.install_package_to_slot("/nonexistent/u.zip", "slot_a") is False
 
 
+# Unpacking must not land the build machine's boot-time state files, while normal files still extract.
 def test_safe_extract_skips_boot_state(tmp_path):
-    """解包不落地启动期状态文件，正常文件照常解出。"""
     import zipfile
     pkg = tmp_path / "u.zip"
     with zipfile.ZipFile(pkg, "w") as archive:
@@ -101,8 +115,8 @@ def test_safe_extract_skips_boot_state(tmp_path):
     assert not (target / "src" / "current_slot").exists()
 
 
+# On the build side the same state files must never be packed, or the build itself fails.
 def test_builder_excludes_boot_state():
-    """打包侧：启动期状态文件进不了包（否则构建直接失败）。"""
     import build_update
     for bad in ("src/current_slot", "src/.hotreset",
                 "current_slot", ".hotreset"):

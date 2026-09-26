@@ -1,14 +1,14 @@
-"""docs/ 静态站自检：HTML 结构、死链、锚点、卡片状态一致性
+'''
+ *
+ *      check_docs_html.py
+ *      Docs static site self-check: tag balance, dead links, anchors and product status consistency.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-纯静态站没有测试框架兜底，这些问题不会报错、只会静默劣化：
-  - 标签不配平（浏览器容错渲染，布局悄悄歪掉）
-  - 死链（调研明确指出：死链最伤信任）
-  - 页内锚点失效
-  - 产品卡片状态与文案矛盾（挂着「持续维护」却写着停更）
-
-2026-09-24 首次运行时抓到一个既存 bug：pyspos.html 的 intro-text div
-从未闭合——浏览器会容错，页面看着还行，但整篇文档的结构是错的。
-"""
 import glob
 import os
 import re
@@ -22,7 +22,9 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
         "meta", "param", "source", "track", "wbr"}
 
 
+# HTML parser collecting tag balance, ids and every local link target.
 class PageCheck(HTMLParser):
+# Start with an empty open-tag stack, error list, link list and id set.
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.stack = []
@@ -30,6 +32,7 @@ class PageCheck(HTMLParser):
         self.links = []
         self.ids = set()
 
+# Record ids and link targets, and push every non-void tag onto the stack.
     def handle_starttag(self, tag, attrs):
         d = dict(attrs)
         if "id" in d:
@@ -43,6 +46,7 @@ class PageCheck(HTMLParser):
         if tag not in VOID:
             self.stack.append((tag, self.getpos()))
 
+# Pop the open-tag stack, recording a mismatch or a stray end tag.
     def handle_endtag(self, tag):
         if tag in VOID:
             return
@@ -55,6 +59,7 @@ class PageCheck(HTMLParser):
                 f"L{self.getpos()[0]}: </{tag}> 与 <{opened}>(L{pos[0]}) 不匹配")
 
 
+# Feed one page to the parser, then verify local links and in-page anchors exist.
 def check_page(path):
     c = PageCheck()
     c.feed(open(path, encoding="utf-8").read())
@@ -74,13 +79,8 @@ def check_page(path):
     return c
 
 
+# Check that the product status story is self-consistent.
 def check_product_states():
-    """产品状态的自洽性检查。
-
-    分两处，因为「别让用户断在这里」的要求在两处的形态不同：
-      - 首页作品索引：停更条目至少要有一个可用出口（链接）
-      - SpaceOS 6/7 详情页：必须有停更提示块，且要指向当前维护的 PySpOS
-    """
     errs = []
     idx = os.path.join(DOCS, "index.html")
     if os.path.exists(idx):
@@ -102,11 +102,11 @@ def check_product_states():
                 errs.append(
                     f"作品 {t}: 视觉状态(retired={retired})"
                     f"与徽标「{b}」矛盾")
-            # 停更条目不能是个死胡同：至少留一个出口
+            # A retired entry must not be a dead end: it needs at least one way out
             if retired and not re.search(r'<a\s+href="[^"#]', body):
                 errs.append(f"作品 {t}: 停更条目没有任何可点击出口")
 
-    # SpaceOS 6/7 详情页必须有停更提示块并指向 PySpOS
+    # The SpaceOS 6/7 detail pages need a retirement notice pointing at PySpOS
     for ver in ("6", "7"):
         p = os.path.join(DOCS, f"spaceos{ver}.html")
         if not os.path.exists(p):
@@ -125,6 +125,7 @@ def check_product_states():
     return errs
 
 
+# Check every docs page, print a per-page table and return 1 if anything failed.
 def main():
     pages = sorted(glob.glob(os.path.join(DOCS, "*.html"))
                    + glob.glob(os.path.join(DOCS, "ota", "*.html")))

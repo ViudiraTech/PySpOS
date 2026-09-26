@@ -1,20 +1,13 @@
-#
-#   common/reset.py
-#   出厂重置（factory reset）：recovery erase 与测试共用同一实现，
-#   保证“erase 掉的 = 下次开机 OOBE 判定所需的干净状态”。
-#
-#   覆盖的状态（root_dir 相对 + 工程外）：
-#     1. etc/                       bootcfg / audit / OOBE 标记
-#     2. etc.bak-*                  btcfg 修复时改名备份的残留
-#     3. slot_a/ slot_b/            槽位系统文件
-#     4. current_slot               重置回默认 slot_a
-#     5. ota/*.zip                  已下载的更新包（目录保留）
-#     6. src/apps/question_bank.json 内 history 数组（题目保留，只清答题记录）
-#     7. ~/.pyspos_history          家目录 readline 历史
-#     8. 全树 __pycache__ / *.pyc   根目录 + src 树（旧 erase 漏了 src/）
-#
-#   返回 report: {类别: (ok: bool, 说明)}，调用方负责展示。
-#
+'''
+ *
+ *      reset.py
+ *      Factory reset: wipes every piece of state OOBE checks.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import glob
 import json
@@ -26,6 +19,7 @@ READLINE_HISTORY = os.path.join(os.path.expanduser("~"), ".pyspos_history")
 DEFAULT_SLOT = "slot_a"
 
 
+# Remove a tree, but only for a real directory, never a symlink.
 def _rmtree(path):
     if os.path.isdir(path) and not os.path.islink(path):
         shutil.rmtree(path, ignore_errors=False)
@@ -33,6 +27,7 @@ def _rmtree(path):
     return False
 
 
+# Remove a file or symlink, reporting whether anything went away.
 def _remove(path):
     if os.path.isfile(path) or os.path.islink(path):
         os.remove(path)
@@ -40,8 +35,10 @@ def _remove(path):
     return False
 
 
+# Wipe the device state the next OOBE run judges, shared by recovery
+# erase and the tests. Per-item failures are reported as
+# {category: (ok, note)} for the caller to display.
 def factory_reset(root_dir, include_host_history=True):
-    """执行出厂重置。永不抛异常，逐项记录结果。"""
     report = {}
     try:
         import secure_boot
@@ -50,14 +47,14 @@ def factory_reset(root_dir, include_host_history=True):
     except Exception:
         locked = True
 
-    # 1. etc/
+    # 1. etc/: bootcfg, audit log and OOBE markers
     etc_path = os.path.join(root_dir, "etc")
     if _rmtree(etc_path):
         report["etc"] = (True, f"已删除 {etc_path}（bootcfg/audit/OOBE标记）")
     else:
         report["etc"] = (True, "etc 不存在，无需清理")
 
-    # 2. etc.bak-*
+    # 2. etc.bak-*: leftovers renamed aside by the btcfg repair
     bak_paths = sorted(glob.glob(os.path.join(root_dir, "etc.bak-*")))
     removed_bak = 0
     for p in bak_paths:
@@ -76,7 +73,7 @@ def factory_reset(root_dir, include_host_history=True):
     else:
         report["etc_bak"] = (True, "无引导备份残留")
 
-    # 3. 槽位
+    # 3. slot_a/ and slot_b/: the per-slot system files
     for slot in ("slot_a", "slot_b"):
         slot_path = os.path.join(root_dir, slot)
         if locked:
@@ -86,7 +83,7 @@ def factory_reset(root_dir, include_host_history=True):
         else:
             report[f"slot_{slot}"] = (True, f"槽位 {slot} 不存在")
 
-    # 4. current_slot 重置为默认
+    # 4. current_slot: reset to the default slot
     slot_file = os.path.join(root_dir, "current_slot")
     if locked:
         report["current_slot"] = (True, "锁定模式保留当前槽位选择")
@@ -98,7 +95,7 @@ def factory_reset(root_dir, include_host_history=True):
         except OSError as e:
             report["current_slot"] = (False, f"重置 current_slot 失败: {e}")
 
-    # 5. ota 更新包（删 zip，留目录）
+    # 5. ota/*.zip: drop the downloaded updates, keep the directory
     ota_dir = os.path.join(root_dir, "ota")
     zips = sorted(glob.glob(os.path.join(ota_dir, "*.zip")))
     removed_zip = 0
@@ -113,7 +110,7 @@ def factory_reset(root_dir, include_host_history=True):
     else:
         report["ota"] = (True, "无更新包残留")
 
-    # 6. 题库答题历史（只清 history 数组，题目保留）
+    # 6. question bank history: clear the records, keep the questions
     bank_path = os.path.join(root_dir, QUESTION_BANK_RELPATH)
     try:
         with open(bank_path, "r", encoding="utf-8") as f:
@@ -128,14 +125,14 @@ def factory_reset(root_dir, include_host_history=True):
     except (OSError, ValueError) as e:
         report["question_bank"] = (False, f"题库历史清除失败: {e}")
 
-    # 7. 家目录 readline 历史
+    # 7. the readline history in the home directory
     if include_host_history:
         if _remove(READLINE_HISTORY):
             report["readline_history"] = (True, f"已删除 {READLINE_HISTORY}")
         else:
             report["readline_history"] = (True, "家目录无命令历史残留")
 
-    # 8. 全树 __pycache__ / *.pyc
+    # 8. every __pycache__ and *.pyc under the root
     purged_dirs = 0
     purged_files = 0
     for dirpath, dirnames, filenames in os.walk(root_dir):

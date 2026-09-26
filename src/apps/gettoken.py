@@ -1,22 +1,14 @@
-# gettoken.py - 旧版答题入口（不授予 Bootloader 权限）
-#
-# 审核算法（2026-09-24 重构，A+B 组合）：
-#   A. 规则重构 —— 分数为主，速度不再定罪：
-#      - 达到及格线即通过；答得快 + 全对 = 能力强，不是作弊
-#        （测量学 person-fit 方向的共识：作弊信号是“难题答对+极短时”或
-#        “极短时+答错”，从没有任何成熟做法惩罚“简单题又快又对”）。
-#      - 时间只拦机器级异常：单题用时 < MACHINE_TAP_SECONDS(0.4s) 视为连点，
-#        该题不得分；整卷连点数 >= MACHINE_TAP_LIMIT(5) 则整卷无效。
-#        （0.4s 量级参考 rapid-guessing 文献中“未加工题干”的极短时定义，
-#        人类读完题干再作答不可能稳定低于此值。）
-#      - 总限时 TOTAL_TIME_LIMIT（行业实践 60~90s/选择题，这里 10 题给 300s，
-#        只防查答案，不刁难正常作答）；超时按已答题结算。
-#      - 未通过冷却 COOLDOWN_SECONDS，防刷题。
-#   B. 题库纵深 —— 安全从“审速度”转到“背不下答案”：
-#      - 分层随机抽题（True/False 各半），修复旧题库答案 99:26 偏斜下
-#        “全蒙 y 得 79 分”的漏洞；每次题目 + 顺序都随机；
-#      - 考后只告知对错，不泄露正确答案（本文件历来如此，保持）。
-#
+'''
+ *
+ *      gettoken.py
+ *      Quiz app used to obtain a session token.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import api
 import random
 import json
@@ -25,36 +17,35 @@ import time
 from datetime import datetime
 import printk
 
-# ---------------- 可调配置区 ----------------
 TOTAL_QUESTIONS = 10
 PASS_SCORE = 80
 SCORE_PER_QUESTION = 10
 
-# 每类答案各抽一半（TOTAL_QUESTIONS 须为偶数；某池不足时自动回退全池随机）
+# Take half of each answer class; TOTAL_QUESTIONS must be even and a short
+# pool falls back to a plain random draw
 TRUE_COUNT = TOTAL_QUESTIONS // 2
 FALSE_COUNT = TOTAL_QUESTIONS - TRUE_COUNT
 
-# 机器连点线：单题低于此用时视为无效作答（秒）
+# Machine-tap floor: an answer faster than this counts as invalid (seconds)
 MACHINE_TAP_SECONDS = 0.4
-# 整卷连点数达到此值 → 整卷无效（秒级连点不可能是人类作答）
+# Machine taps reaching this count invalidate the whole paper; nobody
+# answers in seconds
 MACHINE_TAP_LIMIT = 5
-# 整卷总限时（秒）：只防查答案，正常作答绰绰有余
+# Total time limit in seconds: it only stops answer lookups and never
+# hampers normal answering
 TOTAL_TIME_LIMIT = 300
-# 未通过后的冷却（秒）：防高频刷题
+# Cooldown after a failed pass, in seconds, to stop rapid retries
 COOLDOWN_SECONDS = 60
 
-# 题库路径（跨平台：不再硬编码反斜杠，兼容 Linux/Mac/Windows）
+# Question bank path, built with os.path.join instead of a hardcoded
+# backslash so it works on Linux/Mac/Windows
 QUESTION_BANK_PATH = os.path.join(os.getcwd(), 'apps', 'question_bank.json')
 
 
-# ---------------- 纯函数（可单测） ----------------
-
+# Draw questions with a balanced True/False split, then shuffle them.
+# A short pool falls back to a plain random draw, so this never raises.
 def select_questions(pool, total=TOTAL_QUESTIONS,
                      n_true=TRUE_COUNT, n_false=FALSE_COUNT):
-    """分层随机抽题：True 池抽 n_true，False 池抽 n_false，再整体乱序。
-
-    池子不足时回退为全池随机抽取，保证永不崩溃。
-    """
     trues = [q for q in pool if q.get("answer") is True]
     falses = [q for q in pool if q.get("answer") is False]
     if len(trues) >= n_true and len(falses) >= n_false:
@@ -65,13 +56,10 @@ def select_questions(pool, total=TOTAL_QUESTIONS,
     return picked
 
 
+# Score one attempt from (correct, cost) pairs, discarding answers
+# faster than MACHINE_TAP_SECONDS. Returns (score, machine_taps,
+# valid); reaching MACHINE_TAP_LIMIT taps invalidates the whole paper.
 def grade(results):
-    """结算：results 为 [(correct: bool, cost: float)] 列表。
-
-    返回 (score, machine_taps, valid)：
-      - 单题 cost < MACHINE_TAP_SECONDS → 连点，该题不得分；
-      - machine_taps >= MACHINE_TAP_LIMIT → 整卷无效。
-    """
     score = 0
     machine_taps = 0
     for correct, cost in results:
@@ -84,15 +72,17 @@ def grade(results):
     return score, machine_taps, valid
 
 
+# Seconds left before a failed attempt may be retried, 0 once the
+# COOLDOWN_SECONDS cooldown has expired.
 def cooldown_remaining(last_fail_ts, now=None):
-    """距上次失败不足 COOLDOWN_SECONDS 时返回剩余秒数，否则返回 0。"""
     now = now if now is not None else time.time()
     rest = COOLDOWN_SECONDS - (now - last_fail_ts)
     return max(0, int(rest))
 
 
-# ---------------- 交互主流程 ----------------
-
+# Read the question bank, adding a history array when missing, and
+# reject it if the file is unusable or holds fewer than
+# TOTAL_QUESTIONS questions.
 def _load_bank():
     try:
         with open(QUESTION_BANK_PATH, 'r', encoding='utf-8') as f:
@@ -112,6 +102,7 @@ def _load_bank():
     return bank
 
 
+# Write the bank back with the new history record; never raises.
 def _save_bank(bank):
     try:
         with open(QUESTION_BANK_PATH, 'w', encoding='utf-8') as f:
@@ -120,6 +111,7 @@ def _save_bank(bank):
         print(f"{printk.RED_COLOR}错误：记录答题历史失败 - {str(e)}{printk.RESET_COLOR}")
 
 
+# Print the most recent history record.
 def _show_history(history):
     latest = history[-1]
     print("检测到有历史答题数据，以下是历史数据")
@@ -127,6 +119,10 @@ def _show_history(history):
           f"答题时间：{latest['timestamp']}，平均答题时间：{latest.get('avg_time', '-')}秒")
 
 
+# Run the quiz: the score decides, and only machine-speed answers
+# count as cheating. A timeout settles the questions already
+# answered, a failure starts COOLDOWN_SECONDS, and passing grants
+# neither ROOT nor any bootloader trust.
 def main():
     print("旧版答题入口")
     print("答题结果不会授予 ROOT 或改变 Bootloader 信任域。")
@@ -141,7 +137,8 @@ def main():
     if history:
         latest = history[-1]
         _show_history(history)
-        # 冷却：上次没过且还在冷却期内，拒绝重考
+        # Cooldown: the last attempt failed and is still cooling down, so
+        # refuse the retake
         if not latest.get("pass", False):
             rest = cooldown_remaining(latest.get("fail_ts", 0))
             if rest > 0:
@@ -185,7 +182,8 @@ def main():
     avg_time = round(sum(answer_times) / len(answer_times), 2) if answer_times else 0
     total_time = round(time.time() - t_start, 2)
     is_pass = valid and not timeout and score >= PASS_SCORE
-    # 超时但已答部分满分这种极端情况也允许过：按“已答题均对且触线”折算
+    # Edge case: a timed-out run also passes when every answered question was
+    # right, scaled by how much of the paper was answered
     if timeout and valid and results and score >= PASS_SCORE * len(results) / TOTAL_QUESTIONS:
         is_pass = True
 

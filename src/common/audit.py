@@ -1,17 +1,26 @@
-#
-#   common/audit.py
-#   轻量审计日志：记录 root/lock 等敏感操作。失败时静默忽略，绝不阻塞主流程。
-#
+'''
+ *
+ *      audit.py
+ *      Lightweight append-only audit log.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import time
 
 AUDIT_FILENAME = os.path.join("etc", "audit.log")
 
 
+# Absolute path of the audit log for one root directory.
 def _audit_path(root_dir: str) -> str:
     return os.path.join(root_dir, AUDIT_FILENAME)
 
 
+# Append one audit record. Never raises, so logging cannot break the caller.
 def audit(root_dir: str, actor: str, action: str, detail: str = "") -> None:
     try:
         path = _audit_path(root_dir)

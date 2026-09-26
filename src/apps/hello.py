@@ -1,7 +1,17 @@
-# hello.py - 一个简单的应用程序，打印问候信息
+'''
+ *
+ *      hello.py
+ *      Minimal demo app printing a greeting.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import api
 
+# Greet the current system user, then print five hello lines.
 def main():
     print(f"your username is: {api.get_system_username()}")
 

@@ -1,10 +1,21 @@
-"""出厂重置：6 类残留全覆盖，缺项不崩。"""
+'''
+ *
+ *      test_factory_reset.py
+ *      Factory reset: every residue class is cleared and an already clean root is not a crash.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import json
 import os
 
 from common.reset import factory_reset
 
 
+# Lay down one of every residue class that factory_reset promises to remove.
 def _seed(root):
     os.makedirs(os.path.join(root, "etc"))
     open(os.path.join(root, "etc", "bootcfg.json"), "w").write("{}")
@@ -23,6 +34,7 @@ def _seed(root):
     open(os.path.join(root, "src", "shell", "x.pyc"), "w").write("p")
 
 
+# Every residue class is gone, current_slot is back to slot_a, and the question bank keeps its questions while losing its history.
 def test_factory_reset_clears_everything(tmp_path):
     root = str(tmp_path)
     _seed(root)
@@ -52,6 +64,7 @@ def test_factory_reset_clears_everything(tmp_path):
     assert all(ok for ok, _ in report.values())
 
 
+# Resetting an already clean root must succeed on every item and still leave slot_a selected.
 def test_factory_reset_idempotent_on_empty(tmp_path):
     report = factory_reset(str(tmp_path), include_host_history=False)
     assert all(ok for ok, _ in report.values())

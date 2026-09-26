@@ -1,3 +1,14 @@
+'''
+ *
+ *      pkg.py
+ *      Command line front end of the user package manager.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import shlex
 
@@ -6,6 +17,7 @@ import api
 _USAGE = "用法: pkg <list|info|verify|install|remove|build> ...\n"
 
 
+# Split the argument list the shell passed in PYSPOS_APP_ARGS.
 def _args():
     raw = os.environ.get("PYSPOS_APP_ARGS", "")
     try:
@@ -14,6 +26,7 @@ def _args():
         return raw.split()
 
 
+# Collect every command name a manifest offers: entry points plus aliases.
 def _names(manifest):
     names = []
     for entry in manifest.get("entrypoints", []):
@@ -22,6 +35,7 @@ def _names(manifest):
     return names
 
 
+# Print one manifest: id, version, description and command names.
 def _print_manifest(manifest):
     print(f"包: {manifest['id']}@{manifest['version']}")
     if manifest.get("description"):
@@ -30,6 +44,7 @@ def _print_manifest(manifest):
     print()
 
 
+# List the installed user packages as an ID/VERSION/COMMANDS table.
 def _list():
     packages = api.package_list()
     if not packages:
@@ -42,6 +57,7 @@ def _list():
     print()
 
 
+# pkg info <id>: print the manifest of an installed package.
 def _info(tokens):
     if len(tokens) != 1:
         api.api_error("用法: pkg info <包id>\n")
@@ -53,6 +69,7 @@ def _info(tokens):
     _print_manifest(manifest)
 
 
+# pkg verify <dir|file>: check a package without installing it.
 def _verify(tokens):
     if len(tokens) != 1:
         api.api_error("用法: pkg verify <包目录|包文件>\n")
@@ -62,6 +79,7 @@ def _verify(tokens):
     print("入口: " + ", ".join(_names(manifest)) + "\n")
 
 
+# pkg install <dir|file>: install a package (ROOT, unlocked device).
 def _install(tokens):
     if len(tokens) != 1:
         api.api_error("用法: pkg install <包目录|包文件>\n")
@@ -71,6 +89,7 @@ def _install(tokens):
     print("可用命令: " + ", ".join(_names(manifest)) + "\n")
 
 
+# pkg remove <id>: uninstall a package (ROOT, unlocked device).
 def _remove(tokens):
     if len(tokens) != 1:
         api.api_error("用法: pkg remove <包id>\n")
@@ -79,6 +98,8 @@ def _remove(tokens):
     api.api_ok(f"已删除: {manifest['id']}\n")
 
 
+# pkg build <dir> [out.pyspkg]: pack a package, defaulting the output
+# name to <id>.pyspkg in the working directory.
 def _build(tokens):
     if len(tokens) not in (1, 2):
         api.api_error("用法: pkg build <包目录> [输出.pyspkg]\n")
@@ -93,6 +114,7 @@ def _build(tokens):
     api.api_ok(f"已生成包文件: {output}\n")
 
 
+# Dispatch the pkg subcommand, falling back to the usage line.
 def main():
     tokens = _args()
     if not tokens:

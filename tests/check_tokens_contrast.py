@@ -1,25 +1,32 @@
-"""PySpOS 设计 token 对比度校验（WCAG 2.2 AA）
+'''
+ *
+ *      check_tokens_contrast.py
+ *      WCAG 2.2 AA contrast check for the docs design tokens, resolved once per theme.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-按主题分别解析 tokens.css：亮色取 `:root, body:not(.theme-dark)` 块，
-暗色取 `body.theme-dark` 块。正确处理 var() 链；本套 token 全是
-hex 字面值与 var() 引用（无 color-mix），可直接合成计算。
-"""
 import re
 import sys
 
-# ---------- 色彩工具 ----------
+# ---------- colour helpers ----------
 
+# One sRGB channel to linear light, as WCAG defines it.
 def _srgb(c):
     c /= 255
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
+# Relative luminance of an RGB triple, using the WCAG 2.2 weights.
 def lum(rgb):
     return sum(k * _srgb(v) for k, v in zip((0.2126, 0.7152, 0.0722), rgb))
 
 
+# Return (r,g,b,a) for a #hex or an rgb()/rgba() value in comma or space syntax.
 def parse_color(val):
-    """返回 (r,g,b,a)，支持 #hex 与 rgb()/rgba() 空格语法。"""
     val = val.strip()
     m = re.fullmatch(r'#([0-9a-fA-F]{3,8})', val)
     if m:
@@ -41,50 +48,52 @@ def parse_color(val):
     return None
 
 
+# Flatten a translucent foreground onto its background.
 def composite(fg, bg):
-    """把半透明前景合成到底色上。"""
     r, g, b, a = fg
     br, bg_, bb, _ = bg
     return (r * a + br * (1 - a), g * a + bg_ * (1 - a), b * a + bb * (1 - a), 1.0)
 
 
+# WCAG contrast ratio of two colours, ignoring their alpha.
 def ratio(c1, c2):
     l1, l2 = lum(c1[:3]), lum(c2[:3])
     hi, lo = max(l1, l2), min(l1, l2)
     return (hi + 0.05) / (lo + 0.05)
 
 
-# ---------- token 解析（按主题分块）----------
+# ---------- token parsing, split by theme ----------
 
 PREFIX = r'--pg-[a-z0-9-]+'
 
 
+# Cut out the primitive, light and dark token blocks; where a selector repeats, keep the one with the most tokens.
 def split_blocks(css):
-    """切出原始层、亮色语义块、暗色语义块。
 
-    同一选择器可能出现多次，一律取 token 数最多的那个。
-    """
-
+# Return the body of every block whose selector matches pat.
     def blocks(pat):
-        # pat 只给选择器，不带花括号
+        # pat is the selector alone, without the braces
         return [m.group(1) for m in
                 re.finditer(pat + r'\s*\{(.*?)\n\}', css, re.S)]
 
+# Count the token declarations in one block body.
     def count(b):
         return len(re.findall(PREFIX + r'\s*:', b))
 
+# Pick the block with the most token declarations, or an empty string if there is none.
     def biggest(bl):
         return max(bl, key=count, default='')
 
-    # 原始层：含 --pg-ref- 的那个 :root 块（纯字面值，无 var()）
+    # primitive layer: the :root block holding --pg-ref- (literal values, no var())
     roots = blocks(r':root')
     prim = max((b for b in roots if '--pg-ref-' in b), key=count, default='')
-    # 语义层：亮色是默认值块，暗色是覆盖块
+    # semantic layer: the default block is light, the override block is dark
     light = biggest(blocks(r':root,\s*\nbody:not\(\.theme-dark\)'))
     dark = biggest(blocks(r'body\.theme-dark'))
     return prim, dark, light
 
 
+# Build a var()-chasing resolver over one theme's token table, returning it with the raw table.
 def make_resolver(prim, dark, light, theme):
     table = {}
     for k, v in re.findall(r'(' + PREFIX + r')\s*:\s*([^;]+);', prim):
@@ -93,6 +102,7 @@ def make_resolver(prim, dark, light, theme):
     for k, v in re.findall(r'(' + PREFIX + r')\s*:\s*([^;]+);', src):
         table[k] = v.strip()
 
+# Resolve one token to a colour by following var() links, giving up on cycles.
     def resolve(name, seen=()):
         if name in seen or len(seen) > 20:
             return None
@@ -110,6 +120,7 @@ def make_resolver(prim, dark, light, theme):
     return resolve, table
 
 
+# Measure every token pair that has a contrast floor and return 1 if any falls short.
 def main():
     css = open('docs/css/tokens.css', encoding='utf-8').read()
     prim, dark, light = split_blocks(css)
@@ -136,8 +147,8 @@ def main():
         ('正文 / 凸起面', '--pg-fg-1', 'raised', 4.5),
         ('次要 / 凸起面', '--pg-fg-2', 'raised', 4.5),
         ('次要 / 下沉面', '--pg-fg-2', 'sunk', 4.5),
-        # line-1/line-2 是纯装饰分隔线（WCAG 1.4.11 豁免装饰）；
-        # 控件边界另有 --pg-line-strong，在此实测。
+        # line-1/line-2 are purely decorative separators (WCAG 1.4.11 exempts decoration);
+        # control borders use --pg-line-strong instead, which is what is measured here.
         ('控件边界 strong / 页面底', '--pg-line-strong', 'page', 3.0),
         ('反白带文字 / 带底', '--pg-band-fg', 'band', 4.5),
         ('反白带次要 / 带底', '--pg-band-mute', 'band', 4.5),

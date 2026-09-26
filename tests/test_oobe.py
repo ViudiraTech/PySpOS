@@ -1,4 +1,14 @@
-"""OOBE：触发判定、语言时区真实生效、向导脚本化跑通。"""
+'''
+ *
+ *      test_oobe.py
+ *      OOBE: the trigger marker, real language and timezone effects, scripted wizard runs.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import io
 import os
 import sys
@@ -8,7 +18,9 @@ import syslocale
 import tui
 
 
+# Build a wizard context whose persist() calls land in a list instead of on disk.
 def _ctx(tmp_path=None, persist_log=None):
+# Record the wizard's final settings rather than writing them anywhere.
     def persist(values):
         if persist_log is not None:
             persist_log.append(dict(values))
@@ -16,6 +28,7 @@ def _ctx(tmp_path=None, persist_log=None):
             "username": "tester", "locked": True, "persist": persist}
 
 
+# OOBE runs until the .oobe_done marker exists, and never runs again afterwards.
 def test_marker_triggers_oobe(tmp_path):
     assert oobe.should_run(str(tmp_path)) is True
     etc = tmp_path / "etc"
@@ -24,6 +37,7 @@ def test_marker_triggers_oobe(tmp_path):
     assert oobe.should_run(str(tmp_path)) is False
 
 
+# Switching the language really changes translated strings, while an unknown code is refused.
 def test_language_switch_is_real():
     assert syslocale.set_language("en") is True
     assert syslocale._("tui.cont") == "Continue"
@@ -32,6 +46,7 @@ def test_language_switch_is_real():
     assert syslocale.set_language("xx") is False
 
 
+# A bogus zone is rejected, a real one sticks, and the clock formats in it.
 def test_timezone_rejects_bogus_accepts_real():
     assert syslocale.set_timezone("Nope/Nowhere") is False
     assert syslocale.set_timezone("Asia/Shanghai") is True
@@ -39,6 +54,7 @@ def test_timezone_rejects_bogus_accepts_real():
     assert syslocale.now_str("%Y-%m-%d")[:4].isdigit()
 
 
+# The zone database splits into regions and per-region cities, with a fallback for an unknown region.
 def test_tz_region_city_split():
     regions, zones = oobe._regions()
     assert "Asia" in regions
@@ -47,6 +63,7 @@ def test_tz_region_city_split():
     assert "UTC" in oobe._cities_of("Other", zones)
 
 
+# Drive the whole wizard through the line backend with a scripted answer sequence, forcing Chinese and a known timezone first.
 def _run_wizard(monkeypatch, answers):
     monkeypatch.setenv("PYSPOS_TUI", "line")
     inputs = iter(answers)
@@ -58,9 +75,10 @@ def _run_wizard(monkeypatch, answers):
     return ok, log
 
 
+# A full Chinese run persists the chosen language, no ROOT, the stable channel and the default display name.
 def test_full_wizard_zh(monkeypatch, tmp_path):
-    # 欢迎回车 → 语言选1中文 → 许可y → 地区回车(默认) → 城市回车 → 预览回车 →
-    # 显示名回车 → root n → bl回车 → ota回车 → token回车 → 汇总y → 完成页回车
+    # welcome Enter -> language 1 for Chinese -> licence y -> region Enter (default) -> city Enter -> preview Enter ->
+    # display name Enter -> root n -> bl Enter -> ota Enter -> token Enter -> summary y -> done page Enter
     ok, log = _run_wizard(monkeypatch, ["", "1", "y", "", "", "", "", "n",
                                        "", "", "", "y", ""])
     assert ok is True
@@ -69,32 +87,36 @@ def test_full_wizard_zh(monkeypatch, tmp_path):
     assert v["channel"] == "stable" and v["display_name"] == "tester"
 
 
+# Pressing back on the first page aborts the wizard instead of leaving a half-configured device.
 def test_wizard_back_navigation(monkeypatch):
-    # 欢迎页直接 < → 中止
+    # Pressing back on the welcome page aborts
     monkeypatch.setenv("PYSPOS_TUI", "line")
     monkeypatch.setattr("builtins.input", lambda _p="": "<")
     syslocale.set_language("zh_CN")
     assert oobe.run_wizard(_ctx()) is False
 
 
+# EOF aborts through TUIAbort and maybe_run_oobe absorbs it, so a non-interactive boot still starts.
 def test_wizard_abort_on_eof(monkeypatch):
     import pytest
     monkeypatch.setenv("PYSPOS_TUI", "line")
 
+# input() stand-in reporting a closed stdin.
     def _eof(_p=""):
         raise EOFError
     monkeypatch.setattr("builtins.input", _eof)
     syslocale.set_language("zh_CN")
     with pytest.raises(tui.TUIAbort):
         oobe.run_wizard(_ctx())
-    # maybe_run_oobe 负责兜底：中止不写标记、不崩启动
+    # maybe_run_oobe is the backstop: an abort writes no marker and does not break boot
     assert oobe.maybe_run_oobe("/nonexistent-root-xyz") is False
 
 
+# locale tz persists a real zone and locale shows it back; the real bootcfg is restored afterwards.
 def test_locale_command(tmp_path, monkeypatch):
     import main
     monkeypatch.chdir(tmp_path)
-    # locale tz 会写真实 bootcfg.json：先备份，测完还原
+    # locale tz writes the real bootcfg.json: back it up first and restore it afterwards
     import btcfg
     cfg_path = btcfg.boot_config
     backup = None

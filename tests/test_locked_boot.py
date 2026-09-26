@@ -1,7 +1,14 @@
-"""LOCKED 签名启动端到端：tmp 伪根 + 现场密钥对 + 手工槽 manifest。
+'''
+ *
+ *      test_locked_boot.py
+ *      End-to-end locked boot over a throwaway root, throwaway keys and a hand-written manifest.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-不碰真实槽位与 LOCKED 文件，只调 prepare_boot(locked=True)。
-"""
 import base64
 import sys
 
@@ -13,6 +20,7 @@ import secure_boot
 from secure_boot import BootVerificationError
 
 
+# Generate a throwaway Ed25519 key pair plus the trusted-key map keyed by its key id.
 def _make_keys():
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -24,6 +32,7 @@ def _make_keys():
     return priv, key_id, keys
 
 
+# Manifest every file in the slot except the manifest and signature, then sign the canonical bytes.
 def _sign_slot(slot_dir, priv, key_id):
     files = {}
     for rel, full in secure_boot._iter_tree_files(str(slot_dir)):
@@ -40,6 +49,7 @@ def _sign_slot(slot_dir, priv, key_id):
         f.write(secure_boot.sign_bytes(priv, raw))
 
 
+# Build a minimal two-file slot tree; the real slots are never touched.
 def _fake_root(tmp_path):
     slot = tmp_path / "slot_a"
     (slot / "lib").mkdir(parents=True)
@@ -48,6 +58,7 @@ def _fake_root(tmp_path):
     return slot
 
 
+# A correctly signed slot is accepted and selected on a locked device.
 def test_locked_boot_accepts_signed_slot(tmp_path):
     priv, key_id, keys = _make_keys()
     slot = _fake_root(tmp_path)
@@ -57,6 +68,7 @@ def test_locked_boot_accepts_signed_slot(tmp_path):
     assert sel is not None and sel["slot"] == "slot_a"
 
 
+# A file changed after signing must fail verification closed rather than boot anyway.
 def test_locked_boot_rejects_tampered_slot(tmp_path):
     priv, key_id, keys = _make_keys()
     slot = _fake_root(tmp_path)
@@ -67,6 +79,7 @@ def test_locked_boot_rejects_tampered_slot(tmp_path):
             str(tmp_path), True, keys=keys, legacy_slot="slot_a")
 
 
+# A signature made with a key outside the trust store must not verify.
 def test_locked_boot_rejects_wrong_key(tmp_path):
     _, key_id, _ = _make_keys()
     _, _, other_keys = _make_keys()

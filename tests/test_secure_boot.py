@@ -1,3 +1,14 @@
+'''
+ *
+ *      test_secure_boot.py
+ *      Secure boot: signed images, boot state, policy, packages and developer keys.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import hashlib
 import os
 import zipfile
@@ -9,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import secure_boot
 
 
+# Generate a throwaway Ed25519 key pair and the trusted-key map keyed by its key id.
 def _key_pair():
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes(
@@ -17,6 +29,7 @@ def _key_pair():
     return private, keys
 
 
+# Build a signed two-file slot image carrying the given security version.
 def _write_image(root, private, keys, security_version=1):
     slot = root / "slot_a"
     slot.mkdir(exist_ok=True)
@@ -40,6 +53,7 @@ def _write_image(root, private, keys, security_version=1):
     return manifest
 
 
+# A correctly signed image boots on a locked device and its manifest is reported back.
 def test_locked_boot_requires_a_valid_signature(tmp_path):
     private, keys = _key_pair()
     _write_image(tmp_path, private, keys)
@@ -49,6 +63,7 @@ def test_locked_boot_requires_a_valid_signature(tmp_path):
     assert selection["manifest"]["security_version"] == 1
 
 
+# A file changed after signing must abort the boot instead of running modified code.
 def test_tampered_image_fails_closed(tmp_path):
     private, keys = _key_pair()
     _write_image(tmp_path, private, keys)
@@ -59,6 +74,7 @@ def test_tampered_image_fails_closed(tmp_path):
                                  legacy_slot="slot_a")
 
 
+# An explicit preferred slot wins, and without one the legacy slot is used.
 def test_preferred_slot_wins_over_default_order(tmp_path):
     for slot in ("slot_a", "slot_b"):
         d = tmp_path / slot
@@ -73,6 +89,7 @@ def test_preferred_slot_wins_over_default_order(tmp_path):
     assert sel["slot"] == "slot_a"
 
 
+# A preferred slot that is not there must fall through rather than fail the boot.
 def test_preferred_slot_missing_falls_through(tmp_path):
     d = tmp_path / "slot_a"
     d.mkdir(exist_ok=True)
@@ -82,6 +99,7 @@ def test_preferred_slot_missing_falls_through(tmp_path):
     assert sel["slot"] == "slot_a"
 
 
+# An unsigned image boots on an unlocked device with no manifest, but is refused when locked.
 def test_unsigned_image_is_rejected_only_when_locked(tmp_path):
     slot = tmp_path / "slot_a"
     slot.mkdir(exist_ok=True)
@@ -93,6 +111,7 @@ def test_unsigned_image_is_rejected_only_when_locked(tmp_path):
                                  legacy_slot="slot_a")
 
 
+# A signature from an untrusted key fails, and a security_version below the recorded one is a rollback and is refused.
 def test_wrong_key_and_rollback_are_rejected(tmp_path):
     private, keys = _key_pair()
     other_private, other_keys = _key_pair()
@@ -112,22 +131,18 @@ def test_wrong_key_and_rollback_are_rejected(tmp_path):
                                  legacy_slot="slot_a")
 
 
+# A package carrying the build machine's current_slot has those members skipped by verification, so the update proceeds instead of failing whole.
 def test_boot_state_members_are_skipped_not_rejected(tmp_path):
-    """3.2.0 真实事故：包里混入构建机的 src/current_slot。
-
-    启动期状态描述的是构建那台机器，不该落地；验签跳过它们，
-    更新照常进行，而不是让整个包失败。
-    """
     package = tmp_path / "update.zip"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("src/main.py", "print('package')\n")
         archive.writestr("src/current_slot", "slot_a")
         archive.writestr("current_slot", "slot_a")
         archive.writestr(".hotreset", "x")
-    # 未签名 + 未锁定：跳过状态文件后验证通过
+    # Unsigned and unlocked: verification passes once the state files are skipped
     assert secure_boot.verify_package(str(package), locked=False) is None
 
-    # 签名路径同样跳过：manifest 清单里不应出现状态文件
+    # The signed path skips them too: the manifest must not list any state file
     private, keys = _key_pair()
     signed = tmp_path / "signed.zip"
     with zipfile.ZipFile(signed, "w") as archive:
@@ -140,6 +155,7 @@ def test_boot_state_members_are_skipped_not_rejected(tmp_path):
     assert "src/current_slot" not in manifest["files"]
 
 
+# A signed package verifies, and a member with a .. escape is refused even when unlocked.
 def test_signed_package_and_path_traversal(tmp_path):
     private, keys = _key_pair()
     package = tmp_path / "update.zip"
@@ -157,6 +173,7 @@ def test_signed_package_and_path_traversal(tmp_path):
         secure_boot.verify_package(str(bad), keys=keys, locked=False)
 
 
+# Unpacking a signed package keeps the manifest and signature, or the staged tree could never be verified.
 def test_signed_package_keeps_verification_files_on_install(tmp_path):
     import ota
     private, keys = _key_pair()
@@ -172,6 +189,7 @@ def test_signed_package_keeps_verification_files_on_install(tmp_path):
     assert (staging / secure_boot.SIGNATURE_NAME).is_file()
 
 
+# Staging a slot records a pending slot with a limited attempt budget, and success promotes it to active and clears pending.
 def test_boot_state_is_atomic_and_pending_state_is_tracked(tmp_path):
     state = secure_boot.load_state(str(tmp_path))
     assert state["rollback_index"] == 0
@@ -185,6 +203,7 @@ def test_boot_state_is_atomic_and_pending_state_is_tracked(tmp_path):
     assert state["pending_slot"] is None
 
 
+# The lock state comes from a signed policy, and editing the locked flag invalidates it.
 def test_policy_signature_controls_lock_state(tmp_path):
     private, keys = _key_pair()
     secure_boot.write_policy(str(tmp_path), True, 3, private, trusted_keys=keys)
@@ -195,10 +214,12 @@ def test_policy_signature_controls_lock_state(tmp_path):
         secure_boot.read_policy(str(tmp_path), keys)
 
 
+# A device with no policy file at all must read as locked, not as unlocked.
 def test_missing_policy_fails_closed(tmp_path):
     assert secure_boot.read_locked(str(tmp_path)) is True
 
 
+# The developer key made during OOBE may sign unlocked images only: locked verification and a locked policy both refuse it.
 def test_oobe_developer_key_only_trusts_unlocked_images(tmp_path, monkeypatch):
     monkeypatch.setattr(secure_boot, "_RUNTIME_TRUSTED_KEYS", {})
     info = secure_boot.ensure_developer_key(str(tmp_path), locked=False)
@@ -217,12 +238,14 @@ def test_oobe_developer_key_only_trusts_unlocked_images(tmp_path, monkeypatch):
         secure_boot.write_policy(str(tmp_path), True, 1, info["private_key"])
 
 
+# The old token API is gone, and a local set_lockstate call cannot change the policy.
 def test_legacy_token_cannot_change_policy():
     import api
     assert not hasattr(api, "return_token")
     assert api._local_set_lockstate(False) is False
 
 
+# Wiping slots keeps the policy file, and wiping is refused outright while the device is locked.
 def test_reset_slot_preserves_policy_and_is_locked_safe(tmp_path, monkeypatch):
     import reset_slot
     private, keys = _key_pair()

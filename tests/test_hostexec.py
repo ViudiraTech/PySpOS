@@ -1,8 +1,14 @@
-"""宿主 Linux 程序执行：PATH 解析、前台直通、后台中继、信号、重定向。
+'''
+ *
+ *      test_hostexec.py
+ *      Host program execution: PATH lookup, foreground passthrough, background relay, signals and redirection.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-能用真 fork+exec 的地方就用真的（sys.executable -c），只在需要隔离
-信号/进程表时打桩。POSIX 相关用例在非 POSIX 平台跳过。
-"""
 import contextlib
 import io
 import os
@@ -24,6 +30,7 @@ IS_POSIX = os.name == "posix"
 needs_posix = pytest.mark.skipif(not IS_POSIX, reason="需要 fork/exec")
 
 
+# Run one shell command and capture what it printed.
 def run(cmd):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -31,16 +38,19 @@ def run(cmd):
     return buf.getvalue()
 
 
+# Start each test from an empty process table.
 def setup_function(_):
     proc.reset()
 
 
+# Build a real host argv around this interpreter, so no fixture binary is needed.
 def _py_writer(code="import sys;sys.stdout.buffer.write(b'out\\n')"):
     return [sys.executable, "-c", code]
 
 
-# ---------- PATH 解析 ----------
+# ---------- PATH lookup ----------
 
+# An absolute path resolves to itself, while a missing file and an empty name both resolve to None.
 def test_resolve_absolute_and_path(tmp_path):
     exe = tmp_path / "myprog"
     exe.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -50,6 +60,7 @@ def test_resolve_absolute_and_path(tmp_path):
     assert hostexec.resolve("") is None
 
 
+# PATH lookup finds an executable, rejects a non-executable file, and still reports the directory as a known command source.
 def test_resolve_uses_path_and_rejects_dirs(tmp_path, monkeypatch):
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -68,8 +79,9 @@ def test_resolve_uses_path_and_rejects_dirs(tmp_path, monkeypatch):
         hostexec._PATH_BIN_CACHE = None
 
 
-# ---------- 前台：真进程、vt100 原样过 ----------
+# ---------- foreground: a real process, vt100 bytes untouched ----------
 
+# A foreground host program really runs, its bytes pass through untouched, and its PCB ends in Done.
 @needs_posix
 def test_foreground_exec_real_process(tmp_path):
     out = tmp_path / "o.bin"
@@ -96,6 +108,7 @@ def test_foreground_exec_real_process(tmp_path):
     assert hosts and all(p.state == "Done" for p in hosts)
 
 
+# The parent's own SIGINT handler must survive running a foreground child.
 @needs_posix
 def test_parent_sigint_handler_restored():
     if os.name != "posix":
@@ -111,6 +124,7 @@ def test_parent_sigint_handler_restored():
         signal.signal(signal.SIGINT, old)
 
 
+# An ignored disposition is turned into a catchable handler for the child and restored exactly afterwards.
 @needs_posix
 def test_make_catchable_roundtrip():
     old = signal.getsignal(signal.SIGINT)
@@ -126,6 +140,7 @@ def test_make_catchable_roundtrip():
         signal.signal(signal.SIGINT, old)
 
 
+# The child must see the default SIGINT disposition, not the parent's ignored one.
 @needs_posix
 def test_spawned_child_gets_default_sigint():
     old = signal.getsignal(signal.SIGINT)
@@ -153,12 +168,15 @@ def test_spawned_child_gets_default_sigint():
         signal.signal(signal.SIGINT, old)
 
 
-# ---------- 分发：内置优先、127 保留 ----------
+# ---------- dispatch: builtins first, 127 reserved ----------
 
+# A builtin of the same name wins: echo must not exec the host binary even when one is resolvable.
 def test_builtin_shadows_host(monkeypatch):
     called = []
 
+# Popen stand-in that fails the test if a builtin ever reaches the host exec path.
     class Boom:
+# Record the attempt and abort: no host spawn was expected here.
         def __init__(self, *a, **k):
             called.append((a, k))
             raise AssertionError("不应 spawn 宿主程序")
@@ -169,14 +187,16 @@ def test_builtin_shadows_host(monkeypatch):
     assert called == []
 
 
+# An unresolvable command keeps the shell's own not-found wording.
 def test_unknown_still_127(monkeypatch):
     monkeypatch.setattr(hostexec, "resolve", lambda name: None)
     out = run("definitely-not-a-command-xyz")
     assert "未找到命令" in out
 
 
-# ---------- 重定向 / 管道走 fd 级 ----------
+# ---------- redirection and pipes at the fd level ----------
 
+# Redirecting a host program to a file keeps its escape bytes instead of stripping them.
 @needs_posix
 def test_redirect_host_keeps_vt100(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -188,6 +208,7 @@ def test_redirect_host_keeps_vt100(tmp_path, monkeypatch):
     assert raw == b"A\n\x1b[1mB\x1b[0m\n"
 
 
+# A host producer piped into a builtin filter has to work at the fd level.
 @needs_posix
 def test_pipe_host_to_grep(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -197,8 +218,9 @@ def test_pipe_host_to_grep(tmp_path, monkeypatch):
     assert "foobar" in out and "\nfoo\n" not in out
 
 
-# ---------- 后台：作业注册 + 中继不改字节 ----------
+# ---------- background: job registration and a byte-exact relay ----------
 
+# A background host job registers with the job table, becomes a zombie, and its bytes still reach the terminal.
 @needs_posix
 def test_background_registers_job_and_reaps(capfd):
     prog = [sys.executable, "-c",
@@ -215,6 +237,6 @@ def test_background_registers_job_and_reaps(capfd):
             break
         time.sleep(0.05)
     assert process.get(pid).state == "Zombie"
-    time.sleep(0.3)  # 给中继线程留出 flush 时间
+    time.sleep(0.3)  # Leave the relay thread time to flush
     out, _ = capfd.readouterr()
     assert "\x1b[32mbg\x1b[0m" in out

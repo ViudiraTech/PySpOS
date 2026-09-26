@@ -1,9 +1,14 @@
-"""OTA 清单自检：version.json 里的每条都必须指向真实存在且哈希正确的包
+'''
+ *
+ *      check_ota_manifest.py
+ *      OTA manifest self-check: every version.json entry must point at a package that exists with a matching hash.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-`docs/ota/version.json` 是 OTA 客户端与网页共用的真源。手改 JSON、
-只上传 zip 忘了更新 sha256、或改了包没重算哈希——这些都不会报错，
-只会在用户端表现为「校验失败」。这里把它变成会红的检查。
-"""
 import hashlib
 import json
 import os
@@ -15,6 +20,7 @@ OTA = os.path.join(REPO, "docs", "ota")
 VJ = os.path.join(OTA, "version.json")
 
 
+# Hash a file in 64 KiB blocks so a large zip does not have to fit in memory.
 def sha256_of(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -23,6 +29,7 @@ def sha256_of(path):
     return h.hexdigest()
 
 
+# Verify docs/ota/version.json against the packages on disk and return 1 on any error.
 def main():
     if not os.path.exists(VJ):
         print("[FAIL] 找不到 docs/ota/version.json")
@@ -35,7 +42,7 @@ def main():
     top_sha = data.get("sha256")
     top_size = data.get("file_size")
 
-    # ---- 顶层（当前版本）----
+    # ---- top level (the current version) ----
     if top_url and not top_url.startswith("http"):
         p = os.path.join(OTA, top_url)
         if not os.path.exists(p):
@@ -52,7 +59,7 @@ def main():
                     print(f"[ OK ] 当前版本 {top_ver} 包校验通过"
                           f"（{real} 字节，sha256 一致）")
 
-    # ---- changelog 每一条 ----
+    # ---- every changelog entry ----
     changelog = data.get("changelog", [])
     if not changelog:
         errs.append("changelog 为空")
@@ -80,17 +87,17 @@ def main():
         else:
             warns.append(f"{ver}: sha256 为 null（3.0.0 指向 GitHub tag，可接受）")
 
-    # ---- 顶层 version 必须出现在 changelog 首位 ----
+    # ---- the top-level version must be the first changelog entry ----
     if changelog and changelog[0].get("version") != top_ver:
         errs.append(f"顶层 version={top_ver} 与 changelog 首位 "
                     f"{changelog[0].get('version')} 不一致")
 
-    # ---- develop_stage 合法性 ----
+    # ---- develop_stage validity ----
     stage = (data.get("develop_stage") or "").lower()
     if stage not in {"beta", "rc", "release", "alpha", "pre", "dev"}:
         warns.append(f"develop_stage={stage!r} 不在约定取值内")
 
-    # ---- releases.html 的静态兜底副本是否同步 ----
+    # ---- whether the releases.html static fallback is in sync ----
     rel = os.path.join(OTA, "releases.html")
     marker = "const fallbackVersionData = "
     if os.path.exists(rel):
@@ -109,7 +116,7 @@ def main():
             except ValueError:
                 errs.append("releases.html 的 fallbackVersionData 不是合法 JSON")
 
-    # ---- 目录里是否有没被登记的 zip ----
+    # ---- zips in the directory that nobody registered ----
     registered = {e.get("download_url") for e in changelog}
     registered.add(top_url)
     for f in sorted(os.listdir(OTA)):

@@ -1,4 +1,14 @@
-"""shparser：分词 / 语法 / 展开。"""
+'''
+ *
+ *      test_shparser.py
+ *      shparser: tokenizing, parsing and word expansion.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import sys
 
@@ -8,10 +18,12 @@ sys.path.insert(0, "src")
 from shell import shparser
 
 
+# Flatten tokenize() into (kind, spans) pairs for terse assertions.
 def words(line):
     return [(k, v) for k, v in shparser.tokenize(line)]
 
 
+# Quotes group words and an escaped space stays in the same word, with the quoted flag recorded per span.
 def test_tokenize_quotes_and_escapes():
     assert words("echo hi") == [
         ("word", [("lit", "echo", False)]),
@@ -23,12 +35,14 @@ def test_tokenize_quotes_and_escapes():
                                 ("lit", "f", False)])
 
 
+# Every operator, including the 2> and 2>&1 fd forms, is its own token in source order.
 def test_tokenize_operators():
     toks = words("a | b && c || d ; e & f > g >> h < i 2> j 2>&1")
     ops = [v for k, v in toks if k == "op"]
     assert ops == ["|", "&&", "||", ";", "&", ">", ">>", "<", "2>", "2>&1"]
 
 
+# Command substitutions nest, and $X, ${Y} and $? are separate span kinds so the expander can tell them apart.
 def test_tokenize_subst_and_vars():
     toks = words("echo $(a $(b)) `c` $X ${Y} $? $$ $!")
     kinds = [s[0] for _, spans in toks[1:] for s in spans]
@@ -38,6 +52,7 @@ def test_tokenize_subst_and_vars():
     assert ("var", "?", False) in toks[5][1]
 
 
+# An unterminated quote or substitution is a LexError, not a silent truncation.
 def test_tokenize_unclosed():
     with pytest.raises(shparser.LexError):
         shparser.tokenize("echo 'abc")
@@ -47,6 +62,7 @@ def test_tokenize_unclosed():
         shparser.tokenize("echo $(a")
 
 
+# parse() yields one statement per separator with the right chain operators and background flags, and a pipe nests into cmds.
 def test_parse_pipeline_and_chain():
     prog = shparser.parse("a | b && c || d ; e &")
     assert len(prog) == 4
@@ -55,6 +71,7 @@ def test_parse_pipeline_and_chain():
     assert len(prog[0][0]["cmds"]) == 2
 
 
+# Leading VAR=value assignments attach to the command, and redirect order is preserved.
 def test_parse_redirects_and_assign():
     prog = shparser.parse("A=1 B=x cmd > out.txt 2> err >> app < in")
     stmt = prog[0][0]
@@ -65,6 +82,7 @@ def test_parse_redirects_and_assign():
     assert [r[1] for r in redirs] == [">", ">", ">>", "<"]
 
 
+# Dangling operators are LexErrors rather than half-parsed programs.
 def test_parse_errors():
     with pytest.raises(shparser.LexError):
         shparser.parse("a | | b")
@@ -74,12 +92,14 @@ def test_parse_errors():
         shparser.parse("a &&")
 
 
+# A fresh expansion context: empty vars, status 0, no nesting, no capture callback.
 def _ctx(**kw):
     ctx = {"vars": {}, "last": 0, "depth": 0, "run_capture": None}
     ctx.update(kw)
     return ctx
 
 
+# Expand only the word tokens of a line and return the resulting argv list.
 def _expand(line, **kw):
     out = []
     for kind, spans in shparser.tokenize(line):
@@ -88,6 +108,7 @@ def _expand(line, **kw):
     return out
 
 
+# Variables expand from the environment and the context, an undefined one disappears (quoted it becomes an empty string), and the special parameters expand too.
 def test_expand_vars_and_specials(tmp_path, monkeypatch):
     monkeypatch.setenv("PYSPOS_TEST_VAR", "vv")
     assert _expand("$PYSPOS_TEST_VAR") == ["vv"]
@@ -100,6 +121,7 @@ def test_expand_vars_and_specials(tmp_path, monkeypatch):
     assert _expand("~")[0].startswith("/")
 
 
+# Command substitution captures stdout without its trailing newlines, globbing expands and sorts, and a non-matching or quoted pattern is left alone.
 def test_expand_subst_and_glob(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.txt").write_text("x")

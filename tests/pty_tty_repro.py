@@ -1,12 +1,14 @@
-#!/usr/bin/env python3
-"""pty 实测：在「坏 tty」下按 Enter，验证不再刷 ^M。
+'''
+ *
+ *      pty_tty_repro.py
+ *      Manual pty reproduction of the broken-tty caret spam, before and after the ttyutil defence.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
-模拟真实故障态（icrnl-off，回车 \r 不翻译成 \n），然后：
-  1. 直接用裸 input() 读 —— 应复现刷屏/空循环（即用户看到的现象）；
-  2. 换成 ttyutil.read_choice —— 应一次读到默认并干净退出。
-
-这比任何单测都更有说服力：真的开了 pty，真的关了 icrnl。
-"""
 import os
 import pty
 import select
@@ -18,13 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
 
 
+# Run code in a pty with icrnl off, the real fault state where a bare CR echoes as ^M and never ends the line, then press Enter three times and report the counts.
 def run_in_broken_pty(code, label, expect_prefix):
-    """开一个 pty，只关 icrnl（保留 icanon+echo），再跑 code。
-
-    真实故障态就是 icrnl-off：canonical 模式下 IC RNL 关掉后，回车发出的
-    \\r 不会被翻译成行结束符 \\n，终端只把它当普通字符回显成 ^M，
-    input() 于是永远等不到行结束——用户每按一次 Enter 就多一个 ^M。
-    """
     pid, fd = pty.fork()
     if pid == 0:
         os.chdir(ROOT)
@@ -33,7 +30,7 @@ def run_in_broken_pty(code, label, expect_prefix):
     subprocess.run(["stty", "-icrnl"], stdin=fd, stderr=subprocess.DEVNULL)
     time.sleep(0.4)
     for _ in range(3):
-        os.write(fd, b"\r")          # 连按三次 Enter，发的是裸 \r
+        os.write(fd, b"\r")          # Press Enter three times; what goes out is a bare \r
         time.sleep(0.15)
     out, deadline = b"", time.time() + 6
     while time.time() < deadline:
@@ -68,13 +65,13 @@ def run_in_broken_pty(code, label, expect_prefix):
     return n_caret, spins
 
 
-# 1) 裸 input()：应当复现问题（证明复现环境是真实的）
+# 1) bare input(): must reproduce the problem, which proves the reproduction is real
 bare, bare_spins = run_in_broken_pty(
     "s=input('? (y/n)[n]: ')\n"
     "print('GOT', repr(s))",
     "裸 input() 读裸 \\r（icrnl-off）", "?")
 
-# 2) ttyutil：应当自行恢复，一行读完干净退出
+# 2) ttyutil: must recover by itself, read one line and exit cleanly
 safe, safe_spins = run_in_broken_pty(
     "import ttyutil\n"
     "ttyutil.ensure_sane_tty()\n"

@@ -1,10 +1,21 @@
-"""SpaceConfig 解析/序列化往返。"""
+'''
+ *
+ *      test_spc.py
+ *      SpaceConfig parse and serialize roundtrip.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import sys
 
 sys.path.insert(0, "src")
 import spc
 
 
+# Sections and typed values survive a dumps plus loads roundtrip unchanged.
 def test_loads_dumps_roundtrip():
     text = """
 # 注释
@@ -27,6 +38,7 @@ host = "example.com"
     assert again == data
 
 
+# The legacy bootcfg checksum is dropped on the way to SPC, and both flags survive the way back.
 def test_bootcfg_convert():
     bootcfg = {"locked": True, "rootstate": False, "checksum": "xxx"}
     data = spc.bootcfg_to_spc(bootcfg)
@@ -35,6 +47,7 @@ def test_bootcfg_convert():
     assert back["locked"] is True and back["rootstate"] is False
 
 
+# dump writes a file that load reads back with the same value.
 def test_dump_load_file(tmp_path):
     p = tmp_path / "boot.spc"
     spc.dump({"boot": {"locked": False}}, str(p))

@@ -1,3 +1,14 @@
+'''
+ *
+ *      test_pkg.py
+ *      User packages: verify, build, install, command resolution, removal and the rejection cases.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import hashlib
 import json
 import sys
@@ -13,6 +24,7 @@ import package_core as pkg
 REPO = Path(__file__).resolve().parents[1]
 
 
+# Write a minimal source package: one entrypoint plus a manifest whose file hash matches the payload.
 def _make_package(tmp_path, package_id="org.test.demo", command="demo", body=None):
     body = body or "print('demo package')\n"
     source = tmp_path / "source"
@@ -37,6 +49,7 @@ def _make_package(tmp_path, package_id="org.test.demo", command="demo", body=Non
     return source
 
 
+# The whole lifecycle works: verify, install, list, resolve the command to the installed file, then remove and lose both.
 def test_verify_install_resolve_and_remove(tmp_path):
     source = _make_package(tmp_path)
     root = tmp_path / "system"
@@ -54,6 +67,7 @@ def test_verify_install_resolve_and_remove(tmp_path):
     assert pkg.resolve_command("demo", str(root)) is None
 
 
+# A built archive verifies, and installing it twice replaces cleanly instead of duplicating.
 def test_build_archive_and_replace(tmp_path):
     source = _make_package(tmp_path)
     archive = tmp_path / "demo.pyspkg"
@@ -66,6 +80,7 @@ def test_build_archive_and_replace(tmp_path):
     assert pkg.get_package("org.test.demo", str(root))["version"] == "1.0.0"
 
 
+# A payload edited after the manifest was written must be refused on the hash, not installed.
 def test_hash_mismatch_is_rejected(tmp_path):
     source = _make_package(tmp_path)
     script = source / "payload" / "demo.py"
@@ -74,6 +89,7 @@ def test_hash_mismatch_is_rejected(tmp_path):
         pkg.verify_package(source)
 
 
+# A zip member escaping the extraction root is refused, since trusting it writes outside the system tree.
 def test_zip_path_traversal_is_rejected(tmp_path):
     archive = tmp_path / "bad.pyspkg"
     manifest = {
@@ -95,6 +111,7 @@ def test_zip_path_traversal_is_rejected(tmp_path):
         pkg.verify_package(archive)
 
 
+# A package may not claim a command name the shell reserves.
 def test_command_conflict_is_rejected(tmp_path):
     source = _make_package(tmp_path, command="ls")
     with pytest.raises(pkg.PackageError, match="冲突"):
@@ -102,6 +119,7 @@ def test_command_conflict_is_rejected(tmp_path):
                              reserved_commands={"ls"})
 
 
+# A user package is an external app: pkg install works under ROOT and its command runs the installed entrypoint.
 def test_pkg_is_an_external_app_and_runs_installed_entrypoint(tmp_path, monkeypatch, capsys):
     sys._launcher_detected = True
     sys.path.insert(0, str(REPO / "src"))
@@ -127,6 +145,7 @@ def test_pkg_is_an_external_app_and_runs_installed_entrypoint(tmp_path, monkeypa
     assert "你好，PySpOS！这是 PySpOS 用户包。" in capsys.readouterr().out
 
 
+# Installing without ROOT is refused and leaves no package directory behind.
 def test_pkg_install_requires_root(tmp_path, monkeypatch, capsys):
     sys._launcher_detected = True
     sys.path.insert(0, str(REPO / "src"))

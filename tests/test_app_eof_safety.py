@@ -1,10 +1,13 @@
-"""apps 的 EOF/中断安全：stdin 关闭不得导致真子进程空转吃 CPU。
-
-背景：apps 从 in-process exec 改成了 fork 出来的真子进程后，
-任何「input() 抛 EOFError → 通用 except → continue」的循环都会
-永久占用一个 CPU 核。这里用 AST 静态检查每个 app 的循环体，
-并跑真实子进程做行为验证。
-"""
+'''
+ *
+ *      test_app_eof_safety.py
+ *      Apps must handle EOF: a closed stdin may not leave a forked child spinning on a core.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import ast
 import os
@@ -22,8 +25,8 @@ FORKEXEC = REPO / "src" / "forkexec.py"
 EOLF = {"EOFError", "KeyboardInterrupt"}
 
 
+# Tell whether these except handler names really cover EOFError/KeyboardInterrupt, including via a broad clause that names them.
 def _handles_eof(handler_names, source_lines):
-    """判断 except 子句是否覆盖 EOFError/KeyboardInterrupt。"""
     for n in handler_names:
         if n in EOLF:
             return True
@@ -34,8 +37,8 @@ def _handles_eof(handler_names, source_lines):
     return False
 
 
+# Every while loop calling input() must handle EOF explicitly, or a forked child spins on a core forever.
 def test_no_app_loops_swallow_eof():
-    """任何含 input() 的 while 循环都必须显式处理 EOF。"""
     offenders = []
     for py in sorted(APPS.glob("*.py")):
         tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
@@ -65,8 +68,8 @@ def test_no_app_loops_swallow_eof():
     assert not offenders, f"以下循环未处理 EOF（会空转吃 CPU）: {offenders}"
 
 
+# Regression lock: the forkexec child entry keeps an EOFError net as the last line of defence when an app forgets one.
 def test_child_process_has_eof_safety_net():
-    """forkexec 子进程入口必须有 EOF 兜底（apps 漏写时的最后防线）。"""
     src = FORKEXEC.read_text(encoding="utf-8")
     assert "except EOFError" in src
     tree = ast.parse(src)
@@ -76,8 +79,8 @@ def test_child_process_has_eof_safety_net():
     assert found, "forkexec._child_main 缺少 EOFError 兜底"
 
 
+# Run it for real: with stdin at immediate EOF the app must exit quickly, print no EOF traceback and not repeat the prompt.
 def test_zzlsb_exits_on_eof():
-    """真实跑一次：stdin 立即 EOF 时必须快速退出，不刷屏。"""
     import subprocess
     src = (APPS / "zzlsb.py").resolve()
     p = subprocess.run([sys.executable, str(src)], input="", timeout=30,
@@ -88,13 +91,13 @@ def test_zzlsb_exits_on_eof():
     assert out.count("输入你猜的数字") <= 1, "EOF 后仍在循环刷屏"
 
 
+# The normal interactive path still ends: answering correctly prints the win message and exits 0.
 def test_zzlsb_guessed_number_terminates():
-    """正常交互路径：猜中后应退出。"""
     import re
     import subprocess
     src = (APPS / "zzlsb.py").read_text(encoding="utf-8")
     assert re.search(r"secret_number = random\.randint\(0,\s*\d+\)", src)
-    # 让答案恒为 0，且用 __exec__ 触发守卫（与 shell fork 路径一致）
+    # Pin the answer to 0 and trip the __exec__ guard, the same path the shell's fork takes
     patched = src.replace("secret_number = random.randint(0, 100)",
                           "secret_number = 0")
     patched = patched.replace('if __name__ == "__exec__":',

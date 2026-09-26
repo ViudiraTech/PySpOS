@@ -1,4 +1,14 @@
-"""SPC v2：转义/行尾注释/null/列表/Schema/工具命令；旧文件逐字兼容。"""
+'''
+ *
+ *      test_spc_v2.py
+ *      SPC v2: escapes, inline comments, nulls, lists, schema checks and the tool commands.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import contextlib
 import io
 import sys
@@ -7,12 +17,14 @@ sys.path.insert(0, "src")
 import spc
 
 
+# Backslash and quote escapes decode, then re-encode to the same value.
 def test_escapes_roundtrip():
     data = spc.loads('[s]\npath = "C:\\\\temp\\\\a\\"b\\n"\n')
     assert data["s"]["path"] == 'C:\\temp\\a"b\n'
     assert spc.loads(spc.dumps(data)) == data
 
 
+# A # outside quotes starts a comment, while a # inside a value or inside quotes is data.
 def test_inline_comments():
     text = ("[s]\n"
             "a = 1 # comment\n"
@@ -24,11 +36,13 @@ def test_inline_comments():
     assert data["s"] == {"a": 1, "b": "x#y", "c": "a#b"}
 
 
+# null, none, ~ and an empty value all mean null, while an empty string stays a string.
 def test_null_forms():
     data = spc.loads("[s]\na = null\nb = none\nc = ~\nd = \ne = \"\"\n")
     assert data["s"] == {"a": None, "b": None, "c": None, "d": None, "e": ""}
 
 
+# List literals keep element types, and a comma inside a quoted element does not split.
 def test_lists():
     data = spc.loads('[s]\nnums = [1, 2, 3]\nmix = [1, "a, b", true, null]\n')
     assert data["s"]["nums"] == [1, 2, 3]
@@ -36,28 +50,32 @@ def test_lists():
     assert spc.loads(spc.dumps(data)) == data
 
 
+# A v1 style file must parse to exactly the same data under v2.
 def test_v1_files_parse_identically():
-    # v1 风格文件在 v2 下解析结果必须一致（格式稳定承诺）
+    # A v1 style file must parse to the same data under v2; that is the format-stability promise
     text = '[boot]\nlocked = true\nrootstate = false\ncount = 42\nratio = 1.5\nname = hello\n'
     assert spc.loads(text) == {
         "default": {}, "boot": {"locked": True, "rootstate": False,
                                 "count": 42, "ratio": 1.5, "name": "hello"}}
 
 
+# A test schema exercising bool, int and str, plus a range, a default and a choice list.
 def _schema():
     return {"boot": {"locked": {"type": "bool", "required": True},
                      "retries": {"type": "int", "min": 0, "max": 5, "default": 3},
                      "mode": {"type": "str", "choices": ["a", "b"]}}}
 
 
+# Valid data yields no errors, and apply_defaults fills the missing keys without mutating the input.
 def test_schema_valid_and_defaults():
     data = {"boot": {"locked": True}}
     assert [i for i in spc.validate(data, _schema()) if i.level == "error"] == []
     filled = spc.apply_defaults(data, _schema())
     assert filled["boot"]["retries"] == 3
-    assert data["boot"].get("retries") is None  # 不修改输入
+    assert data["boot"].get("retries") is None  # the input is left untouched
 
 
+# Type and range violations come back as coded issues carrying the source line, and ensure_valid aggregates them into one error.
 def test_schema_errors_with_lineno():
     text = "[boot]\nlocked = yesplease\nretries = 99\n"
     data, meta = spc.loads(text, with_meta=True)
@@ -73,6 +91,7 @@ def test_schema_errors_with_lineno():
         assert len(e.issues) >= 2
 
 
+# A missing required key is an error, an unknown key only a warning, so old files still load.
 def test_schema_missing_required_and_unknown_warning():
     issues = spc.validate({"boot": {"mystery": 1}}, _schema())
     codes = {(i.code, i.level) for i in issues}
@@ -80,6 +99,7 @@ def test_schema_missing_required_and_unknown_warning():
     assert ("UNKNOWN_KEY", "warning") in codes
 
 
+# Run one shell command and capture what it printed.
 def _run(cmd):
     import main
     buf = io.StringIO()
@@ -88,6 +108,7 @@ def _run(cmd):
     return buf.getvalue()
 
 
+# spc_validate reports pass and coded failures, and spc_set plus spc_get roundtrip scalar and list values through a file.
 def test_shell_validate_get_set(tmp_path):
     good = tmp_path / "good.spc"
     good.write_text("[boot]\nlocked = true\nrootstate = false\n", encoding="utf-8")
@@ -108,6 +129,7 @@ def test_shell_validate_get_set(tmp_path):
     assert spc.load(str(target))["nums"]["list"] == [1, 2]
 
 
+# bootcfg.json survives json2spc and spc2json, and the checksum field is restored on the way back.
 def test_shell_migrate_roundtrip(tmp_path):
     import json
     j = tmp_path / "bootcfg.json"

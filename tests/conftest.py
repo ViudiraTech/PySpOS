@@ -1,4 +1,14 @@
-"""pytest 引导：模拟 launcher 启动标记，保证 import main 行为与真实启动一致。"""
+'''
+ *
+ *      conftest.py
+ *      pytest bootstrap: launcher startup marker and the repo paths on sys.path.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import sys
 
@@ -15,9 +25,9 @@ for p in (SRC, APPS):
 import pytest
 
 
+# Restore the working directory after each test, so a case that chdirs cannot break the ones that use absolute paths.
 @pytest.fixture(autouse=True)
 def _keep_cwd_at_repo_root():
-    """测试不应依赖 CWD：前面的用例改了目录时，后续用绝对路径的用例仍要正常。"""
     root = os.getcwd()
     yield
     try:

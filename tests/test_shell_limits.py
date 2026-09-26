@@ -1,5 +1,14 @@
-"""上一轮遗留限制项的回归：引号参数、算术、默认赋值、子 shell、fd 复制、
-流式管道、后台 builtin。"""
+'''
+ *
+ *      test_shell_limits.py
+ *      Remaining shell limitations: quoted words, arithmetic, defaults, groups, fd copying, streaming pipes.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import contextlib
 import io
 import os
@@ -19,6 +28,7 @@ IS_POSIX = os.name == "posix"
 needs_posix = pytest.mark.skipif(not IS_POSIX, reason="需要 POSIX 管道/信号")
 
 
+# Run one shell command and capture what it printed.
 def run(cmd):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -26,13 +36,15 @@ def run(cmd):
     return buf.getvalue()
 
 
+# Start each test from an empty process table and a fresh shexec state.
 def setup_function(_):
     proc.reset()
     shexec.reset_state()
 
 
-# ---------- 带空格的引号参数 ----------
+# ---------- quoted arguments containing spaces ----------
 
+# A quoted argument containing spaces must arrive as one word, through both quote styles and into a pipeline.
 def test_quoted_arg_with_spaces_survives(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "f.txt").write_text("hello world\nsecond line\n",
@@ -45,6 +57,7 @@ def test_quoted_arg_with_spaces_survives(tmp_path, monkeypatch):
     assert out.strip() == "a b"
 
 
+# grep honours -i, -c and -v, and its exit status reaches last_status so a conditional can branch on it.
 def test_grep_flags_and_status(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "f.txt").write_text("Foo\nbar\nfoo\n", encoding="utf-8")
@@ -60,8 +73,9 @@ def test_grep_flags_and_status(tmp_path, monkeypatch):
     assert shexec.last_status() == 0
 
 
-# ---------- 算术 / 默认值 ----------
+# ---------- arithmetic and defaults ----------
 
+# Arithmetic expansion respects precedence, integer division, power, modulo and shell variables, and reports division by zero instead of crashing.
 def test_arithmetic_expansion():
     assert "14" in run("echo $((2+3*4))")
     assert "3" in run("echo $((7/2))")
@@ -72,6 +86,7 @@ def test_arithmetic_expansion():
     assert "除以零" in run("echo $((1/0))")
 
 
+# Every parameter default form behaves per POSIX: unset differs from empty, and the assign and abort forms do what they say.
 def test_parameter_default_forms():
     assert "[fb]" in run("echo [${NOPE:-fb}]")
     assert "[fb]" in run("V=; echo [${V:-fb}]")
@@ -88,8 +103,9 @@ def test_parameter_default_forms():
     assert "boom" in run("echo ${NOPE:?boom}")
 
 
-# ---------- 括号分组 / fd 复制 ----------
+# ---------- parenthesised groups and fd duplication ----------
 
+# A parenthesised group works as a pipeline member and a redirect target, and a failed cd aborts the group without running the rest.
 def test_group_as_pipeline_member(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run("(echo a; echo b) | tail -1").strip() == "b"
@@ -102,6 +118,7 @@ def test_group_as_pipeline_member(tmp_path, monkeypatch):
     assert "ran" not in run("(cd /definitely-not-here && echo ran)")
 
 
+# 1>&2 and 2>&1 redirect at the fd level, and a failed command's stderr still reaches a piped filter.
 def test_fd_duplication(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out = run("echo hi 1>&2")
@@ -112,8 +129,9 @@ def test_fd_duplication(tmp_path, monkeypatch):
     assert out.strip() not in ("0", "")
 
 
-# ---------- 流式：上游不结束、下游提前收手 ----------
+# ---------- streaming: upstream never ends, downstream quits early ----------
 
+# A producer that never ends must not hang the shell when the downstream builtin exits early.
 @needs_posix
 def test_infinite_producer_into_early_exiting_builtin():
     out = run("yes | head -2")
@@ -122,6 +140,7 @@ def test_infinite_producer_into_early_exiting_builtin():
     assert out.strip() == ""
 
 
+# A zero line count must read nothing at all rather than drain to EOF.
 @needs_posix
 def test_head_zero_reads_nothing():
     out = run("yes | head -n 0")
@@ -130,6 +149,7 @@ def test_head_zero_reads_nothing():
     assert out.strip() == ""
 
 
+# A 20000-line pipe must be consumed end to end, so the reader has to drain while the writer streams.
 @needs_posix
 def test_large_output_does_not_deadlock():
     out = run("seq 1 20000 | wc -l")
@@ -138,6 +158,7 @@ def test_large_output_does_not_deadlock():
     assert out.strip() == "20000"
 
 
+# Truncating, appending and input redirection all behave as the shell's own semantics require.
 @needs_posix
 def test_redirect_file_and_input_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -151,15 +172,16 @@ def test_redirect_file_and_input_file(tmp_path, monkeypatch):
     assert (tmp_path / "empty.txt").exists()
 
 
-# ---------- 后台 ----------
+# ---------- background ----------
 
+# A backgrounded builtin must really run: wait for the content to land, not just for the file to appear.
 @needs_posix
 def test_background_builtin_runs_and_returns(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     marker = tmp_path / "bg.txt"
     run("echo done > bg.txt &")
-    # 文件在重定向 open 的瞬间就存在，内容要等后台线程真跑完才落盘，
-    # 所以等的是内容而不是存在——否则就是抢跑。
+    # The file exists the moment the redirect opens it, but the contents only land once the background thread has really run,
+    # so wait for the contents, not for the existence, or the check just wins the race.
     deadline = time.time() + 10
     text = ""
     while time.time() < deadline:
@@ -171,6 +193,7 @@ def test_background_builtin_runs_and_returns(tmp_path, monkeypatch):
     assert "done" in text
 
 
+# A backgrounded host program registers with the job table.
 @needs_posix
 def test_background_host_registers_job():
     run(f"{sys.executable} -c 'import time;time.sleep(0.2)' &")

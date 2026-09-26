@@ -1,20 +1,26 @@
-#   
-#   zzlsb.py
-#   简单的猜数字游戏（别问我为什么文件名是zzlsb）
-#
-#   2026/1/23 by GoutouStdio
-#   @ 2022~2026 GoutouStdio. Open all rights.
+'''
+ *
+ *      zzlsb.py
+ *      Number guessing game with a salt hint.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import random
 
 FOOD_OPTIONS = ['', '炸鸡', '炖肉', '胖牛', '汉堡', '飞电6Chanllger']
 
+# Play the guessing game: roll a secret number and a food, then hint
+# how much salt that food needs.
 def main():
     print("简单猜数字游戏，根据提示语找答案！\n")
     secret_number = random.randint(0, 100)
-    # 2026-09-24 修复：FOOD_OPTIONS 只有 6 项（下标 0-5），原来的
-    # randint(1, 6) 会取到下标 6 → list index out of range，
-    # 1/6 概率一开局就崩。
+    # 2026-09-24 fix: FOOD_OPTIONS holds only 6 entries (index 0-5), so the old
+    # randint(1, 6) could pick index 6 and raise list index out of range,
+    # crashing the game on the first round one time in six.
     food_index = random.randint(1, len(FOOD_OPTIONS) - 1)
     print(f"大妈妈，你要做{FOOD_OPTIONS[food_index]}的话，你大该要放{float(secret_number / food_index)}克盐。\n\n")
 
@@ -30,9 +36,9 @@ def main():
             else:
                 print("猜大了，再试试！\n")
         except EOFError:
-            # 2026-09-24 修复：stdin 关闭（EOF/Ctrl-D）时必须退出。
-            # 旧代码把它塞进通用 Exception 里，导致 apps 变成真子进程后
-            # 无限空转吃满一个 CPU 核。
+            # 2026-09-24 fix: a closed stdin (EOF/Ctrl-D) has to end the game.
+            # The old code caught it in a generic Exception, so once apps became real
+            # child processes it spun forever and burned a whole CPU core.
             print("\n输入已结束，游戏退出。\n")
             break
         except KeyboardInterrupt:

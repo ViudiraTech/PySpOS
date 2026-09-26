@@ -1,24 +1,20 @@
-#
-#   apps/api.py
-#   apps 的系统调用（syscall）接口层。
-#
-#   2026-09-24 改造：apps 现在跑在 fork 出来的真子进程里（见 forkexec.py），
-#   子进程不能直接改父进程内存（与 Linux 的进程隔离一致），因此所有“写系统
-#   状态”的操作改为走 syscall RPC：子进程 → 父进程 handler → 回传结果。
-#
-#   两种运行模式自动识别：
-#     子进程模式：检测到 PYSPOS_SYSCTL_ADDR，连父进程 Listener 发请求；
-#     同进程模式（测试/历史 open 兼容路径）：直接调用本地实现。
-#   读类操作（用户名/root/信任域状态）在子进程里也走 RPC，保证读到的是
-#   父进程权威状态，避免子进程持有一份过期副本。
-#
+'''
+ *
+ *      api.py
+ *      App-facing RPC surface used by apps/ programs.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import base64
 import os
 import sys
 from pathlib import Path
 
-# 设置路径
+# Make the parent src/ directory importable
 current_directory = Path.cwd()
 main_dir = current_directory.parent
 syscall = os.path.join(main_dir)
@@ -35,9 +31,12 @@ _REQ_LOCK = None
 
 
 # --------------------------------------------------------------------------
-# RPC 传输
+# RPC transport
 # --------------------------------------------------------------------------
 
+# Return the lazily opened connection to the parent sysctl listener.
+# None means no RPC channel: in-process mode, or a failed handshake
+# (a failure leaves the cache empty so the next call retries).
 def _get_conn():
     global _conn
     if _conn is not None:
@@ -58,12 +57,14 @@ def _get_conn():
     return _conn
 
 
+# Report whether this app runs as a real child process talking RPC.
 def is_remote() -> bool:
     return _get_conn() is not None
 
 
+# Send one syscall to the parent and return (ok, value_or_error).
+# None when there is no channel, leaving the caller to run locally.
 def _call(op, *args, **kwargs):
-    """发起 syscall。返回 (ok, value_or_error)。"""
     conn = _get_conn()
     if conn is None:
         return None
@@ -80,6 +81,8 @@ def _call(op, *args, **kwargs):
     return (True, payload.get("ret"))
 
 
+# In-process body of set_rootstate: flip the live flag and, unless the
+# boot trust domain is OEM-locked, persist it into bootcfg. Audited.
 def _local_set_rootstate_impl(state: bool) -> bool:
     import main
     import btcfg
@@ -105,6 +108,8 @@ def _local_set_rootstate_impl(state: bool) -> bool:
         return False
 
 
+# In-process body of authorize_root: confirm with the user, then arm
+# the one-shot flag that _local_set_rootstate consumes.
 def _local_authorize_root() -> bool:
     import main
     import printk
@@ -114,6 +119,8 @@ def _local_authorize_root() -> bool:
     return True
 
 
+# In-process body of set_rootstate: elevation needs a fresh user
+# confirmation and spends the one-shot authorization.
 def _local_set_rootstate(state: bool) -> bool:
     import main
     if state and not getattr(main, "_root_authorized", False):
@@ -122,11 +129,15 @@ def _local_set_rootstate(state: bool) -> bool:
     return _local_set_rootstate_impl(state)
 
 
+# In-process body of set_lockstate: always refuses, because only an
+# offline signed policy may change the bootloader lock state.
 def _local_set_lockstate(state: bool) -> bool:
     printk.error("Bootloader 状态只能由离线签发的 policy 改变，ROOT/应用无权修改")
     return False
 
 
+# Run a syscall through the parent when a channel exists, otherwise in
+# process. A configured but dead channel fails closed, never falls back.
 def _remote_or_local(op, local_impl, *args, **kwargs):
     res = _call(op, *args, **kwargs)
     if res is None:
@@ -142,10 +153,10 @@ def _remote_or_local(op, local_impl, *args, **kwargs):
 
 
 # --------------------------------------------------------------------------
-# 系统调用
+# Syscalls
 # --------------------------------------------------------------------------
 
-# API: 获取系统用户名
+# API: return the system user name
 def get_system_username():
     res = _call("get_system_username")
     if res is not None:
@@ -156,22 +167,24 @@ def get_system_username():
     return kernel.get_system_username()
 
 
-# API: 调整 rootstate 状态
+# API: change the runtime rootstate
 def set_rootstate(state: bool) -> bool:
     return _remote_or_local("set_rootstate", _local_set_rootstate, bool(state))
 
 
+# API: ask the parent to confirm ROOT for the calling app
 def authorize_root() -> bool:
     return _remote_or_local(
         "authorize_root", _local_authorize_root,
         app_id=os.environ.get("PYSPOS_APP_NAME", ""))
 
 
-# API: 设置 locked 状态
+# API: change the bootloader lock state
 def set_lockstate(state: bool) -> bool:
     return _remote_or_local("set_lockstate", _local_set_lockstate, bool(state))
 
 
+# Read one key from bootcfg, over RPC in a child and from main.bootcfg otherwise.
 def _get_cfg(key, default=None):
     res = _call("get_bootcfg")
     if res is not None:
@@ -186,7 +199,7 @@ def _get_cfg(key, default=None):
         return default
 
 
-# API：返回 ROOT 状态（bcfg中）
+# API: ROOT state as recorded in bootcfg
 def get_rootstate_bcfg() -> bool:
     try:
         import main
@@ -197,7 +210,7 @@ def get_rootstate_bcfg() -> bool:
     return bool(_get_cfg("rootstate", False))
 
 
-# API：返回临时 ROOT 状态
+# API: temporary runtime ROOT state
 def get_rootstate() -> bool:
     res = _call("get_rootstate")
     if res is not None:
@@ -211,6 +224,7 @@ def get_rootstate() -> bool:
         return False
 
 
+# Report the bootloader lock state, failing closed to locked on error.
 def get_lockstate() -> bool:
     try:
         import main
@@ -220,11 +234,14 @@ def get_lockstate() -> bool:
         return True
 
 
+# Import package_core lazily so apps without packaging still start.
 def _load_package_core():
     import package_core
     return package_core
 
 
+# Send a package syscall over RPC and return (handled, value);
+# handled=False means the caller must run the local implementation.
 def _package_call(op, *args):
     result = _call(op, *args)
     if result is None:
@@ -237,6 +254,8 @@ def _package_call(op, *args):
     return True, value
 
 
+# In-process body of the package syscalls. Install and remove also
+# demand ROOT and are refused while the bootloader is locked.
 def _local_package_call(op, *args):
     import main
     core = _load_package_core()
@@ -261,43 +280,49 @@ def _local_package_call(op, *args):
     raise ValueError(f"未知包管理操作: {op}")
 
 
+# List the installed user packages.
 def package_list():
     handled, value = _package_call("pkg_list")
     return value if handled else _local_package_call("pkg_list")
 
 
+# Return the manifest of an installed package, or None.
 def package_info(package_id):
     handled, value = _package_call("pkg_info", package_id)
     return value if handled else _local_package_call("pkg_info", package_id)
 
 
+# Check a package directory or archive and return its manifest.
 def package_verify(source):
     handled, value = _package_call("pkg_verify", source)
     return value if handled else _local_package_call("pkg_verify", source)
 
 
+# Pack a package directory into an archive and return its path.
 def package_build(source, output):
     handled, value = _package_call("pkg_build", source, output)
     return value if handled else _local_package_call("pkg_build", source, output)
 
 
+# Install a package directory or archive (ROOT, unlocked device).
 def package_install(source):
     handled, value = _package_call("pkg_install", source)
     return value if handled else _local_package_call("pkg_install", source)
 
 
+# Uninstall a package by id (ROOT, unlocked device).
 def package_remove(package_id):
     handled, value = _package_call("pkg_remove", package_id)
     return value if handled else _local_package_call("pkg_remove", package_id)
 
 
-# API: 进入内核主循环（子进程中不允许）
+# API: enter the kernel main loop (not allowed in a child process)
 def enter_kernel_loop():
     import kernel
     kernel.loop()
 
 
-# API: 退出系统（RPC 转发给父进程执行）
+# API: exit the system (forwarded to the parent over RPC)
 def exit_system():
     res = _call("exit_system")
     if res is None:
@@ -306,58 +331,67 @@ def exit_system():
     return True
 
 
+# Ask the user a yes/no question on the console.
 def api_confirm(prompt: str) -> bool:
-    # NOTE: kernel 模块从未提供 confirm，统一走 printk.confirm（历史 bug 修复）。
+    # NOTE: the kernel module never provided a confirm function, so every
+    # confirmation goes through printk.confirm (historical bug fix).
     return printk.confirm(prompt)
 
 
-# API: 打印信息
+# API: print a message
 def api_info(message: str) -> None:
     printk.info(message)
 
 
+# Print a success message through printk.
 def api_ok(message: str) -> None:
     printk.ok(message)
 
 
+# Print an error message through printk.
 def api_error(message: str) -> None:
     printk.error(message)
 
 
+# Print a warning message through printk.
 def api_warn(message: str) -> None:
     printk.warn(message)
 
 
+# Print a plain line to stdout.
 def api_print(message: str) -> None:
     print(message)
 
 
-# API: 执行系统命令
+# API: run a system command
 def api_system(command: str) -> int:
     return os.system(command)
 
 
-# API: 基本数学运算
+# API: basic arithmetic
 def add(a, b):
     return a + b
 
 
+# Subtract two numbers.
 def subtract(a, b):
     return a - b
 
 
+# Multiply two numbers.
 def multiply(a, b):
     return a * b
 
 
+# Divide two numbers, raising ValueError on a zero divisor.
 def divide(a, b):
     if b == 0:
         raise ValueError("Cannot divide by zero.")
     return a / b
 
 
+# Snapshot the simulated process table; usable from a child process.
 def get_pids() -> dict:
-    """返回当前模拟进程表快照（子进程可用）。"""
     import process
     return {p.pid: {"comm": p.comm, "state": p.state, "ppid": p.ppid}
             for p in process.list_procs(include_done=True)}

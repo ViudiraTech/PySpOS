@@ -1,4 +1,14 @@
-"""真子进程 fork：隔离、并发、后台作业、syscall RPC。"""
+'''
+ *
+ *      test_fork_exec.py
+ *      Real forked children: isolation, concurrency, background jobs and the syscall RPC.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import os
 import sys
 import time
@@ -21,6 +31,7 @@ print("child root after:", api.get_rootstate(), flush=True)
 '''
 
 
+# Boot the process table and start one real forked child for the payload.
 def _spawn(payload, background=False):
     import forkexec
     proc.boot_system()
@@ -29,12 +40,14 @@ def _spawn(payload, background=False):
                                apps_dir=os.path.join(SRC, "apps"))
 
 
+# Wait for the child to finish and return its final PCB, or None once reaped.
 def _drain(pcb, timeout=20):
     import forkexec
     forkexec.wait(pcb.pid, timeout=timeout)
     return proc.get(pcb.pid)
 
 
+# A forked app is a remote (real) child of the shell pid and reaches a terminal state.
 def test_fork_runs_app_as_real_child():
     pcb = _spawn("app:hello.py")
     assert pcb.remote is True
@@ -43,8 +56,9 @@ def test_fork_runs_app_as_real_child():
     assert p is None or p.state in proc.TERMINAL_STATES
 
 
+# A child dying must leave the parent's own process table usable.
 def test_fork_is_isolated_from_shell():
-    # 子进程崩溃不影响父 shell 本身
+    # A child crashing must not disturb the parent shell itself
     pcb = _spawn("app:hello.py")
     _drain(pcb)
     assert os.getpid() > 0
@@ -52,6 +66,7 @@ def test_fork_is_isolated_from_shell():
     assert proc.get(t.pid) is not None
 
 
+# Three background children get distinct pids, all reach a terminal state, and the shell reaps every one.
 def test_concurrent_background_children():
     pids = [_spawn("app:hello.py", background=True).pid for _ in range(3)]
     assert len(set(pids)) == 3
@@ -62,8 +77,8 @@ def test_concurrent_background_children():
     assert all(proc.get(p) is None for p in pids)
 
 
+# An ordinary child must not be able to flip the parent's ROOT state through the syscall RPC.
 def test_syscall_rpc_rejects_unauthorized_root(tmp_path):
-    """普通子进程不能直接改父进程 ROOT 状态。"""
     import main
     app = tmp_path / "rpcprobe.py"
     app.write_text(RPC_APP, encoding="utf-8")
@@ -80,6 +95,7 @@ def test_syscall_rpc_rejects_unauthorized_root(tmp_path):
         main._root_authorized = was_authorized
 
 
+# A child reads lock state and username through the parent, so its view of the system is authoritative.
 def test_child_reads_parent_authoritative_state(tmp_path):
     app = tmp_path / "reader.py"
     app.write_text(

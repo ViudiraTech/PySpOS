@@ -1,4 +1,14 @@
-"""SPF 2.0：向后兼容 putchar/exit + var/add/print 扩展。"""
+'''
+ *
+ *      test_spf.py
+ *      SPF 2.0: putchar/exit stay compatible and the var/add/print extensions work.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
+
 import contextlib
 import io
 import sys
@@ -6,8 +16,9 @@ import sys
 sys.path.insert(0, "src")
 
 
+# SPF 2.0 keeps the v1 putchar and exit calls working while the var/add/print extensions resolve to the right values.
 def test_spf_v2(tmp_path):
-    import main  # noqa: F401 （parse_spf 依赖 main.boot_time，先导入初始化）
+    import main  # noqa: F401 (parse_spf needs main.boot_time, so import it first to initialise)
     import parse_spf
     spf = tmp_path / "demo.spf"
     spf.write_text(
@@ -28,6 +39,7 @@ def test_spf_v2(tmp_path):
     assert "answer=42" in out
 
 
+# The bundled hello.spf still runs under the v2 interpreter.
 def test_spf_hello_still_runs():
     import os
     import main  # noqa: F401

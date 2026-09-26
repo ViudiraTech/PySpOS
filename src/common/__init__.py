@@ -1,1 +1,10 @@
-"""PySpOS 公共包：路径、审计等横切关注点。"""
+'''
+ *
+ *      __init__.py
+ *      Cross cutting helpers: paths, audit, factory reset.
+ *
+ *      2026/9/25 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
