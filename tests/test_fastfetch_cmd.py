@@ -71,16 +71,20 @@ def test_config_cache_content(tmp_path, monkeypatch):
     monkeypatch.setenv("TMPDIR", str(tmp_path))
     import tempfile
     tempfile.tempdir = None
-    path = fastfetch_cmd.config_path("9.9", "x86_64")
+    import subprocess
+    monkeypatch.setattr(
+        subprocess, "run",
+        lambda *a, **k: type("P", (), {"stdout": "Title:OS:Shell:Memory"})())
+    path = fastfetch_cmd.config_path("9.9", "x86_64", "/usr/bin/fastfetch")
     assert path is not None
     with open(path, encoding="utf-8") as handle:
         config = json.load(handle)
-    formats = {m["type"]: m["format"] for m in config["modules"]}
+    assert config["modules"][0] == "Title"
+    formats = {m["type"]: m["format"] for m in config["modules"]
+               if isinstance(m, dict)}
     assert formats["shell"] == "PySpOS shell 9.9"
     assert formats["os"] == "PySpOS 9.9 x86_64"
-    assert formats["kernel"] == "PySpKernel 9.9"
-    assert formats["host"] == "PySpOS Virtual Machine"
-    assert formats["terminal"] == "PySpOS terminal"
+    assert "Memory" in config["modules"]
     tempfile.tempdir = None
 
 

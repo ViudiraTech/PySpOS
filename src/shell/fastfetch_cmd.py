@@ -32,17 +32,48 @@ def real_binary():
     return shutil.which("fastfetch")
 
 
+# Our identity overrides, spliced into the default structure at runtime.
+# Everything else keeps fastfetch's own detection, so a fastfetch upgrade
+# can add modules without us having to track its module list.
+def brand_modules(version, arch):
+    return {
+        "os": {"type": "os", "format": f"PySpOS {version} {arch}"},
+        "host": {"type": "host", "format": "PySpOS Virtual Machine"},
+        "kernel": {"type": "kernel", "format": f"PySpKernel {version}"},
+        "shell": {"type": "shell", "format": f"PySpOS shell {version}"},
+        "terminal": {"type": "terminal", "format": "PySpOS terminal"},
+    }
+
+
+# Ask the real binary for its default structure, then splice our branded
+# modules in place. Falls back to branding only when that fails.
+def default_structure(binary):
+    import subprocess
+    try:
+        proc = subprocess.run(
+            [binary, "--print-structure"], capture_output=True, text=True,
+            timeout=10)
+        names = proc.stdout.strip().split(":")
+        return [name for name in names if name]
+    except Exception:
+        return []
+
+
 # Write the branding config idempotently and return its path.
 # A stable cache file instead of --config - so piped stdin is never stolen.
-def config_path(version, arch):
+def config_path(version, arch, binary):
     path = os.path.join(tempfile.gettempdir(), CONFIG_NAME)
-    config = {"modules": [
-        {"type": "os", "format": f"PySpOS {version} {arch}"},
-        {"type": "host", "format": "PySpOS Virtual Machine"},
-        {"type": "kernel", "format": f"PySpKernel {version}"},
-        {"type": "shell", "format": f"PySpOS shell {version}"},
-        {"type": "terminal", "format": "PySpOS terminal"},
-    ]}
+    branded = brand_modules(version, arch)
+    modules = []
+    for name in default_structure(binary):
+        key = name.lower()
+        if key in branded:
+            modules.append(branded[key])
+        else:
+            modules.append(name)
+    if not modules:
+        modules = list(branded.values())
+    config = {"modules": modules}
     try:
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(config, handle)
@@ -105,7 +136,7 @@ def cmd_fastfetch(args=""):
     has_logo, has_config, has_structure = scan_args(tokens)
     final = [binary]
     if not has_config and not has_structure:
-        path = config_path(version, arch)
+        path = config_path(version, arch, binary)
         if path is not None:
             final += ["--config", path]
     if not has_logo:
