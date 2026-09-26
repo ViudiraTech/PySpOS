@@ -108,6 +108,13 @@ def set_pending_boot(partition: str) -> None:
         _pending_boot = partition
 
 
+# Read the pending boot request without clearing it, so the connection loop
+# can stop on it while the server loop still gets to act on it.
+def peek_pending_boot():
+    with _state_lock:
+        return _pending_boot
+
+
 # Read and clear the pending boot request, reporting the partition name.
 def take_pending_boot():
     global _pending_boot
@@ -574,7 +581,10 @@ def serve_client(conn: socket.socket, address) -> None:
                     conn.sendall(b"OKAY\n")
                 except OSError:
                     return
-            if take_pending_boot() is not None:
+            # Peek, never consume: fastboot_main owns the single consumption.
+            # Consuming it here left the server loop seeing None, so it went
+            # back to accept() and the device never actually rebooted.
+            if peek_pending_boot() is not None:
                 return
     finally:
         try:

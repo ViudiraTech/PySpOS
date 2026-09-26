@@ -469,3 +469,40 @@ def test_cmd_fastboot_rejects_a_bad_port(monkeypatch, capsys):
                         lambda *_a, **_k: pytest.fail("must not serve"))
     sys_cmds.cmd_fastboot("--port not-a-number")
     assert "用法：fastboot" in capsys.readouterr().out
+
+
+def test_server_stops_listening_after_reboot(monkeypatch, tmp_path):
+    # The device has to actually leave fastboot when the client reboots it.
+    # This regressed once because the pending flag was consumed twice: the
+    # connection loop took it, the server loop then saw None and went back to
+    # accept(), so the device kept serving and never restarted.
+    import time
+    monkeypatch.setattr(fastboot.main, "root_dir", str(tmp_path))
+    monkeypatch.setattr(fastboot, "is_locked", lambda: False)
+    monkeypatch.setattr(fastboot.kernel, "screen_clear", lambda: None)
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    thread = threading.Thread(target=fastboot.fastboot_main, args=("t", port),
+                              daemon=True)
+    thread.start()
+    assert wait_for(port)
+    client = WireClient(port)
+    try:
+        assert client.send("reboot") == "OKAY"
+    finally:
+        client.close()
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        try:
+            probe = socket.create_connection(("127.0.0.1", port), 0.2)
+            probe.close()
+        except OSError:
+            break
+        time.sleep(0.1)
+    else:
+        pytest.fail("server still accepts connections after reboot")
+    thread.join(timeout=5.0)
+    assert not thread.is_alive()
+    fastboot.reset_state()
