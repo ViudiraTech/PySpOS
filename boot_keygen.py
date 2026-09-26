@@ -37,8 +37,11 @@ def main(argv=None):
         os.fsync(stream.fileno())
     try:
         os.chmod(path, 0o600)
-    except OSError:
-        pass
+    except OSError as e:
+        # A private key left group or world readable is worse than no key at all,
+        # so the failure is fatal rather than a shrug: the key never goes on to be
+        # printed and used while it is exposed.
+        raise SystemExit(f"无法将私钥权限收紧为 0600: {e}")
     public = key.public_key().public_bytes(serialization.Encoding.Raw,
                                              serialization.PublicFormat.Raw)
     encoded = base64.b64encode(public).decode("ascii")
