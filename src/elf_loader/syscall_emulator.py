@@ -1393,9 +1393,9 @@ class SyscallEmulator:
             return -errno.EBADF
         
         try:
-            with open(fd_obj.path, 'rb') as f:
-                f.seek(offset)
-                data = f.read(length)
+            handle = self._handles.acquire(fd, fd_obj.path, fd_obj.flags)
+            handle.seek(offset)
+            data = handle.read(length)
             
             from .elf_loader import MemoryRegion
             region_data = bytearray(length_aligned)
@@ -1771,11 +1771,11 @@ class SyscallEmulator:
             return -errno.EBADF
         
         try:
-            with open(fd_obj.path, 'rb') as f:
-                f.seek(offset)
-                data = f.read(count)
-                self._write_buffer(buf, data)
-                return len(data)
+            handle = self._handles.acquire(fd, fd_obj.path, fd_obj.flags)
+            handle.seek(offset)
+            data = handle.read(count)
+            self._write_buffer(buf, data)
+            return len(data)
         except OSError as e:
             return -e.errno
     
@@ -1788,9 +1788,10 @@ class SyscallEmulator:
             return -errno.EBADF
         
         try:
-            with open(fd_obj.path, 'r+b') as f:
-                f.seek(offset)
-                f.write(data)
+            handle = self._handles.acquire(fd, fd_obj.path, fd_obj.flags)
+            handle.seek(offset)
+            handle.write(data)
+            handle.flush()
             return count
         except OSError as e:
             return -e.errno
