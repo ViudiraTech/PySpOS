@@ -83,6 +83,9 @@ class ELFRunner:
         self.custom_syscall_handlers: Dict[int, Callable] = {}
         self.symbol_hooks: Dict[str, Callable] = {}
         
+# input handed to the guest by set_stdin(), kept until load() builds the emulator
+        self._stdin_data: Optional[str] = None
+        
         self.stats = LoaderStats()
         
         self._breakpoints: set = set()
@@ -103,7 +106,8 @@ class ELFRunner:
             self.parser = ELFParser(data)
             
             if not self.parser.parse():
-                logger.error(f"Failed to parse ELF file: {self.elf_path}")
+                logger.error(f"Failed to parse ELF file: {self.elf_path}: "
+                             f"{self.parser.parse_error}")
                 return False
             
             from .elf_constants import ELFType, ELFMachine
@@ -133,6 +137,8 @@ class ELFRunner:
             self.stats.memory_regions = len(self.loader.memory)
             
             self.syscall_emulator = SyscallEmulator(self.loader)
+            if self._stdin_data is not None:
+                self.syscall_emulator.set_stdin(self._stdin_data)
             self._setup_output_capture()
             
             self.cpu = CPUEmulator(self.loader, self._handle_syscall)
@@ -211,8 +217,6 @@ class ELFRunner:
         
         self.cpu.set_argv_envp(argv, envp)
         
-        self.initialize()
-        
         self.is_running = True
         start_time = time.time()
         exit_code = 0
@@ -220,7 +224,9 @@ class ELFRunner:
         fault_addr = 0
         
         try:
-            exit_code = self.cpu.run(max_instructions)
+# a constructor may call exit, which ends the program before _start is reached
+            if self.initialize():
+                exit_code = self.cpu.run(max_instructions)
         except SystemExit as e:
             exit_code = e.code if e.code is not None else 0
         except MemoryAccessError as e:
@@ -342,10 +348,11 @@ class ELFRunner:
         if self.loader and name in self.loader.symbols:
             pass
     
-# Set the data the guest will read from stdin.
+# Set the data the guest will read from stdin; it survives a later load().
     def set_stdin(self, data: str) -> None:
+        self._stdin_data = data
         if self.syscall_emulator:
-            self.syscall_emulator.stdin = data
+            self.syscall_emulator.set_stdin(data)
     
 # Return everything the guest has written to stdout.
     def get_stdout(self) -> str:
@@ -632,7 +639,8 @@ class ELFDebugger:
         
         backtrace = []
         ip = self.runner.cpu._get_ip()
-        bp = self.runner.cpu._get_reg(5)
+# register 5 is RBP on x86_64 but EBX on i386, so ask the CPU for its own base pointer
+        bp = self.runner.cpu._get_bp()
         
         sym = self.runner.get_symbol_at(ip)
         backtrace.append((ip, sym))

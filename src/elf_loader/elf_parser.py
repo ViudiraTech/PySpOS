@@ -25,7 +25,9 @@ from .elf_constants import (
     PT_GNU_STACK, PT_GNU_RELRO, PT_GNU_PROPERTY,
     SHT_GNU_HASH, SHT_GNU_ATTRIBUTES, SHT_GNU_LIBLIST,
     SHT_CHECKSUM, SHT_GNU_VERDEF, SHT_GNU_VERNEED, SHT_GNU_VERSYM,
-    DT_GNU_HASH, DT_VERSYM, DT_VERDEF, DT_VERNEED
+    DT_GNU_HASH, DT_VERSYM, DT_VERDEF, DT_VERNEED,
+    DT_TLSDESC_PLT, DT_TLSDESC_GOT, DT_GNU_CONFLICT, DT_GNU_LIBLIST,
+    DT_CONFIG, DT_DEPAUDIT, DT_AUDIT, DT_PLTPAD, DT_MOVETAB, DT_SYMINFO
 )
 
 
@@ -275,17 +277,19 @@ class ELFDynamic:
 # Report whether d_val is an address rather than a plain number.
     @property
     def is_pointer(self) -> bool:
+# the GNU and version tags are module level constants in elf_constants, not DynamicTag members;
+# every one of them still holds an address that has to take the load bias
         pointer_tags = {
             DynamicTag.DT_PLTGOT, DynamicTag.DT_HASH, DynamicTag.DT_STRTAB,
             DynamicTag.DT_SYMTAB, DynamicTag.DT_RELA, DynamicTag.DT_INIT,
             DynamicTag.DT_FINI, DynamicTag.DT_REL, DynamicTag.DT_DEBUG,
             DynamicTag.DT_JMPREL, DynamicTag.DT_INIT_ARRAY, DynamicTag.DT_FINI_ARRAY,
-            DynamicTag.DT_PREINIT_ARRAY, DynamicTag.DT_GNU_HASH,
-            DynamicTag.DT_TLSDESC_PLT, DynamicTag.DT_TLSDESC_GOT,
-            DynamicTag.DT_GNU_CONFLICT, DynamicTag.DT_GNU_LIBLIST,
-            DynamicTag.DT_CONFIG, DynamicTag.DT_DEPAUDIT, DynamicTag.DT_AUDIT,
-            DynamicTag.DT_PLTPAD, DynamicTag.DT_MOVETAB, DynamicTag.DT_SYMINFO,
-            DynamicTag.DT_VERDEF, DynamicTag.DT_VERNEED,
+            DynamicTag.DT_PREINIT_ARRAY, DT_GNU_HASH,
+            DT_TLSDESC_PLT, DT_TLSDESC_GOT,
+            DT_GNU_CONFLICT, DT_GNU_LIBLIST,
+            DT_CONFIG, DT_DEPAUDIT, DT_AUDIT,
+            DT_PLTPAD, DT_MOVETAB, DT_SYMINFO,
+            DT_VERSYM, DT_VERDEF, DT_VERNEED,
         }
         return self.d_tag in pointer_tags
 
@@ -306,6 +310,10 @@ class ELFParser:
         self.dynamic_symbols: List[ELFSymbol] = []
         self.dynamics: List[ELFDynamic] = []
         self.relocations: List[Union[ELFRelocation, ELFRelocationA]] = []
+        
+# outcome of the last parse() call
+        self.parse_ok = False
+        self.parse_error = ""
         
 # string table
         self.shstrtab: bytes = b""
@@ -382,17 +390,28 @@ class ELFParser:
         fmt = "<q" if self._fmt_xword.startswith("<") else ">q"
         return struct.unpack(fmt, self._read(8))[0]
     
-# Parse the whole image; returns self so the calls can be chained.
-    def parse(self) -> 'ELFParser':
-        self._parse_ident()
-        self._parse_header()
-        self._parse_program_headers()
-        self._parse_section_headers()
-        self._parse_string_tables()
-        self._resolve_section_names()
-        self._parse_symbols()
-        self._parse_dynamic()
-        self._parse_relocations()
+# Parse the whole image. Returns self on success so the calls can be chained, and None
+# when the image is not a usable ELF, with the reason left in parse_error.
+    def parse(self) -> Optional['ELFParser']:
+        self.parse_ok = False
+        self.parse_error = ""
+        
+        try:
+            self._parse_ident()
+            self._parse_header()
+            self._parse_program_headers()
+            self._parse_section_headers()
+            self._parse_string_tables()
+            self._resolve_section_names()
+            self._parse_symbols()
+            self._parse_dynamic()
+            self._parse_relocations()
+        except Exception as e:
+            self.parse_error = str(e)
+            self.header = None
+            return None
+        
+        self.parse_ok = True
         return self
     
 # Parse e_ident, rejecting anything that is not ELF.

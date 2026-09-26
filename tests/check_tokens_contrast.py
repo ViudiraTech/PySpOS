@@ -26,24 +26,35 @@ def lum(rgb):
 
 
 # Return (r,g,b,a) for a #hex or an rgb()/rgba() value in comma or space syntax.
+# A value that is not a colour at all returns None, so one malformed declaration
+# is reported as unresolved instead of raising out of the whole check.
 def parse_color(val):
     val = val.strip()
     m = re.fullmatch(r'#([0-9a-fA-F]{3,8})', val)
     if m:
         h = m.group(1)
-        if len(h) == 3:
+        if len(h) in (3, 4):
             h = ''.join(c * 2 for c in h)
         if len(h) == 6:
             return tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) + (1.0,)
-        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4, 6)) + (1.0,)
+        if len(h) == 8:
+            return tuple(int(h[i:i+2], 16) for i in (0, 2, 4, 6)) + (1.0,)
+        # 5 and 7 digits are not a colour: reject them like any other bad value
+        return None
     m = re.fullmatch(r'rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)'
                       r'(?:[,/\s]+([\d.%]+))?\s*\)', val)
     if m:
-        r, g, b = (float(m.group(i)) for i in (1, 2, 3))
+        try:
+            r, g, b = (float(m.group(i)) for i in (1, 2, 3))
+        except ValueError:
+            return None
         a = m.group(4)
         alpha = 1.0
         if a:
-            alpha = float(a[:-1]) / 100 if a.endswith('%') else float(a)
+            try:
+                alpha = float(a[:-1]) / 100 if a.endswith('%') else float(a)
+            except ValueError:
+                return None
         return (r, g, b, alpha)
     return None
 
@@ -122,7 +133,8 @@ def make_resolver(prim, dark, light, theme):
 
 # Measure every token pair that has a contrast floor and return 1 if any falls short.
 def main():
-    css = open('docs/css/tokens.css', encoding='utf-8').read()
+    with open('docs/css/tokens.css', encoding='utf-8') as stream:
+        css = stream.read()
     prim, dark, light = split_blocks(css)
     rd, td = make_resolver(prim, dark, light, 'dark')
     rl, tl = make_resolver(prim, dark, light, 'light')

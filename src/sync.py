@@ -9,6 +9,7 @@
  */
 '''
 
+import filecmp
 import os
 import shutil
 import printk
@@ -34,6 +35,18 @@ def get_file_size(path: str) -> int:
             return -1
     return 0
 
+# Report whether two files hold the same bytes. Size alone is not content: a
+# patched file of the same length has to be copied, or the destination keeps
+# running the old bytes and the caller believes the sync happened.
+def same_content(src_path: str, dest_path: str) -> bool:
+    try:
+        if os.path.getsize(src_path) != os.path.getsize(dest_path):
+            return False
+        return filecmp.cmp(src_path, dest_path, shallow=False)
+    except OSError as e:
+        printk.warn(f"比较文件内容失败: {str(e)}")
+        return False
+
 # Copy one file out of the fix directory
 def sync_file_from_fix(src_path: str, dest_path: str) -> bool:
     if not os.path.exists(src_path):
@@ -41,14 +54,13 @@ def sync_file_from_fix(src_path: str, dest_path: str) -> bool:
         return False
     
     dest_dir = os.path.dirname(dest_path)
-    os.makedirs(dest_dir, exist_ok=True)
+    # A bare file name has no directory part, and makedirs("") is an error
+    if dest_dir:
+        os.makedirs(dest_dir, exist_ok=True)
     
-    src_size = get_file_size(src_path)
-    dest_size = get_file_size(dest_path)
-    
-    # compare the file sizes
-    if src_size == dest_size and src_size != -1:
-        printk.info(f"文件大小一致，无需同步: {os.path.basename(dest_path)}")
+    # compare the file contents, not just the sizes
+    if os.path.isfile(dest_path) and same_content(src_path, dest_path):
+        printk.info(f"内容一致，无需同步: {os.path.basename(dest_path)}")
         return True
     
     try:

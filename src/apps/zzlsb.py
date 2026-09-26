@@ -22,7 +22,7 @@ def main():
     # randint(1, 6) could pick index 6 and raise list index out of range,
     # crashing the game on the first round one time in six.
     food_index = random.randint(1, len(FOOD_OPTIONS) - 1)
-    print(f"大妈妈，你要做{FOOD_OPTIONS[food_index]}的话，你大该要放{float(secret_number / food_index)}克盐。\n\n")
+    print(f"大妈妈，你要做{FOOD_OPTIONS[food_index]}的话，你大概该放{float(secret_number / food_index)}克盐。\n\n")
 
     while True:
         try:

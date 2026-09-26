@@ -172,21 +172,24 @@ def exit():
     if os.path.isdir("__pycache__"):
         try:
             shutil.rmtree("__pycache__")
-            shutil.rmtree("apps/__pycache__")
             printk.ok("已删除缓存目录 __pycache__")
         except Exception as e:
             printk.error(f"无法删除缓存目录: {e}")
     else:
         printk.warn("未找到缓存目录 __pycache__，无需删除")
-    
-    if os.path.isdir("%s/apps/__pycache__" % current_dir):
+
+    # current_dir is the function from fs, so it has to be called: formatting
+    # it directly produced a path starting with "<function ...>" and this
+    # branch could never match.
+    apps_cache = os.path.join(current_dir(), "apps", "__pycache__")
+    if os.path.isdir(apps_cache):
         try:
-            shutil.rmtree("%s/apps/__pycache__" % current_dir)
+            shutil.rmtree(apps_cache)
             printk.ok("已删除软件缓存目录 apps/__pycache__")
         except Exception as e:
             printk.error(f"无法删除缓存目录: {e}")
     else:
-        printk.warn("pass...")
+        printk.warn("未找到缓存目录 apps/__pycache__，无需删除")
     printk.info("正在关闭 PySpOS 操作系统...")
     time.sleep(1)
     sys.exit(0)

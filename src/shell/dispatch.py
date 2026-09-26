@@ -162,7 +162,7 @@ _REG = [
     ("open", sys_cmds.cmd_open, "以 fork 子进程运行 app", "open <app名>", "run", [], True),
     ("openspf", sys_cmds.cmd_openspf, "运行 SPF 脚本", "openspf <脚本名>", "run", [], True),
     ("run", elf_cmd.cmd_run, "运行 ELF（unicorn/native）",
-     "run [--stats] [--map] [--strace] <elf>", "run", [], True),
+     "run [--stats] [--map] [--strace] [--disasm [N]] [--engine auto|unicorn|native] <elf>", "run", [], True),
     ("hotreset", sys_cmds.cmd_hotreset, "热重启系统", "hotreset", "run", [], False),
     ("recovery", sys_cmds.cmd_recovery, "进入恢复模式", "recovery", "ota", [], False),
     # config
@@ -268,7 +268,8 @@ def _invoke_builtin(meta, args: str):
 
 
 # Record the line in the history and run it; an empty line is ignored.
-def handle_command(prompt) -> str:
+# It is called for what it does, not for a result: every path returns None.
+def handle_command(prompt) -> None:
     prompt = (prompt or "").strip()
     if not prompt:
         return

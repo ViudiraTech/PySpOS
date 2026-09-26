@@ -9,9 +9,6 @@
  */
 '''
 
-import api
-
-
 # Report that locking needs the external signed policy tool; prints only.
 def main():
     print("Bootloader 锁定不能由应用或 ROOT 直接修改。")

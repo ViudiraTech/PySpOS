@@ -58,13 +58,19 @@ def test_unicorn_splibc():
 def test_native_fallback_simple():
     _need_elfs()
     import logging
+    # logging.disable is global state: leaving it on would mute every later test
+    # that expects log output, so the previous level is restored afterwards.
+    previous = logging.root.manager.disable
     logging.disable(logging.CRITICAL)
-    from elf_loader import ELFRunner
-    r = ELFRunner(ELF_SIMPLE)
-    assert r.load()
-    res = r.run(max_instructions=2000000)
-    assert res.exit_code == 0
-    assert "Hello from SpLibC" in res.stdout
+    try:
+        from elf_loader import ELFRunner
+        r = ELFRunner(ELF_SIMPLE)
+        assert r.load()
+        res = r.run(max_instructions=2000000)
+        assert res.exit_code == 0
+        assert "Hello from SpLibC" in res.stdout
+    finally:
+        logging.disable(previous)
 
 
 # run must pick unicorn by default and name the engine it used in its output.

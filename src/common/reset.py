@@ -20,18 +20,27 @@ DEFAULT_SLOT = "slot_a"
 
 
 # Remove a tree, but only for a real directory, never a symlink.
+# False means either there was nothing to remove or the removal failed; the caller
+# has to tell those apart, so nothing is raised out of a factory reset.
 def _rmtree(path):
     if os.path.isdir(path) and not os.path.islink(path):
-        shutil.rmtree(path, ignore_errors=False)
-        return True
+        try:
+            shutil.rmtree(path, ignore_errors=False)
+            return True
+        except OSError:
+            return False
     return False
 
 
-# Remove a file or symlink, reporting whether anything went away.
+# Remove a file or symlink, reporting whether anything went away. A failure is
+# reported as False rather than raised, so a reset never aborts halfway.
 def _remove(path):
     if os.path.isfile(path) or os.path.islink(path):
-        os.remove(path)
-        return True
+        try:
+            os.remove(path)
+            return True
+        except OSError:
+            return False
     return False
 
 
@@ -51,6 +60,10 @@ def factory_reset(root_dir, include_host_history=True):
     etc_path = os.path.join(root_dir, "etc")
     if _rmtree(etc_path):
         report["etc"] = (True, f"已删除 {etc_path}（bootcfg/audit/OOBE标记）")
+    elif os.path.isdir(etc_path):
+        # still there, so the removal failed: reporting success here would claim a
+        # wiped boot config that is really still on disk
+        report["etc"] = (False, f"删除 {etc_path} 失败，目录仍在")
     else:
         report["etc"] = (True, "etc 不存在，无需清理")
 
@@ -80,6 +93,8 @@ def factory_reset(root_dir, include_host_history=True):
             report[f"slot_{slot}"] = (True, f"锁定模式保留已验证槽位 {slot}")
         elif _rmtree(slot_path):
             report[f"slot_{slot}"] = (True, f"已删除槽位 {slot}")
+        elif os.path.isdir(slot_path):
+            report[f"slot_{slot}"] = (False, f"删除槽位 {slot} 失败，目录仍在")
         else:
             report[f"slot_{slot}"] = (True, f"槽位 {slot} 不存在")
 
@@ -129,6 +144,8 @@ def factory_reset(root_dir, include_host_history=True):
     if include_host_history:
         if _remove(READLINE_HISTORY):
             report["readline_history"] = (True, f"已删除 {READLINE_HISTORY}")
+        elif os.path.exists(READLINE_HISTORY):
+            report["readline_history"] = (False, f"删除 {READLINE_HISTORY} 失败")
         else:
             report["readline_history"] = (True, "家目录无命令历史残留")
 

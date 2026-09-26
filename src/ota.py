@@ -183,7 +183,10 @@ def fetch_remote_version() -> dict:
                     break
     
     logk.printl("ota", "网络失败，使用本地版本", boot_time)
-    local_version_file = os.path.join("docs", "ota", "version.json")
+    # The local fallback belongs to this installation, so it is looked up under
+    # root_dir: a relative path resolved against the current working directory,
+    # which the shell may have moved anywhere, and then found nothing.
+    local_version_file = os.path.join(root_dir, "docs", "ota", "version.json")
     if os.path.exists(local_version_file):
         try:
             with open(local_version_file, 'r', encoding='utf-8') as f:
@@ -269,9 +272,33 @@ def _fetch_with_curl(url: str) -> dict:
     else:
         raise Exception(f"curl命令失败: {result.stderr.decode('utf-8', errors='ignore')}")
 
+# SHA-256 of a file, read in blocks so a large package does not have to fit in memory.
+def _file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 16), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+# Reduce a remote URL to a local file name inside the package directory: a bare
+# basename, with both separators and any parent reference stripped, so a crafted
+# URL can never place the download outside OTA_PACKAGE_DIR.
+def _package_name_from_url(url: str) -> str:
+    name = (url or '').split('?')[0].split('#')[0].rstrip('/')
+    name = name.split('/')[-1].split('\\')[-1].strip()
+    if not name or name in ('.', '..') or set(name) <= {'.'}:
+        return OTA_PACKAGE_NAME
+    return name
+
+
 # Stream an update package to local_path, skipping the download when a
 # same-sized file is already there.
-def download_update_package(remote_url: str, local_path: str, expected_size: int = 0) -> bool:
+# expected_hash, when given, has to match that file before the download may be
+# skipped: an equal size is not evidence of an equal package, and a truncated or
+# substituted file of the right length must never be accepted.
+def download_update_package(remote_url: str, local_path: str, expected_size: int = 0,
+                            expected_hash: str = None) -> bool:
     if not _ota_enabled():
         logk.printl("ota", f"云端更新已禁用: {_ota_disable_reason()}（跳过下载 {remote_url}）", boot_time)
         return False
@@ -279,8 +306,10 @@ def download_update_package(remote_url: str, local_path: str, expected_size: int
         if os.path.exists(local_path):
             local_size = os.path.getsize(local_path)
             if expected_size > 0 and local_size == expected_size:
-                logk.printl("ota", f"本地已存在相同大小的更新包，跳过下载", boot_time)
-                return True
+                if not expected_hash or _file_sha256(local_path) == str(expected_hash).lower():
+                    logk.printl("ota", f"本地已存在相同大小的更新包，跳过下载", boot_time)
+                    return True
+                logk.printl("ota", "本地已有同名包但 sha256 不符，重新下载", boot_time)
             elif local_size > 0:
                 logk.printl("ota", f"本地已存在更新包 ({local_size} bytes)", boot_time)
         
@@ -364,11 +393,7 @@ def verify_update_package(package_path: str, expected_hash: str = None) -> bool:
     try:
         if expected_hash:
             logk.printl("ota", "验证更新包 SHA-256", boot_time)
-            sha256_hash = hashlib.sha256()
-            with open(package_path, 'rb') as f:
-                for chunk in iter(lambda: f.read(8192), b''):
-                    sha256_hash.update(chunk)
-            calculated_hash = sha256_hash.hexdigest()
+            calculated_hash = _file_sha256(package_path)
             if calculated_hash.lower() != str(expected_hash).lower():
                 logk.printl("ota", "校验和不匹配", boot_time)
                 return False
@@ -528,8 +553,11 @@ def check_cloud_update() -> dict:
         logk.printl("ota", f"发现新版本: {remote_ver}", boot_time)
         raw_url = remote_info.get('download_url', '')
 
-        # Rebuild builds are named PySpOS-<version>-<date>.zip.
-        is_rebuild = raw_url and re.match(r'PySpOS-[\d.]+-[\d]+\.zip', raw_url)
+        # Rebuild builds are named PySpOS-<version>-<date>.zip. The pattern is
+        # matched against the file name, not the whole URL, or an absolute CDN
+        # link never matched and the download was named update.zip instead.
+        file_name = _package_name_from_url(raw_url)
+        is_rebuild = bool(re.fullmatch(r'PySpOS-[\d.]+-[\d]+\.zip', file_name))
 
         download_url = resolve_download_url(raw_url)
         
@@ -570,20 +598,24 @@ def download_and_install_update() -> bool:
     
     is_rebuild = update_info.get('is_rebuild', False)
     if is_rebuild:
-        package_name = update_info['download_url'].split('/')[-1]
+        package_name = _package_name_from_url(update_info['download_url'])
         logk.printl("ota", f"检测到重构版/新版格式，使用文件名: {package_name}", boot_time)
     else:
         package_name = OTA_PACKAGE_NAME
     
     package_path = os.path.join(OTA_PACKAGE_DIR, package_name)
     
-    if not download_update_package(update_info['download_url'], package_path, update_info.get('file_size', 0)):
+    if not download_update_package(update_info['download_url'], package_path,
+                                   update_info.get('file_size', 0),
+                                   update_info.get('sha256')):
         return False
     
     if not verify_update_package(package_path, update_info.get('sha256')):
         return False
     
-    if not install_update():
+    # Install the file just downloaded, not whatever the directory scan finds:
+    # a stale archive left there could otherwise be installed instead.
+    if not install_update(package_path):
         return False
     
     if not switch_slot():
@@ -597,12 +629,18 @@ def download_and_install_update() -> bool:
     
     logk.printl("ota", "更新已安装，正在重启系统...", boot_time)
     
-    restart_system()
+    # A restart that could not be started is a failure, not a success: the caller
+    # must be able to tell that the new slot is installed but the machine is still
+    # running the old one.
+    if not restart_system():
+        logk.printl("ota", "更新已安装，但重启失败，请手动重启", boot_time)
+        return False
     return True
 
 # Start launcher.py, or the active slot's main.py when there is no launcher,
-# then exit.
-def restart_system() -> None:
+# then exit. False means the restart could not be started at all, so the caller
+# must not report success.
+def restart_system() -> bool:
     import subprocess
     import sys
     
@@ -625,6 +663,7 @@ def restart_system() -> None:
     except Exception as e:
         logk.printl("ota", f"重启失败: {str(e)}", boot_time)
         printk.error("重启失败，请手动重新启动系统\n")
+        return False
 
 # Empty a slot directory.
 # Windows moves it aside and deletes it from a background thread, because files
@@ -734,7 +773,9 @@ def rollback_update() -> bool:
 # Print the update log of each slot, as written by install and rollback.
 def view_update_history() -> None:
     for slot in [SLOT_A, SLOT_B]:
-        log_path = os.path.join(slot, UPDATE_LOG)
+        # under root_dir, not under the current working directory: the log is part
+        # of the installed slot, wherever the shell happens to be
+        log_path = os.path.join(root_dir, slot, UPDATE_LOG)
         if os.path.exists(log_path):
             try:
                 with open(log_path, 'r') as f:
@@ -991,8 +1032,10 @@ def install_package_to_slot(package_path: str, slot: str,
 
 # Local install or plain upgrade: install the staged
 # package into the other slot, then switch to it.
-def install_update() -> bool:
-    package_path = _find_update_package()
+# A package_path the caller just downloaded wins over rediscovering one, so a
+# stale archive sitting in ota/ is never installed by accident.
+def install_update(package_path: str = None) -> bool:
+    package_path = package_path or _find_update_package()
     if package_path is None:
         logk.printl("ota", "未找到更新包", boot_time)
         return False
@@ -1020,13 +1063,16 @@ def download_and_install_version(entry: dict, slot: str,
         logk.printl("ota", "版本条目缺少下载地址", boot_time)
         return False
     os.makedirs(OTA_PACKAGE_DIR, exist_ok=True)
-    package_name = url.split('/')[-1].split('?')[0] or OTA_PACKAGE_NAME
+    # a bare, sanitised basename: the URL is remote input and must not be able to
+    # steer the download out of the package directory
+    package_name = _package_name_from_url(url)
     package_path = os.path.join(OTA_PACKAGE_DIR, package_name)
     file_size = (entry or {}).get('file_size', 0) or 0
+    sha256 = (entry or {}).get('sha256')
 
-    if not download_update_package(url, package_path, file_size):
+    if not download_update_package(url, package_path, file_size, sha256):
         return False
-    if not verify_update_package(package_path, (entry or {}).get('sha256')):
+    if not verify_update_package(package_path, sha256):
         return False
     return install_package_to_slot(package_path, slot, allow_downgrade)
 
@@ -1070,6 +1116,9 @@ def switch_slot() -> bool:
 def get_ota_status() -> dict:
     current = get_current_slot()
     other = get_other_slot()
+    # asked once: two calls listed the package directory twice and could disagree
+    # with each other if a package appeared or vanished in between
+    has_update = check_for_update()
     return {
         "ota_enabled": _ota_enabled(),
         "ota_disable_reason": (None if _ota_enabled() else _ota_disable_reason()),
@@ -1083,8 +1132,8 @@ def get_ota_status() -> dict:
         "other_version": get_version(other),
         "other_slot_verified": secure_boot.secure_slot_present(
             root_dir, other, floor=_rollback_floor()),
-        "has_update": check_for_update(),
-        "update_version": get_update_version() if check_for_update() else None
+        "has_update": has_update,
+        "update_version": get_update_version() if has_update else None
     }
 
 # Delete the staged update package, reporting whether there was one.

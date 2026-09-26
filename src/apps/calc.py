@@ -37,4 +37,4 @@ def pi():
     return math.pi
 
 if __name__ == "__main__":
-    print(f"请不要直接运行此模块或 open calc，请在 main.py 中调用 calc 模块的 main 函数。")
+    print("请不要直接运行此模块或 open calc，请在 main.py 中调用 calc 模块的 main 函数。")

@@ -214,6 +214,10 @@ def discover_external() -> List[str]:
     for fn in sorted(os.listdir(d)):
         if not fn.endswith(".py") or fn.startswith("_"):
             continue
+        # A directory whose name ends in .py is not an app: offering it as a
+        # command produced a name that resolved to a directory and then failed.
+        if not os.path.isfile(os.path.join(d, fn)):
+            continue
         name = fn[:-3]
         if name in LIBRARY_MODULES:
             continue
@@ -256,7 +260,9 @@ def resolve_package_command(name: str, root_dir: Optional[str] = None) -> Option
 def reserved_command_names() -> set[str]:
     names = set()
     for name, meta in _REGISTRY.items():
-        if meta.fn is not None:
+        # An external command is taken too: a package must not be able to claim a
+        # name an app/ script or one of its aliases already answers to.
+        if meta.fn is not None or meta.external:
             names.add(name)
             names.update(meta.aliases)
     names.update(discover_external())

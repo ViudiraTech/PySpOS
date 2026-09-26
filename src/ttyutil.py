@@ -50,6 +50,22 @@ def read_line(prompt: str = "") -> str:
     return s.strip("\n").rstrip()
 
 
+# Full words accepted for the one-letter answers, so the documented yes/no
+# answers work as well as y and n.
+CHOICE_WORDS = {"y": ("yes",), "n": ("no",)}
+
+
+# Match one answer against the valid set, accepting a full word for a one-letter
+# answer, so 'yes' and 'no' work where the prompt offers y and n.
+def _match_choice(text, valid):
+    if text in valid:
+        return text
+    for v in valid:
+        if text in CHOICE_WORDS.get(v, ()):
+            return v
+    return None
+
+
 # Ask a yes/no style question, retrying up to a limit and then taking the default.
 def read_choice(prompt: str, valid=("y", "n"), default="n",
                 max_retries: int = 0) -> str:
@@ -62,12 +78,9 @@ def read_choice(prompt: str, valid=("y", "n"), default="n",
         s = read_line(prompt).lower()
         if not s:
             return default
-        if s in valid:
-            return s
-# accept the fully written form
-        for v in valid:
-            if s == v:
-                return v
+        match = _match_choice(s, valid)
+        if match is not None:
+            return match
         tries += 1
         if max_retries and tries >= max_retries:
             return default

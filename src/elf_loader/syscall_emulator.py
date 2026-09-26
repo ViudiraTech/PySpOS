@@ -844,6 +844,15 @@ class SyscallEmulator:
 # stdout and stderr properties, kept for compatibility
         self.stdout = sys.stdout
         self.stderr = sys.stderr
+        
+# the guest's fd 0: None means it reads the host's own stdin
+        self.stdin: Optional[str] = None
+        self.stdin_pos: int = 0
+    
+# Feed the guest a fixed input string, replacing the host's stdin for fd 0.
+    def set_stdin(self, data: str) -> None:
+        self.stdin = data
+        self.stdin_pos = 0
     
 # Map numbers to handlers, using the i386 table in 32-bit mode.
     def _setup_syscall_handlers(self):
@@ -964,7 +973,13 @@ class SyscallEmulator:
     
 # Map a host exception onto the errno the guest expects.
     def _get_errno(self, e: Exception) -> int:
-        if isinstance(e, FileNotFoundError):
+        from .elf_loader import MemoryAccessError, MemoryProtectionError
+        
+        if isinstance(e, MemoryAccessError):
+            return errno.EFAULT
+        elif isinstance(e, MemoryProtectionError):
+            return errno.EFAULT
+        elif isinstance(e, FileNotFoundError):
             return errno.ENOENT
         elif isinstance(e, PermissionError):
             return errno.EACCES
@@ -979,6 +994,8 @@ class SyscallEmulator:
     
 # Read a NUL-terminated string out of guest memory.
     def _read_string(self, addr: int) -> str:
+        from .elf_loader import MemoryAccessError
+        
         result = bytearray()
         offset = 0
         while True:
@@ -990,7 +1007,12 @@ class SyscallEmulator:
                 offset += 1
                 if offset > 4096:  # cap the length
                     break
-            except MemoryError:
+            except MemoryAccessError:
+# the loader raises this, not MemoryError, for an address outside every region
+# a pointer that is not mapped at all is the guest's fault and has to become EFAULT,
+# while a path that simply runs off the end of a mapping stays truncated
+                if not result:
+                    raise
                 break
         return result.decode('utf-8', errors='replace')
     
@@ -1007,6 +1029,13 @@ class SyscallEmulator:
 # Read from a descriptor into guest memory.
     def sys_read(self, fd: int, buf: int, count: int) -> int:
         if fd in (0, 1, 2):  # standard I/O
+            if fd == 0 and self.stdin is not None:
+# a supplied input string replaces the host's stdin, and its end reads as EOF
+                chunk = self.stdin[self.stdin_pos:self.stdin_pos + count]
+                self.stdin_pos += len(chunk)
+                data = chunk.encode()
+                self._write_buffer(buf, data)
+                return len(data)
             try:
                 data = os.read(fd, count)
                 self._write_buffer(buf, data)
@@ -1077,7 +1106,8 @@ class SyscallEmulator:
         truncate = bool(flags & OpenFlags.O_TRUNC)
         exclusive = bool(flags & OpenFlags.O_EXCL)
         
-        if exclusive and exists:
+        if exclusive and create and exists:
+# Linux defines EEXIST only for O_EXCL together with O_CREAT; a bare O_EXCL must not fail
             return -errno.EEXIST
         
         if create:
@@ -1179,9 +1209,20 @@ class SyscallEmulator:
         except OSError as e:
             return -e.errno
     
-# Fill a guest struct stat; unlike Linux, symlinks are followed.
+# Fill a guest struct stat for the link itself, so lstat does not follow the target.
     def sys_lstat(self, pathname: int, statbuf: int) -> int:
-        return self.sys_stat(pathname, statbuf)  # simplified
+        path = self._read_string(pathname)
+        
+        if not os.path.isabs(path):
+            path = os.path.join(self.cwd, path)
+        path = os.path.normpath(path)
+        
+        try:
+            st = os.lstat(path)
+            self._write_stat(statbuf, st)
+            return 0
+        except OSError as e:
+            return -e.errno
     
 # Write this architecture's struct stat layout into guest memory.
     def _write_stat(self, addr: int, st: os.stat_result):
@@ -1411,12 +1452,10 @@ class SyscallEmulator:
         machine = b"x86_64\x00" if self.is_64bit else b"i686\x00"
         domainname = b"(none)\x00"
         
-        if self.is_64bit:
-# x86_64: 65 bytes per field
-            field_size = 65
-        else:
-# i386: 65 bytes per field
-            field_size = 65
+# Linux uses _UTSNAME_LENGTH = 65 per field and the same six fields (sysname, nodename,
+# release, version, machine, domainname) on i386 and x86_64, so the word size does not
+# change the layout and the struct is 390 bytes on both
+        field_size = 65
         
         data = (
             sysname.ljust(field_size, b'\x00') +
@@ -1437,8 +1476,9 @@ class SyscallEmulator:
         mem = psutil.virtual_memory()
         
         if self.is_64bit:
-# sysinfo layout (x86_64)
-            data = struct.pack('<QQQQQQQQQQQIQQ',
+# x86_64 layout, 112 bytes: uptime, loads[3], six memory words, procs and pad as u16,
+# four bytes of alignment padding, totalhigh, freehigh, mem_unit, then the struct's own tail
+            data = struct.pack('<QQQQQQQQQQHH4xQQI4x',
                 int(time.time()),  # uptime
                 1,  # loads[0]
                 1,  # loads[1]
@@ -1452,18 +1492,28 @@ class SyscallEmulator:
                 1,  # procs
                 0,  # pad
                 0,  # totalhigh
-                0   # freehigh
+                0,  # freehigh
+                1   # mem_unit
             )
         else:
-# sysinfo layout (i386)
-            data = struct.pack('<IIIIIIIIIIIIIII',
+# i386 layout, 64 bytes: the same field order with 4 byte words, no alignment padding,
+# and the libc5 _f tail
+            data = struct.pack('<IIIIIIIIIIHHIII8x',
                 int(time.time()),  # uptime
-                1, 1, 1,  # loads
-                mem.total // 1024,
-                mem.free // 1024,
-                mem.shared // 1024 if hasattr(mem, 'shared') else 0,
-                0, 0, 0,
-                1, 0, 0, 0
+                1,  # loads[0]
+                1,  # loads[1]
+                1,  # loads[2]
+                mem.total // 1024,  # totalram
+                mem.free // 1024,   # freeram
+                mem.shared // 1024 if hasattr(mem, 'shared') else 0,  # sharedram
+                0,  # bufferram
+                0,  # totalswap
+                0,  # freeswap
+                1,  # procs
+                0,  # pad
+                0,  # totalhigh
+                0,  # freehigh
+                1   # mem_unit
             )
         
         self._write_buffer(info, data)

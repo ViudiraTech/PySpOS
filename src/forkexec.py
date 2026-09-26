@@ -31,8 +31,13 @@ except ValueError:
     _CTX = mp.get_context()
 
 _pump_thread = None
-_listener = None
 _relay_threads = {}
+# One RPC endpoint per child, keyed by its pid, holding the Listener to close
+# once the child is gone.
+_child_servers = {}
+
+# The only apps allowed to ask the parent for ROOT authorisation.
+ROOT_APPS = {"getroot.py", "bm.py"}
 
 
 # --------------------------------------------------------------------------
@@ -137,7 +142,20 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
         else:
             raise ValueError(f"未知 payload 类型: {kind}")
     except SystemExit as e:
-        code = e.code if isinstance(e.code, int) else 0
+        # None is a plain sys.exit() and stays success. Any other non-int code is a
+        # message rather than a status, and reporting it as 0 would turn a failed
+        # child into a successful one, so it keeps a non-zero exit status.
+        if e.code is None:
+            code = 0
+        elif isinstance(e.code, int):
+            code = e.code
+        else:
+            try:
+                sys.stdout.write(f"{e.code}\n")
+                sys.stdout.flush()
+            except Exception:
+                pass
+            code = 1
     except EOFError:
         # 2026-09-24: a closed stdin is a normal way to end, so no traceback is dumped.
         # The apps already handle EOF one by one; this is the child-level backstop.
@@ -206,6 +224,7 @@ def _pump_loop():
                 except Exception:
                     code = 0
                 table.handles.pop(pid, None)
+                _close_child_server(pid)
                 if pcb.state not in proc.TERMINAL_STATES:
                     wall = (time.time() - pcb.start_time) * 1000.0
                     table.child_exited(pid, exit_code=code, wall_ms=wall)
@@ -223,7 +242,10 @@ def _ensure_pump():
 
 # Parent-side implementation of the privileged operations an app may request
 # over RPC.
-def _sysctl_handler(op, args, kwargs):
+# app_id is the identity the parent bound to this connection when it launched the
+# child, never a value the caller supplied, so an app cannot claim to be another
+# one. It is empty only on a channel with no bound identity.
+def _sysctl_handler(op, args, kwargs, app_id=""):
     import main
     import btcfg
     import kernel
@@ -231,8 +253,15 @@ def _sysctl_handler(op, args, kwargs):
 
     op = str(op)
     if op == "authorize_root":
-        app_id = str(kwargs.get("app_id", ""))
-        if app_id not in {"getroot.py", "bm.py"}:
+        claimed = str(kwargs.get("app_id", ""))
+        if not app_id:
+            # Without a parent-bound identity the shared RPC key only proves the
+            # caller is one of our children, never which one, so the claim is not
+            # evidence and the request is refused.
+            raise PermissionError("无法确认调用方身份，拒绝 ROOT 授权")
+        if claimed and claimed != app_id:
+            raise PermissionError(f"应用身份不匹配（声称 {claimed}，实际 {app_id}），拒绝 ROOT 授权")
+        if app_id not in ROOT_APPS:
             raise PermissionError("只有官方 ROOT 管理应用可以请求授权")
         main._root_authorized = True
         return True
@@ -309,8 +338,12 @@ def _sysctl_handler(op, args, kwargs):
 def _audit(action, detail):
     try:
         import main
+        import kernel
         from common.audit import audit
-        audit(main.root_dir, _sysctl_handler.__name__ and "app", action, detail)
+        # The record has to name the real source: the request came from the child
+        # the shell runs as this user, so a hardcoded placeholder would make every
+        # RPC record look like the same unidentified caller.
+        audit(main.root_dir, kernel.get_system_username(), action, detail)
     except Exception:
         pass
 
@@ -323,7 +356,9 @@ def _delayed_exit():
 
 
 # Answer syscall requests for one child connection until it goes away.
-def _serve_client(conn):
+# app_id is the identity the parent bound to this endpoint when it launched the
+# child, so the handler can tell who is really asking.
+def _serve_client(conn, app_id=""):
     while True:
         try:
             msg = conn.recv()
@@ -333,7 +368,7 @@ def _serve_client(conn):
             break
         req_id, op, args, kwargs = msg
         try:
-            ret = _sysctl_handler(op, args, kwargs)
+            ret = _sysctl_handler(op, args, kwargs, app_id=app_id)
             payload = {"ok": True, "ret": ret}
         except BaseException as e:
             payload = {"ok": False, "error": f"{type(e).__name__}: {e}"}
@@ -347,30 +382,41 @@ def _serve_client(conn):
         pass
 
 
-# Accept syscall connections and give each one its own answering thread.
-def _sysctl_accept_loop():
-    global _listener
+# Open an RPC endpoint for one child and answer its calls with app_id as the
+# caller's identity. The endpoint is bound before the child is started, so the
+# child never races the accept thread, and a failed bind is not retried.
+def _serve_child_server(app_id):
     from multiprocessing.connection import Listener
     try:
-        _listener = Listener(("127.0.0.1", 0), authkey=AUTHKEY)
+        listener = Listener(("127.0.0.1", 0), authkey=AUTHKEY)
     except Exception:
-        _listener = None
+        return None
+    addr = listener.address
+
+    def accept_loop():
+        while True:
+            try:
+                conn = listener.accept()
+            except Exception:
+                break
+            threading.Thread(target=_serve_client, args=(conn, app_id),
+                             daemon=True).start()
+
+    threading.Thread(target=accept_loop, name="pyspos-sysctl",
+                     daemon=True).start()
+    return listener, addr
+
+
+# Close the RPC endpoint of a child that has ended, so a long-running shell does
+# not accumulate one listening socket per app it ever ran.
+def _close_child_server(pid):
+    listener = _child_servers.pop(pid, None)
+    if listener is None:
         return
-    while True:
-        try:
-            conn = _listener.accept()
-        except Exception:
-            break
-        threading.Thread(target=_serve_client, args=(conn,), daemon=True).start()
-
-
-# Start the syscall listener once; a failed bind is not retried.
-def _ensure_listener():
-    if _listener is None and not getattr(_ensure_listener, "_tried", False):
-        _ensure_listener._tried = True
-        threading.Thread(target=_sysctl_accept_loop, name="pyspos-sysctl",
-                         daemon=True).start()
-        time.sleep(0.05)
+    try:
+        listener.close()
+    except Exception:
+        pass
 
 
 # Deliver a fatal signal to the real child: SIGKILL
@@ -455,7 +501,7 @@ def _relay_parent_side(out_r, in_w, background):
     output_thread.start()
     threading.Thread(target=_pump_in_relay, args=(in_w, background),
                      daemon=True).start()
-    return output_thread
+    return [output_thread]
 
 
 # Run a payload in a real child and return its PCB, marked remote.
@@ -465,18 +511,27 @@ def _relay_parent_side(out_r, in_w, background):
 def fork_exec(payload, *, kind="app", background=False, nice=0,
               src_dir=None, apps_dir=None, env=None, log_path=None):
     _ensure_pump()
-    _ensure_listener()
     if src_dir is None:
         src_dir = os.path.dirname(os.path.abspath(__file__))
     if apps_dir is None:
         apps_dir = os.path.join(src_dir, "apps")
-    addr = _listener.address if _listener is not None else None
 
     comm = payload.split(":", 1)[-1]
     if comm.endswith(".py"):
         comm = comm[:-3]
     pcb = proc.spawn(comm, kind=kind, nice=nice, remote=True,
                      note="real child process")
+
+    # A private RPC endpoint per child: the shared key only proves the caller is
+    # one of our children, so the app identity has to be bound here, on the
+    # parent's side, from the payload this parent itself launched.
+    app_id = os.path.basename(payload.split(":", 1)[-1]) or comm
+    endpoint = _serve_child_server(app_id)
+    if endpoint is None:
+        addr = None
+    else:
+        listener, addr = endpoint
+        _child_servers[pcb.pid] = listener
 
     # Relays always use a bare os.pipe(): stdin and stdout are byte streams, and
     # mp.Pipe's message framing cannot carry them (see the comment on
@@ -524,6 +579,17 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
     except Exception as e:
         proc._table().handles.pop(pcb.pid, None)
         proc.finish(pcb.pid, 1, failed=True)
+        # The pipes and the /dev/null stand-in are already open, so the failure
+        # path owns them: nothing else can reach them and the parent would leak a
+        # descriptor per failed launch for the rest of the shell's life. out_fd and
+        # in_fd alias out_w and in_r, so each end is closed exactly once.
+        for fd in tuple(dict.fromkeys(
+                f for f in (out_r, out_w, in_r, in_w, in_fd) if f is not None)):
+            try:
+                os.close(fd)
+            except (OSError, TypeError):
+                pass
+        _close_child_server(pcb.pid)
         print(f"fork_exec: 子进程启动失败: {e}")
         return pcb
     # The parent must close its own copy of the ends the child uses, otherwise:
@@ -540,7 +606,7 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
         if log_path:
             # Write to the log **and** keep printing to the terminal: for a background job,
             # `cmd > log` means keep a copy, not swallow the terminal output.
-            _log_relay(out_r, log_path, echo=not background)
+            _relay_threads[pcb.pid] = _log_relay(out_r, log_path, echo=not background)
             if not background and in_w is not None:
                 threading.Thread(target=_pump_in_relay, args=(in_w, False),
                                  daemon=True).start()
@@ -551,7 +617,8 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
 
 
 # Write the child's stdout to log_path; with echo=True
-# it is printed to the terminal as well, a tee.
+# it is printed to the terminal as well, a tee. The relay thread is returned so
+# wait() can join it before it reports the child as finished.
 def _log_relay(out_r, log_path, echo=False):
     # One direction of the log relay: read the child
     # stdout into the file, and echo it when asked.
@@ -574,16 +641,25 @@ def _log_relay(out_r, log_path, echo=False):
                 os.close(out_r)
             except (OSError, TypeError):
                 pass
-    threading.Thread(target=_pump, daemon=True).start()
+    thread = threading.Thread(target=_pump, daemon=True)
+    thread.start()
+    return [thread]
 
 
 # Wait for a child to end and reap it, the wait
 # semantics, then drop the entry from the table.
+# The output relays are joined here, so everything the child wrote has reached
+# the terminal and the log before wait() returns. The stdin pump is deliberately
+# left alone: on an interactive terminal it is blocked reading the user's next
+# keystroke and has nothing left to deliver to a child that is gone.
 def wait(pid, timeout=30.0):
     pcb = proc.wait_for(pid, timeout=timeout)
-    output_thread = _relay_threads.pop(pid, None)
-    if output_thread is not None:
-        output_thread.join(timeout=1)
+    for thread in _relay_threads.pop(pid, []):
+        try:
+            thread.join(timeout=1)
+        except RuntimeError:
+            pass
+    _close_child_server(pid)
     if pcb is not None:
         proc.reap_children(pcb.ppid)
     return pcb

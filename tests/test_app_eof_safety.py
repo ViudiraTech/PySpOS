@@ -79,14 +79,21 @@ def test_child_process_has_eof_safety_net():
     assert found, "forkexec._child_main 缺少 EOFError 兜底"
 
 
-# Run it for real: with stdin at immediate EOF the app must exit quickly, print no EOF traceback and not repeat the prompt.
+# Run it for real: with stdin at immediate EOF the app must exit 0 quickly, print no EOF traceback and not repeat the prompt.
 def test_zzlsb_exits_on_eof():
     import subprocess
-    src = (APPS / "zzlsb.py").resolve()
-    p = subprocess.run([sys.executable, str(src)], input="", timeout=30,
-                       capture_output=True, text=True,
+    src = (APPS / "zzlsb.py").read_text(encoding="utf-8")
+    # Run it as __exec__, the name the shell's fork gives the child. Executing the
+    # file directly only trips the "do not run me" guard, so the game never started
+    # and this test asserted nothing about EOF at all.
+    p = subprocess.run([sys.executable, "-c",
+                        f'__name__="__exec__"\n{src}'],
+                       input="", timeout=30, capture_output=True, text=True,
                        env={**os.environ, "PYTHONPATH": f"{REPO / 'src'}{os.pathsep}{REPO / 'src' / 'apps'}"})
     out = p.stdout + p.stderr
+    assert "简单猜数字游戏" in out, f"游戏根本没运行: {out}"
+    assert p.returncode == 0, f"EOF 后应以 0 退出，实际 {p.returncode}: {out}"
+    assert "输入已结束" in out, f"EOF 后没有走退出分支: {out}"
     assert "EOF when reading a line" not in out, "仍在打印 EOF 错误"
     assert out.count("输入你猜的数字") <= 1, "EOF 后仍在循环刷屏"
 
@@ -97,11 +104,9 @@ def test_zzlsb_guessed_number_terminates():
     import subprocess
     src = (APPS / "zzlsb.py").read_text(encoding="utf-8")
     assert re.search(r"secret_number = random\.randint\(0,\s*\d+\)", src)
-    # Pin the answer to 0 and trip the __exec__ guard, the same path the shell's fork takes
+    # Pin the answer to 0 so the single guess below is the right one
     patched = src.replace("secret_number = random.randint(0, 100)",
                           "secret_number = 0")
-    patched = patched.replace('if __name__ == "__exec__":',
-                              'if __name__ == "__exec__":')
     p = subprocess.run([sys.executable, "-c",
                         f'__name__="__exec__"\n{patched}'],
                        input="0\n", timeout=30, capture_output=True,

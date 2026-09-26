@@ -77,11 +77,14 @@ def cmd_run(args: str):
             strace = True
             i += 1
         elif token == '--disasm':
-            try:
-                nxt = tokens[i + 1]
+            # Only a real count is consumed. Swallowing the next token blindly ate
+            # the file name in `run --disasm --stats file` and even the option
+            # itself, so --disasm has to leave anything non-numeric alone.
+            nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+            if nxt is not None and nxt.isdigit():
                 disasm_n = int(nxt)
                 i += 2
-            except (IndexError, ValueError):
+            else:
                 disasm_n = 10
                 i += 1
         elif token.startswith('--disasm='):
@@ -147,7 +150,7 @@ def cmd_run(args: str):
     
     # check the ELF path
     if elf_path is None:
-        printk.error("用法: run [-v] [-d] [-f] [--stats] [--map] [--disasm [N]] [--strace] <elf文件路径>\n")
+        printk.error("用法: run [-v] [-d] [-f] [--stats] [--map] [--disasm [N]] [--strace] [--engine auto|unicorn|native] <elf文件路径>\n")
         return
     
     # set the log level
@@ -199,6 +202,11 @@ def cmd_run(args: str):
                     engine_used = "unicorn"
                 except Exception as e:
                     logk.printl("run", f"unicorn 引擎初始化失败: {e}", main.boot_time)
+                    if engine == "unicorn":
+                        # The user named unicorn explicitly, so running on the
+                        # in-house engine instead has to be said out loud: silently
+                        # downgrading would report an engine that never ran.
+                        printk.warn("unicorn 引擎初始化失败，已降级到自研引擎执行\n")
                     runner = None
             elif engine == "unicorn":
                 printk.error("unicorn 库不可用（pip install unicorn），无法强制使用 unicorn 引擎\n")
@@ -255,9 +263,11 @@ def cmd_run(args: str):
             _orig_handler = runner.syscall_emulator.handle_syscall
 
             # Wrapper installed on the syscall handler for --strace.
-            def _traced(number, *a, **k):
-                print(f"[strace] syscall nr={number} args={list(a)}")
-                return _orig_handler(number, *a, **k)
+            def _traced(number, *a, **kw):
+                # Named arguments are part of the call too, and a syscall that
+                # takes them looks silently different without them.
+                print(f"[strace] syscall nr={number} args={list(a)} kwargs={kw}")
+                return _orig_handler(number, *a, **kw)
 
             runner.syscall_emulator.handle_syscall = _traced
 

@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 PAGE_SIZE = 0x1000
 PAGE_MASK = ~(PAGE_SIZE - 1)
 
+# How many instructions a guest constructor may run before the call is given up on.
+CONSTRUCTOR_BUDGET = 1000000
+
 
 # Round value up to the next multiple of alignment.
 def align_up(value: int, alignment: int) -> int:
@@ -227,9 +230,27 @@ class ELFLoaderError(Exception):
     pass
 
 
-# Raised when an address falls outside every mapped region.
+# Raised when an address falls outside every mapped region. Callers may pass either a
+# message or the (address, is_write) pair, and both styles expose the same attributes.
 class MemoryAccessError(ELFLoaderError):
-    pass
+    def __init__(self, *args, address: Optional[int] = None, is_write: bool = False):
+        if args and address is None and isinstance(args[0], int):
+            address = args[0]
+            if len(args) > 1:
+                is_write = bool(args[1])
+            args = ()
+        
+        if args:
+            message = str(args[0])
+        elif address is not None:
+            message = (f"invalid memory access at 0x{address:x} "
+                       f"({'write' if is_write else 'read'})")
+        else:
+            message = "invalid memory access"
+        
+        super().__init__(message)
+        self.address = address
+        self.is_write = is_write
 
 
 # Raised when a write hits a region that has no write permission.
@@ -334,6 +355,9 @@ class ELFLoader:
         
         self._external_symbol_resolver: Optional[Callable[[str], Optional[int]]] = None
         
+# CPU used only to run IFUNC resolvers, built on first use
+        self._helper_cpu_obj: Any = None
+        
 # Choose a page-aligned base inside the window the architecture allows.
     def _randomize_base(self) -> int:
         if self.parser.is_32bit:
@@ -367,15 +391,17 @@ class ELFLoader:
             
             self._setup_plt_got(load_offset)
             
+# heap and stack first: an IFUNC resolver is called while relocations run and needs
+# a mapped writable stack to return through. Their layout does not depend on relocations.
+            self._setup_heap()
+            
+            self._create_stack()
+            
             self._perform_relocations(load_offset)
             
             self._setup_tls(load_offset)
             
             self._collect_init_fini(load_offset)
-            
-            self._setup_heap()
-            
-            self._create_stack()
             
             self._build_auxv(load_offset)
             
@@ -660,6 +686,7 @@ class ELFLoader:
 # Locate the PLT and the GOT, then index the PLT relocations.
     def _setup_plt_got(self, load_offset: int) -> None:
         plt_addr = 0
+        got_addr = 0
         got_plt_addr = 0
         jmprel_addr = self.dynamic_info.get(DynamicTag.DT_JMPREL, 0)
         jmprel_size = self.dynamic_info.get(DynamicTag.DT_PLTRELSZ, 0)
@@ -670,12 +697,14 @@ class ELFLoader:
             elif section.name == '.got.plt':
                 got_plt_addr = section.sh_addr + load_offset
             elif section.name == '.got':
-                self.got_plt_base = section.sh_addr + load_offset
+                got_addr = section.sh_addr + load_offset
         
         if not got_plt_addr:
             got_plt_addr = self.dynamic_info.get(DynamicTag.DT_PLTGOT, 0)
         
-        self.got_plt_base = got_plt_addr
+# .got holds the GOT proper, so it is the real base whenever the section exists;
+# only the stripped .got.plt layout and DT_PLTGOT point at the first PLT slot instead.
+        self.got_plt_base = got_addr or got_plt_addr
         
         if jmprel_addr and jmprel_size:
             self._parse_plt_entries(jmprel_addr, jmprel_size, load_offset, 
@@ -969,9 +998,6 @@ class ELFLoader:
                 return (got_addr + addend - addr) & 0xffffffff
             return 0
         
-        elif rel_type == RelocationTypeX86_64.R_X86_64_GD32:
-            return self._get_got_entry(sym_name, sym_value) + addend
-        
         elif rel_type == RelocationTypeX86_64.R_X86_64_SIZE32:
             return sym_size + addend
         
@@ -980,7 +1006,8 @@ class ELFLoader:
         
         elif rel_type == RelocationTypeX86_64.R_X86_64_IRELATIVE:
             resolver_addr = load_offset + addend
-            return self._call_ifunc_resolver(resolver_addr)
+# the resolver wants the address of the GOT slot it is filling in
+            return self._call_ifunc_resolver(resolver_addr, addr)
         
         else:
             logger.debug(f"Unhandled relocation type: {rel_type}")
@@ -1069,7 +1096,8 @@ class ELFLoader:
         
         elif rel_type == RelocationTypeI386.R_386_IRELATIVE:
             resolver_addr = load_offset + addend
-            return self._call_ifunc_resolver(resolver_addr)
+# the resolver wants the address of the GOT slot it is filling in
+            return self._call_ifunc_resolver(resolver_addr, addr)
         
         else:
             logger.debug(f"Unhandled i386 relocation type: {rel_type}")
@@ -1097,10 +1125,126 @@ class ELFLoader:
         
         return 0
     
-# Resolve an IFUNC target; the loader owns no CPU, so it only logs and returns 0.
-    def _call_ifunc_resolver(self, resolver_addr: int) -> int:
-        logger.debug(f"IFUNC resolver at 0x{resolver_addr:x}")
+# Return an address in a mapped writable page that guest code never reaches; it is only
+# used as the return target of call_function, so nothing is planted at it.
+    def scratch_address(self) -> int:
+        stack_region = self.memory.get(self.stack_bottom)
+        if stack_region and stack_region.writable and stack_region.size > 64:
+            return self.stack_bottom + 16
+        
+        for region in self.memory.values():
+            if region.writable and region.size > 64:
+                return region.start + 16
+        
         return 0
+    
+# Call a guest function on cpu with args and return RAX, 0 when it could not be run.
+    def call_function(self, cpu: Any, func_addr: int, args: List[int],
+                      budget: int = 100000) -> int:
+        returned, result = self._call_guest_function(cpu, func_addr, args, budget)
+        return result
+    
+# Call a guest function on cpu with args; returns whether it returned, and RAX.
+    def _call_guest_function(self, cpu: Any, func_addr: int, args: List[int],
+                             budget: int = 100000) -> Tuple[bool, int]:
+        if cpu is None or not func_addr:
+            return False, 0
+        
+        sentinel = self.scratch_address()
+        if not sentinel:
+            logger.warning(f"Cannot call 0x{func_addr:x}: no writable page for a return address")
+            return False, 0
+        
+        is_64bit = not self.parser.is_32bit
+        ptr_size = 8 if is_64bit else 4
+        fmt = '<Q' if is_64bit else '<I'
+        mask = (1 << (ptr_size * 8)) - 1
+        
+# the SysV integer argument registers; i386 cdecl passes everything on the stack
+        arg_regs = [7, 6, 2, 1, 8, 9] if is_64bit else []
+        
+        saved_regs = dict(cpu.state.regs)
+        saved_ip = cpu._get_ip()
+        
+# Push one machine word below sp and return the new stack pointer.
+        def push(value: int) -> int:
+            sp = cpu._get_sp() - ptr_size
+            cpu.memory.write_bytes(sp, struct.pack(fmt, value & mask))
+            cpu._set_sp(sp)
+            return sp
+        
+        try:
+            for reg, arg in zip(arg_regs, args):
+                cpu._set_reg(reg, arg)
+            
+            if not arg_regs:
+                for arg in reversed(args):
+                    push(arg)
+            
+# the ABI wants the stack pointer 8 mod 16 once the return address is on the stack
+            if is_64bit:
+                while (cpu._get_sp() - ptr_size) % 16 != 8:
+                    push(0)
+            
+            push(sentinel)
+            cpu._set_ip(func_addr)
+            
+            return self._step_call(cpu, func_addr, sentinel, budget)
+            
+        finally:
+            cpu.state.regs = saved_regs
+            cpu._set_ip(saved_ip)
+    
+# Single step until the helper call returns to its sentinel, servicing any SYSCALL.
+    def _step_call(self, cpu: Any, func_addr: int, sentinel: int,
+                   budget: int) -> Tuple[bool, int]:
+        from .cpu_emulator import SyscallInterrupt
+        
+        for _ in range(budget):
+            if cpu._get_ip() == sentinel:
+                return True, cpu._get_reg(0)
+            
+            try:
+                name, length, operands = cpu.decoder.decode(cpu.memory, cpu._get_ip())
+                cpu._execute(name, length, operands)
+            except SyscallInterrupt as e:
+# a helper that reads a file or writes to the console still has to make progress
+                if not cpu.syscall_handler:
+                    raise
+                cpu._set_reg(0, cpu.syscall_handler(e.number, *e.syscall_args))
+            except SystemExit:
+# a guest exit inside a helper call ends the run, as it would in a real process
+                raise
+            except Exception as e:
+                logger.warning(f"Call to 0x{func_addr:x} stopped at 0x{cpu._get_ip():x}: {e}")
+                return False, 0
+        
+        logger.warning(f"Call to 0x{func_addr:x} did not return within {budget} instructions")
+        return False, 0
+    
+# Resolve an IFUNC target by really running the resolver, which takes the GOT slot
+# address in RDI and returns the chosen address in RAX.
+    def _call_ifunc_resolver(self, resolver_addr: int, got_slot: int = 0) -> int:
+        cpu = self._helper_cpu()
+        if cpu is None:
+            logger.warning(f"IFUNC resolver at 0x{resolver_addr:x} not run: no CPU available")
+            return 0
+        
+        returned, result = self._call_guest_function(cpu, resolver_addr, [got_slot])
+        if not returned or not result:
+            logger.warning(f"IFUNC resolver at 0x{resolver_addr:x} produced no address")
+        return result
+    
+# Return a CPU that can run short helper calls, building it on first use.
+    def _helper_cpu(self) -> Any:
+        if self._helper_cpu_obj is None:
+            try:
+                from .cpu_emulator import CPUEmulator
+            except Exception as e:
+                logger.warning(f"No CPU available for helper calls: {e}")
+                return None
+            self._helper_cpu_obj = CPUEmulator(self)
+        return self._helper_cpu_obj
     
 # Record the PT_TLS template and give it a module id.
     def _setup_tls(self, load_offset: int) -> None:
@@ -1278,20 +1422,38 @@ class ELFLoader:
             return self.stack_bottom + offset
         return 0
     
-# Log the preinit and init functions; the loader owns no CPU to run them.
+# Run the preinit and init functions on the CPU; initialized is set only when every
+# one of them returned, so a skipped constructor never passes for a completed one.
     def run_init_functions(self, cpu_emulator: Any) -> None:
-        for func_addr in self.preinit_functions:
-            logger.debug(f"Running preinit function at 0x{func_addr:x}")
+        self.initialized = False
         
-        for func_addr in self.init_functions:
-            logger.debug(f"Running init function at 0x{func_addr:x}")
+        skipped = [func_addr for func_addr in self.preinit_functions + self.init_functions
+                   if not self._run_constructor(func_addr, cpu_emulator)]
+        
+        if skipped:
+            logger.warning(f"Init functions not run: "
+                           f"{', '.join(f'0x{a:x}' for a in skipped)}")
+            return
         
         self.initialized = True
     
-# Log the fini functions in reverse order.
+# Run the fini functions in reverse order, as the ABI requires.
     def run_fini_functions(self, cpu_emulator: Any) -> None:
         for func_addr in reversed(self.fini_functions):
-            logger.debug(f"Running fini function at 0x{func_addr:x}")
+            self._run_constructor(func_addr, cpu_emulator)
+    
+# Call one constructor on the CPU; False means it did not return normally.
+    def _run_constructor(self, func_addr: int, cpu_emulator: Any) -> bool:
+        if not func_addr or cpu_emulator is None:
+            logger.warning(f"Constructor at 0x{func_addr:x} not run: no CPU available")
+            return False
+        
+        logger.debug(f"Running constructor at 0x{func_addr:x}")
+        returned, _ = self._call_guest_function(cpu_emulator, func_addr, [],
+                                               budget=CONSTRUCTOR_BUDGET)
+        if not returned:
+            logger.warning(f"Constructor at 0x{func_addr:x} did not return")
+        return returned
     
 # Read size bytes, walking the regions one byte at a time.
     def read_memory(self, addr: int, size: int) -> bytes:
@@ -1309,7 +1471,8 @@ class ELFLoader:
             result.append(region.data[offset])
         return bytes(result)
     
-# Write data, walking the regions one byte at a time.
+# Write data, walking the regions one byte at a time. The region's own write path is
+# used, so strict_protection applies to the syscall emulator just as it does elsewhere.
     def write_memory(self, addr: int, data: bytes) -> None:
         for i, byte in enumerate(data):
             cur_addr = addr + i
@@ -1320,8 +1483,7 @@ class ELFLoader:
                     break
             if region is None:
                 raise MemoryAccessError(cur_addr, True)
-            offset = cur_addr - region.start
-            region.data[offset] = byte
+            region.write(cur_addr, bytes((byte,)))
     
 # Read a 1, 2, 4 or 8 byte little-endian integer.
     def read_int(self, addr: int, size: int, signed: bool = False) -> int:

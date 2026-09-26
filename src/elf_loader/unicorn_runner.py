@@ -31,7 +31,7 @@ try:
     )
     from unicorn.x86_const import (
         UC_X86_REG_RAX, UC_X86_REG_RDX, UC_X86_REG_RSI, UC_X86_REG_RDI,
-        UC_X86_REG_RSP, UC_X86_REG_RIP,
+        UC_X86_REG_RSP, UC_X86_REG_RIP, UC_X86_REG_RCX,
         UC_X86_REG_RFLAGS,
         UC_X86_REG_R8, UC_X86_REG_R9, UC_X86_REG_R10,
         UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_ECX,
@@ -226,6 +226,10 @@ class UnicornRunner:
         self.exit_code = 0
         self.fault_addr = 0
         self.fault_msg = ""
+        self.guest_exited = False
+
+# input handed to the guest by set_stdin(), kept until load() builds the emulator
+        self._stdin_data = None
 
 # -- loading --
 
@@ -236,7 +240,7 @@ class UnicornRunner:
                 data = f.read()
             self.parser = ELFParser(data)
             if not self.parser.parse():
-                logger.error("unicorn: ELF 解析失败")
+                logger.error(f"unicorn: ELF 解析失败: {self.parser.parse_error}")
                 return False
 
             from .elf_constants import ELFType, ELFMachine
@@ -266,6 +270,8 @@ class UnicornRunner:
                 self.adapter.map_region(region)
 
             self.syscall_emulator = SyscallEmulator(self.adapter)
+            if self._stdin_data is not None:
+                self.syscall_emulator.set_stdin(self._stdin_data)
             self.syscall_emulator.stdout_buffer.clear()
             self.syscall_emulator.stderr_buffer.clear()
 
@@ -316,6 +322,9 @@ class UnicornRunner:
         except SystemExit as e:
             code = e.code if isinstance(e.code, int) else 0
             self.exit_code = code
+# the syscall hook turns _GuestExit into emu_stop, so the flag is what tells the
+# caller that the program really ended instead of running out of emulation
+            self.guest_exited = True
             raise _GuestExit(code)
 # mmap, munmap and brk can add or drop mappings, so sync them into uc
         try:
@@ -392,12 +401,25 @@ class UnicornRunner:
         self.exit_code = 0
         self.fault_addr = 0
         self.fault_msg = ""
+        self.guest_exited = False
         start = time.time()
         try:
+# the constructors run on the guest's own stack, before _start, and may exit the program
+            if self._run_constructors(self.loader.preinit_functions + self.loader.init_functions):
+                self.loader.initialized = True
+            else:
+                logger.warning("unicorn: 构造函数未全部执行")
+        except _GuestExit as e:
+            self.exit_code = e.code
+        
+# a constructor that called exit ends the run before _start is ever reached
+        exited_in_init = self.guest_exited
+        try:
+            if not exited_in_init:
 # until=0, so the run ends through emu_stop or a fault, plus a 15s timeout and an instruction cap
-            self.uc.emu_start(self.entry_point, 0,
-                              timeout=15 * 1000 * 1000,
-                              count=max_instructions or 0)
+                self.uc.emu_start(self.entry_point, 0,
+                                  timeout=15 * 1000 * 1000,
+                                  count=max_instructions or 0)
         except UcError as e:
 # an emu_stop from the syscall hook is a normal exit; anything else is a fault
             if self.fault_msg:
@@ -408,6 +430,10 @@ class UnicornRunner:
                 logger.error(f"unicorn: {self.fault_msg}")
         except _GuestExit as e:
             self.exit_code = e.code
+
+# destructors run in reverse order once the program has stopped
+        if not exited_in_init:
+            self._run_constructors(reversed(self.loader.fini_functions))
         execution_time = time.time() - start
 
         stdout_text = b''.join(self.syscall_emulator.stdout_buffer).decode(
@@ -502,7 +528,59 @@ class UnicornRunner:
         if self.is_64bit:
             return self.uc.reg_read(UC_X86_REG_RIP)
         return self.uc.reg_read(UC_X86_REG_EIP)
-
+    
+# Call one guest function on the engine and report whether it returned; the SysV and cdecl
+# entry state is built by hand because the loader has no CPU to call through here.
+    def _call_guest_function(self, func_addr: int, args=None,
+                             budget: int = 1000000) -> bool:
+        if not func_addr:
+            return True
+        
+        assert self.uc is not None and self.adapter is not None
+        sentinel = self.loader.scratch_address()
+        if not sentinel:
+            logger.warning(f"unicorn: 无法调用 0x{func_addr:x}，找不到可写返回地址")
+            return False
+        
+        sp_reg = UC_X86_REG_RSP if self.is_64bit else UC_X86_REG_ESP
+        ip_reg = UC_X86_REG_RIP if self.is_64bit else UC_X86_REG_EIP
+        arg_regs = (UC_X86_REG_RDI, UC_X86_REG_RSI, UC_X86_REG_RDX,
+                    UC_X86_REG_RCX, UC_X86_REG_R8, UC_X86_REG_R9) if self.is_64bit else ()
+        
+        saved_sp = self.uc.reg_read(sp_reg)
+        saved_ip = self.uc.reg_read(ip_reg)
+        
+        try:
+            new_sp = saved_sp - (8 if self.is_64bit else 4)
+            self.adapter.write_memory(
+                new_sp, struct.pack('<Q', sentinel) if self.is_64bit
+                else struct.pack('<I', sentinel & 0xFFFFFFFF))
+            self.uc.reg_write(sp_reg, new_sp)
+            
+            for reg, arg in zip(arg_regs, args or ()):
+                self.uc.reg_write(reg, arg & (0xFFFFFFFFFFFFFFFF if self.is_64bit else 0xFFFFFFFF))
+            
+# emu_start stops when the instruction pointer reaches the sentinel, so no
+# instruction has to be planted there
+            self.uc.emu_start(func_addr, sentinel, count=budget)
+            return self._current_ip() == sentinel
+        except UcError as e:
+            logger.warning(f"unicorn: 调用 0x{func_addr:x} 失败: {e}")
+            return False
+        finally:
+            self.uc.reg_write(sp_reg, saved_sp)
+            self.uc.reg_write(ip_reg, saved_ip)
+    
+# Run a list of constructors in order; True only when every one of them returned.
+    def _run_constructors(self, func_addrs) -> bool:
+        ok = True
+        for func_addr in func_addrs:
+            logger.debug(f"unicorn: 运行构造函数 0x{func_addr:x}")
+            if not self._call_guest_function(func_addr):
+                logger.warning(f"unicorn: 构造函数 0x{func_addr:x} 未返回")
+                ok = False
+        return ok
+    
 # Install the smallest flat GDT a 32-bit guest will accept.
     def _setup_segments_32(self):
         assert self.uc is not None
@@ -573,10 +651,11 @@ class UnicornRunner:
             result.append((start, region.size, region.name, perms))
         return sorted(result, key=lambda x: x[0])
 
-# Set the data the guest will read from stdin.
+# Set the data the guest will read from stdin; it survives a later load().
     def set_stdin(self, data: str) -> None:
+        self._stdin_data = data
         if self.syscall_emulator:
-            self.syscall_emulator.stdin = data
+            self.syscall_emulator.set_stdin(data)
 
 
 # Raised inside a hook so a guest exit can unwind out of Unicorn.

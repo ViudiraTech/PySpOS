@@ -11,6 +11,7 @@
 
 import io
 import os
+import select
 import shlex
 import signal
 import sys
@@ -25,6 +26,12 @@ _LAST = 0
 _VARS = {}
 _ENCODING = (sys.stdout.encoding or "utf-8")
 _DEBUG = os.environ.get("PYSPOS_SHELL_DEBUG") == "1"
+
+# A full pipe is waited on, never spun on: this is how long one wait lasts and
+# how many waits a writer gives up after, so a reader that never drains costs
+# _WRITE_POLL_TIMEOUT * _WRITE_MAX_WAITS seconds and then gives up.
+_WRITE_POLL_TIMEOUT = 0.05
+_WRITE_MAX_WAITS = 200
 
 
 # Stage-level trace on stderr; enabled with PYSPOS_SHELL_DEBUG=1 so it never pollutes a pipeline.
@@ -108,13 +115,28 @@ class _Pipe:
             self.write = None
 
 
-# Write every byte to a descriptor, retrying on a full pipe; False means the reader is gone.
+# Write every byte to a descriptor, retrying on a full pipe; False means the reader is gone
+# or stopped draining, so the caller has to give up instead of blocking the shell for ever.
 def _write_fd(fd, data):
     view = memoryview(data)
+    waits = 0
     while view:
         try:
             n = os.write(fd, view)
         except BlockingIOError:
+            # The pipe is full. A bare `continue` here burns a whole core and never
+            # ends, so wait for the reader to make room, and only for a bounded
+            # number of waits: a reader that never drains must not hang the shell.
+            waits += 1
+            if waits > _WRITE_MAX_WAITS:
+                return False
+            try:
+                _, writable, _ = select.select([], [fd], [], _WRITE_POLL_TIMEOUT)
+            except (OSError, ValueError):
+                return False
+            if not writable:
+                continue
+            waits = 0
             continue
         except OSError:
             return False
@@ -373,7 +395,45 @@ def _invoke_builtin(argv, real, stdin_stream, out, err):
     return status, captured
 
 
-# Start one host stage and return (Popen, PCB, stdin fd) or None on failure.
+# Collector for a host stage running under capture: a drain thread that keeps every
+# byte the child wrote, so $(...) around a host program really returns its output
+# instead of the empty string a stage with no buffer would leave behind.
+class _Capture:
+    def __init__(self, read_fd):
+        self.read_fd = read_fd
+        self.chunks = []
+        self.thread = threading.Thread(target=self._pump, daemon=True)
+        self.thread.start()
+
+    # Read the child's stdout to EOF, remembering every byte, then close the read
+    # end: nothing else holds it and the shell would leak one per capture.
+    def _pump(self):
+        try:
+            while True:
+                try:
+                    chunk = os.read(self.read_fd, 65536)
+                except (OSError, ValueError):
+                    break
+                if not chunk:
+                    break
+                self.chunks.append(chunk)
+        finally:
+            try:
+                os.close(self.read_fd)
+            except (OSError, TypeError):
+                pass
+            self.read_fd = None
+
+    # Wait for the child to close the pipe and return what it wrote. The wait is
+    # bounded: a child that never exits has already failed, and the thread is a
+    # daemon, so an unfinished read cannot hold the shell.
+    def result(self):
+        self.thread.join(timeout=5)
+        return b"".join(self.chunks)
+
+
+# Start one host stage and return (Popen, PCB, stdin fd, capture) or None on failure.
+# capture is a _Capture when the stage writes into a memory buffer, else None.
 def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
     stdin_fd = None
     owned_stdin = False
@@ -400,12 +460,16 @@ def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
     elif stdin_spec is None and background:
         stdin_fd = fds.add(_devnull_in())
         owned_stdin = True
+    capture_write = None
     if out[0] == "file":
         stdout_fd = fds.add(_open_out(out[1], out[2]))
     elif out[0] == "fd":
         stdout_fd = out[1]
     else:
-        stdout_fd = None
+        # out is a memory buffer: the child needs a real pipe, otherwise it would
+        # inherit the parent's stdout and write straight past the capture.
+        capture_read, capture_write = os.pipe()
+        stdout_fd = capture_write
     stderr_fd = None
     merge = err[0] == "merge"
     if err[0] == "file":
@@ -420,18 +484,33 @@ def _spawn_host(argv, stdin_spec, out, err, background, fds, env_extra):
             env_extra=env_extra)
     except OSError as exc:
         printk.error(f"{argv[0]}: 启动失败: {exc}\n")
+        if capture_write is not None:
+            for fd in (capture_read, capture_write):
+                try:
+                    os.close(fd)
+                except (OSError, TypeError):
+                    pass
         return None
     hostexec.audit_cmd(" ".join(argv))
+    capture = None
+    if capture_write is not None:
+        # The parent has to drop its own copy of the write end, or the collector
+        # below would never see the EOF that ends the capture.
+        try:
+            os.close(capture_write)
+        except (OSError, TypeError):
+            pass
+        capture = _Capture(capture_read)
     if background:
         hostexec.track_bg(popen_obj, pcb, " ".join(argv))
-        return popen_obj, pcb, None
+        return popen_obj, pcb, None, capture
     if owned_stdin and stdin_fd is not None:
         fds.discard(stdin_fd)
         try:
             os.close(stdin_fd)
         except OSError:
             pass
-    return popen_obj, pcb, stdin_fd
+    return popen_obj, pcb, stdin_fd, capture
 
 
 # Wait for every host stage already started and return the status of the last one.
@@ -492,6 +571,7 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
     status = 0
     statuses = [0] * total
     buffered = [None] * total
+    captures = {}
 
     for index, stage in enumerate(stages):
         if stage["kind"] not in _REAL_KINDS:
@@ -523,7 +603,9 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
             status = 1
             buffered[index] = b""
             continue
-        popen_obj, pcb, _ = result
+        popen_obj, pcb, _, capture = result
+        if capture is not None:
+            captures[index] = capture
         if background:
             buffered[index] = b""
         else:
@@ -585,7 +667,14 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
         except Exception:
             stage_status = 1
         _dbg(f"wait  stage[{index}] status={stage_status}")
-        buffered[index] = buffered[index] if buffered[index] else b""
+        # A host stage writes straight to its own descriptor, so the only bytes it
+        # contributes to a capture are the ones its collector drained; anything
+        # else stays empty rather than pretending an output that was never kept.
+        capture = captures.get(index)
+        if capture is not None:
+            buffered[index] = capture.result()
+        elif not buffered[index]:
+            buffered[index] = b""
         if index == total - 1:
             status = stage_status
         statuses[index] = stage_status

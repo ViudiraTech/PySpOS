@@ -65,31 +65,39 @@ def run_in_broken_pty(code, label, expect_prefix):
     return n_caret, spins
 
 
-# 1) bare input(): must reproduce the problem, which proves the reproduction is real
-bare, bare_spins = run_in_broken_pty(
-    "s=input('? (y/n)[n]: ')\n"
-    "print('GOT', repr(s))",
-    "裸 input() 读裸 \\r（icrnl-off）", "?")
+# Drive both pty reproductions, report the counts and return 0 when the defence held.
+# It is a function, not module-level code: importing this file must not fork two
+# ptys or exit the interpreter, so only the __main__ guard below runs it.
+def main():
+    # 1) bare input(): must reproduce the problem, which proves the reproduction is real
+    bare, bare_spins = run_in_broken_pty(
+        "s=input('? (y/n)[n]: ')\n"
+        "print('GOT', repr(s))",
+        "裸 input() 读裸 \\r（icrnl-off）", "?")
 
-# 2) ttyutil: must recover by itself, read one line and exit cleanly
-safe, safe_spins = run_in_broken_pty(
-    "import ttyutil\n"
-    "ttyutil.ensure_sane_tty()\n"
-    "r=ttyutil.read_choice('? (y/n)[n]: ', valid=('y','n'),"
-    " default='n', max_retries=5)\n"
-    "print('GOT', repr(r))",
-    "ttyutil.ensure_sane_tty + read_choice", "无效输入")
+    # 2) ttyutil: must recover by itself, read one line and exit cleanly
+    safe, safe_spins = run_in_broken_pty(
+        "import ttyutil\n"
+        "ttyutil.ensure_sane_tty()\n"
+        "r=ttyutil.read_choice('? (y/n)[n]: ', valid=('y','n'),"
+        " default='n', max_retries=5)\n"
+        "print('GOT', repr(r))",
+        "ttyutil.ensure_sane_tty + read_choice", "无效输入")
 
-print()
-ok = True
-if bare == 0:
-    print("注意：裸 input() 未复现 ^M，pty 复现环境可能不够真实")
-    ok = False
-if safe > 3:
-    print(f"失败：read_choice 后仍出现 {safe} 次 ^M")
-    ok = False
-if safe_spins > 1:
-    print(f"失败：无效提示刷了 {safe_spins} 次（有上限=1~2）")
-    ok = False
-print("结论：", "通过 —— 防御层生效" if ok else "未通过")
-sys.exit(0 if ok else 1)
+    print()
+    ok = True
+    if bare == 0:
+        print("注意：裸 input() 未复现 ^M，pty 复现环境可能不够真实")
+        ok = False
+    if safe > 3:
+        print(f"失败：read_choice 后仍出现 {safe} 次 ^M")
+        ok = False
+    if safe_spins > 1:
+        print(f"失败：无效提示刷了 {safe_spins} 次（有上限=1~2）")
+        ok = False
+    print("结论：", "通过 —— 防御层生效" if ok else "未通过")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -17,6 +17,11 @@ from typing import Optional
 _LEVELS = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
 _current_level = _LEVELS.get(os.environ.get("PYSPOS_LOG_LEVEL", "INFO").upper(), 20)
 
+# The shared boot reference, captured once at import. A default taken per call
+# would restart the clock on every line and report every line as 0.000000s
+# elapsed; the caller that really knows the boot time still passes it in.
+_BOOT_TIME = time.time()
+
 # Set the global severity threshold; an unknown name falls back to INFO.
 def set_level(level: str) -> None:
     global _current_level
@@ -42,7 +47,7 @@ def printl(
 ) -> None:
     # default the reference time
     if boot_time is None:
-        boot_time = time.time()
+        boot_time = _BOOT_TIME
     
     # compute the elapsed time and format the timestamp
     elapsed = time.time() - boot_time

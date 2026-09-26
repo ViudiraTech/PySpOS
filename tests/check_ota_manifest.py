@@ -34,7 +34,8 @@ def main():
     if not os.path.exists(VJ):
         print("[FAIL] 找不到 docs/ota/version.json")
         return 1
-    data = json.load(open(VJ, encoding="utf-8"))
+    with open(VJ, encoding="utf-8") as stream:
+        data = json.load(stream)
     errs, warns = [], []
 
     top_ver = data.get("version")
@@ -101,20 +102,28 @@ def main():
     rel = os.path.join(OTA, "releases.html")
     marker = "const fallbackVersionData = "
     if os.path.exists(rel):
-        h = open(rel, encoding="utf-8").read()
+        with open(rel, encoding="utf-8") as stream:
+            h = stream.read()
         i = h.find(marker)
         if i >= 0:
             j = i + len(marker)
             try:
                 obj, _ = json.JSONDecoder().raw_decode(h[j:])
-                a = [c.get("version") for c in obj.get("changelog", [])]
-                b = [c.get("version") for c in changelog]
-                if a != b:
-                    errs.append(f"releases.html 静态兜底已过期: {a} vs {b}")
-                else:
-                    print("[ OK ] releases.html 静态兜底与 version.json 同步")
             except ValueError:
                 errs.append("releases.html 的 fallbackVersionData 不是合法 JSON")
+            else:
+                # A syntactically valid value of the wrong shape is a broken
+                # fallback too, and .get on it would raise instead of being
+                # reported, so the type is checked before it is used.
+                if not isinstance(obj, dict):
+                    errs.append("releases.html 的 fallbackVersionData 不是 JSON 对象")
+                else:
+                    a = [c.get("version") for c in obj.get("changelog", [])]
+                    b = [c.get("version") for c in changelog]
+                    if a != b:
+                        errs.append(f"releases.html 静态兜底已过期: {a} vs {b}")
+                    else:
+                        print("[ OK ] releases.html 静态兜底与 version.json 同步")
 
     # ---- zips in the directory that nobody registered ----
     registered = {e.get("download_url") for e in changelog}

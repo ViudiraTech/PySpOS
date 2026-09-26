@@ -187,11 +187,13 @@ def test_builtin_shadows_host(monkeypatch):
     assert called == []
 
 
-# An unresolvable command keeps the shell's own not-found wording.
+# An unresolvable command keeps the shell's own not-found wording and the reserved 127 status.
 def test_unknown_still_127(monkeypatch):
+    from shell import shexec
     monkeypatch.setattr(hostexec, "resolve", lambda name: None)
     out = run("definitely-not-a-command-xyz")
     assert "未找到命令" in out
+    assert shexec.last_status() == 127
 
 
 # ---------- redirection and pipes at the fd level ----------
@@ -231,12 +233,18 @@ def test_background_registers_job_and_reaps(capfd):
     pid = jobs[0].pids[0]
     assert process.last_bg_pid() == pid
     deadline = time.time() + 10
+    zombie = None
     while time.time() < deadline:
         pcb = process.get(pid)
-        if pcb is not None and pcb.state == "Zombie":
+        if pcb is None:
+            # already reaped: nothing left to inspect, so stop looking
+            break
+        if pcb.state == "Zombie":
+            zombie = pcb
             break
         time.sleep(0.05)
-    assert process.get(pid).state == "Zombie"
+    assert zombie is not None and zombie.state == "Zombie", \
+        f"作业 {pid} 未变成僵尸: {getattr(zombie, 'state', None)!r}"
     time.sleep(0.3)  # Leave the relay thread time to flush
     out, _ = capfd.readouterr()
     assert "\x1b[32mbg\x1b[0m" in out

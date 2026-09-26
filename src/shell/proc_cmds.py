@@ -87,7 +87,11 @@ def cmd_fg(args: str = ""):
     print(f"继续作业 [{job.job_id}] {job.cmdline}")
     for pid in live:
         proc.send_signal(pid, proc.SIGCONT)
-    forkexec.wait(live[0], timeout=None)
+    # A job can hold several processes, so every one of them has to be waited for:
+    # returning after the first one would leave the rest of the job running
+    # unsupervised and still marked live.
+    for pid in live:
+        forkexec.wait(pid, timeout=None)
     proc.reap_children(proc.current_shell_pid())
 
 

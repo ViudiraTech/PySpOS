@@ -25,5 +25,10 @@ def get_spf_path(app_name: str) -> str:
 
 # Report whether a filename is safe to use
 def is_safe_filename(filename: str) -> bool:
+    # A backslash is a path separator on Windows and a traversal spelling on every
+    # platform, so '..\..\etc' has to be refused the same way '../' is; testing only
+    # for '../' let it through and the write landed outside the directory.
+    if "\\" in filename:
+        return False
     return not (re.search(r'\.\./', filename) or os.path.isabs(filename))
 

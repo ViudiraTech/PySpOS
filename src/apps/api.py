@@ -12,6 +12,7 @@
 import base64
 import os
 import sys
+import threading
 from pathlib import Path
 
 # Make the parent src/ directory importable
@@ -27,20 +28,53 @@ SYSCTL_ENV = "PYSPOS_SYSCTL_ADDR"
 AUTHKEY_ENV = "PYSPOS_SYSCTL_AUTHKEY"
 _conn = None
 _req_id = 0
-_REQ_LOCK = None
+# One lock around the connection cache: several app threads may race to open
+# it, and a second Client on the same address is a leaked socket.
+_conn_lock = threading.Lock()
+# One lock around the request-id counter: a child may issue syscalls from several
+# threads, and an interleaved send would hand two replies to one waiting caller.
+_req_lock = threading.Lock()
 
 
 # --------------------------------------------------------------------------
 # RPC transport
 # --------------------------------------------------------------------------
 
-# Return the lazily opened connection to the parent sysctl listener.
-# None means no RPC channel: in-process mode, or a failed handshake
-# (a failure leaves the cache empty so the next call retries).
+# Split a host:port address, accepting the bracketed IPv6 form
+# "[::1]:port" that a plain rsplit cannot handle.
+def _split_addr(addr):
+    if addr.startswith("["):
+        host, _, rest = addr[1:].partition("]")
+        if not rest.startswith(":"):
+            raise ValueError(f"非法的监听地址: {addr}")
+        return host, int(rest[1:])
+    host, sep, port = addr.rpartition(":")
+    if not sep:
+        raise ValueError(f"非法的监听地址: {addr}")
+    return host, int(port)
+
+
 def _get_conn():
     global _conn
     if _conn is not None:
         return _conn
+    addr = os.environ.get(SYSCTL_ENV)
+    if not addr:
+        return None
+    try:
+        from multiprocessing.connection import Client
+        encoded = os.environ.get(AUTHKEY_ENV)
+        if not encoded:
+            return None
+        authkey = base64.b64decode(encoded, validate=True)
+        host, port = _split_addr(addr)
+        with _conn_lock:
+            if _conn is None:
+                _conn = Client((host, port), authkey=authkey)
+    except Exception:
+        with _conn_lock:
+            _conn = None
+    return _conn
     addr = os.environ.get(SYSCTL_ENV)
     if not addr:
         return None
@@ -69,13 +103,16 @@ def _call(op, *args, **kwargs):
     if conn is None:
         return None
     global _req_id
-    _req_id += 1
-    rid = _req_id
+    with _req_lock:
+        _req_id += 1
+        rid = _req_id
     try:
         conn.send((rid, op, list(args), dict(kwargs)))
-        _, payload = conn.recv()
+        got_id, payload = conn.recv()
     except Exception as e:
         return (False, f"系统调用失败: {e}")
+    if got_id != rid:
+        return (False, "系统调用响应序号不匹配")
     if not payload.get("ok"):
         return (False, payload.get("error", "未知错误"))
     return (True, payload.get("ret"))

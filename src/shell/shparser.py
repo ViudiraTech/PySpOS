@@ -359,6 +359,8 @@ def _parse_command(tokens):
             elif value[0].isdigit():
                 fd = int(value[:-2] if value.endswith(">>") else value[:-1])
                 mode = ">>" if value.endswith(">>") else value[-1]
+                # fd 0 lands on the same (0, "<", target) redirect the bare < uses,
+                # so 0<file and <file are the same input redirection.
                 redirects.append((fd, mode, target))
             elif value == ">":
                 redirects.append((1, ">", target))

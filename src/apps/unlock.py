@@ -9,9 +9,6 @@
  */
 '''
 
-import api
-
-
 # Report that the trust domain only changes offline; prints only.
 def main():
     print("Bootloader 信任域不能由 Token 或 ROOT 改变。")

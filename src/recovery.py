@@ -15,6 +15,7 @@ import logk
 import tui
 from tui import BACK, TUIAbort
 import printk
+import re
 import shutil
 import os
 import gc
@@ -74,18 +75,33 @@ def check_and_terminate_main_process():
                 current_pid = str(os.getpid())
                 
                 for line in lines[1:]:  # skip the header line
-                    if line:
-                        parts = line.split(',')
-                        if len(parts) >= 2:
-                            pid = parts[1].strip('"')
-                            
-                            # read that process's command line
-                            cmd_result = subprocess.run(['wmic', 'process', 'where', f'ProcessId={pid}', 'get', 'CommandLine'], 
-                                                      capture_output=True, text=True)
-                            if cmd_result.returncode == 0 and 'main.py' in cmd_result.stdout and pid != current_pid:
-                                logk.printl("recovery", f"发现正在运行的 main 进程 (PID: {pid})，正在终止...", main.boot_time)
-                                subprocess.run(['taskkill', '/PID', pid, '/F'], cwd=root_dir)
-                                logk.printl("recovery", f"main 进程已终止", main.boot_time)
+                    if not line:
+                        continue
+                    parts = line.split(',')
+                    if len(parts) < 2:
+                        continue
+                    pid = parts[1].strip('"')
+                    if not pid.isdigit() or pid == current_pid:
+                        continue
+                    # read that process's command line
+                    cmd_result = subprocess.run(['wmic', 'process', 'where', f'ProcessId={pid}', 'get', 'ProcessId,CommandLine'], 
+                                              capture_output=True, text=True)
+                    if cmd_result.returncode != 0:
+                        continue
+                    # Match one line at a time and only act on a line that names
+                    # this pid. A 'main.py' anywhere in the whole output said
+                    # nothing about which process it belonged to, so a match in
+                    # another row could kill an innocent process by mistake.
+                    for row in cmd_result.stdout.splitlines():
+                        row = row.strip()
+                        if not row or 'main.py' not in row:
+                            continue
+                        if not re.search(r'(?<!\d)' + re.escape(pid) + r'(?!\d)', row):
+                            continue
+                        logk.printl("recovery", f"发现正在运行的 main 进程 (PID: {pid})，正在终止...", main.boot_time)
+                        subprocess.run(['taskkill', '/PID', pid, '/F'], cwd=root_dir)
+                        logk.printl("recovery", f"main 进程已终止", main.boot_time)
+                        break
         else:  # Linux/Unix
             result = subprocess.run(['ps', 'aux'], capture_output=True, text=True, cwd=root_dir)
             if result.returncode == 0:
@@ -93,13 +109,19 @@ def check_and_terminate_main_process():
                 current_pid = str(os.getpid())
                 
                 for line in lines[1:]:  # skip the header line
-                    if line and 'main.py' in line and current_pid not in line:
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            pid = parts[1]
-                            logk.printl("recovery", f"发现正在运行的 main 进程 (PID: {pid})，正在终止...", main.boot_time)
-                            subprocess.run(['kill', '-9', pid], cwd=root_dir)
-                            logk.printl("recovery", f"main 进程已终止", main.boot_time)
+                    if not line or 'main.py' not in line:
+                        continue
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+                    pid = parts[1]
+                    # compare the pid field itself, never a substring of the line:
+                    # "1234" must not match a process whose pid is 51234
+                    if not pid.isdigit() or pid == current_pid:
+                        continue
+                    logk.printl("recovery", f"发现正在运行的 main 进程 (PID: {pid})，正在终止...", main.boot_time)
+                    subprocess.run(['kill', '-9', pid], cwd=root_dir)
+                    logk.printl("recovery", f"main 进程已终止", main.boot_time)
     except Exception as e:
         logk.printl("recovery", f"检查进程时出错: {e}", main.boot_time)
 
