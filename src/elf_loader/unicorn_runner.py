@@ -450,8 +450,12 @@ class UnicornRunner:
             signal=signal, fault_addr=self.fault_addr)
 
 # Return the stack top, held clear of the AT_RANDOM page.
+# The 64-bit top sits at 0x7fff0000 so a 32-bit stack is never clamped
+# into unmapped space; the 32-bit top is already a region boundary.
     def _stack_top_clamped(self) -> int:
         top = self.loader.stack_top
+        if self.loader.parser.is_32bit:
+            return top
         if top >= 0x7fff0000:
             top = 0x7ffefff0
         return top

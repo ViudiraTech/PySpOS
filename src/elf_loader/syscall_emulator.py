@@ -754,6 +754,22 @@ class OpenFlags(IntEnum):
     O_PATH = 0o10000000
 
 
+# Translate a PROT_* value into MemoryProtection bits.
+# PROT_NONE=0x0, PROT_READ=0x1, PROT_WRITE=0x2, PROT_EXEC=0x4 are the kernel's
+# bit assignment; MemoryProtection numbers them like x86 PF_* flags instead,
+# so a mechanical passthrough transposes read and exec.
+def _mmap_prot_to_region(prot: int) -> int:
+    from .elf_loader import MemoryProtection
+    flags = 0
+    if prot & int(MmapProt.PROT_READ):
+        flags |= int(MemoryProtection.READ)
+    if prot & int(MmapProt.PROT_WRITE):
+        flags |= int(MemoryProtection.WRITE)
+    if prot & int(MmapProt.PROT_EXEC):
+        flags |= int(MemoryProtection.EXEC)
+    return flags
+
+
 # mmap protection flags
 # The PROT_* protection bits mmap and mprotect take.
 class MmapProt(IntEnum):
@@ -1225,11 +1241,20 @@ class SyscallEmulator:
             return -e.errno
     
 # Write this architecture's struct stat layout into guest memory.
+    def _split_timespec(self, stamp):
+        """Split a float timestamp into whole seconds and nanoseconds."""
+        whole = int(stamp)
+        return whole, int((stamp - whole) * 1000000000)
+
     def _write_stat(self, addr: int, st: os.stat_result):
+        atime, atime_nsec = self._split_timespec(st.st_atime)
+        mtime, mtime_nsec = self._split_timespec(st.st_mtime)
+        ctime, ctime_nsec = self._split_timespec(st.st_ctime)
         if self.is_64bit:
-# x86_64 stat layout
-# a simplified layout that only fills the fields programs check
-            data = struct.pack('<QQQQQQQQQQQQQQQQQQQ',
+# x86_64 struct stat is 144 bytes: dev/ino/nlink 8 each, mode/uid/gid/pad
+# 4 each, rdev/size/blksize/blocks 8 each, three 16-byte timespecs,
+# then three reserved words. Fields before this patch were shifted.
+            data = struct.pack('<QQQLLLlQQQQqqqqqqQQQ',
                 st.st_dev,      # dev
                 st.st_ino,      # ino
                 st.st_nlink,    # nlink
@@ -1241,20 +1266,20 @@ class SyscallEmulator:
                 st.st_size,     # size
                 st.st_blksize,  # blksize
                 st.st_blocks,   # blocks
-                int(st.st_atime),  # atime
-                0,              # atime_nsec
-                int(st.st_mtime),  # mtime
-                0,              # mtime_nsec
-                int(st.st_ctime),  # ctime
-                0,              # ctime_nsec
-                0, 0, 0         # __unused
+                atime,          # atime
+                atime_nsec,
+                mtime,          # mtime
+                mtime_nsec,
+                ctime,          # ctime
+                ctime_nsec,
+                0, 0, 0         # __glibc_reserved
             )
         else:
-# i386 stat layout
-            data = struct.pack('<QQIIIIIIIIIIIIIIII',
+# i386 struct stat64 is 96 bytes: the second ino carries the full value.
+            data = struct.pack('<QIIIIIIQIQIQQQQQ',
                 st.st_dev,      # dev
                 0,              # __pad1
-                st.st_ino,      # ino
+                st.st_ino & 0xffffffff,  # __st_ino
                 st.st_mode,     # mode
                 st.st_nlink,    # nlink
                 st.st_uid,      # uid
@@ -1264,12 +1289,10 @@ class SyscallEmulator:
                 st.st_size,     # size
                 st.st_blksize,  # blksize
                 st.st_blocks,   # blocks
-                int(st.st_atime),  # atime
-                0,              # atime_nsec
-                int(st.st_mtime),  # mtime
-                0,              # mtime_nsec
-                int(st.st_ctime),  # ctime
-                0               # ctime_nsec
+                atime,
+                mtime,
+                ctime,
+                st.st_ino,      # st_ino
             )
         self._write_buffer(addr, data)
     
@@ -1321,7 +1344,7 @@ class SyscallEmulator:
                 start=addr,
                 size=length_aligned,
                 data=bytearray(length_aligned),
-                flags=prot,
+                flags=_mmap_prot_to_region(prot),
                 name="mmap"
             )
             self.loader.memory[addr] = region
@@ -1345,7 +1368,7 @@ class SyscallEmulator:
                 start=addr,
                 size=length_aligned,
                 data=region_data,
-                flags=prot,
+                flags=_mmap_prot_to_region(prot),
                 name="mmap_file"
             )
             self.loader.memory[addr] = region
@@ -1365,7 +1388,18 @@ class SyscallEmulator:
     
 # Change protection; accepted and ignored, so the old bits stay.
     def sys_mprotect(self, addr: int, length: int, prot: int) -> int:
-# simplified
+# Change the protection of every mapped region the range touches.
+        region_flags = _mmap_prot_to_region(prot)
+        end = addr + length
+        touched = False
+        for region in self.loader.memory.values():
+            if region.end <= addr or region.start >= end:
+                continue
+            region.flags = region_flags
+            touched = True
+        if not touched:
+            return -errno.ENOMEM
+        self.mmaps[addr] = (length, prot)
         return 0
     
 # Report the break when addr is zero, otherwise grow the heap.

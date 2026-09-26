@@ -617,9 +617,11 @@ class ELFLoader:
         
         while current_addr:
             try:
-                vd_ndx = self._read_memory_int(current_addr + 16, 2)
+# Elf64_Verdef: vd_version@0 u16, vd_flags@2 u16, vd_ndx@4 u16,
+# vd_cnt@6 u16, vd_hash@8 u32, vd_aux@12 u32, vd_next@16 u32.
+                vd_ndx = self._read_memory_int(current_addr + 4, 2)
                 vd_name_off = self._read_memory_int(current_addr + 20, 4)
-                vd_next = self._read_memory_int(current_addr + 8, 4)
+                vd_next = self._read_memory_int(current_addr + 16, 4)
                 
                 name = self._read_string(strtab + vd_name_off)
                 self.verdef.append((vd_ndx, name))
@@ -638,18 +640,22 @@ class ELFLoader:
         
         while current_addr:
             try:
-                vn_file_off = self._read_memory_int(current_addr + 8, 4)
-                vn_cnt = self._read_memory_int(current_addr + 12, 2)
-                vn_next = self._read_memory_int(current_addr + 16, 4)
+# Elf64_Verneed: vn_version@0 u16, vn_cnt@2 u16, vn_file@4 u32,
+# vn_aux@8 u32, vn_next@12 u32.
+                vn_file_off = self._read_memory_int(current_addr + 4, 4)
+                vn_cnt = self._read_memory_int(current_addr + 2, 2)
+                vn_next = self._read_memory_int(current_addr + 12, 4)
                 
                 filename = self._read_string(strtab + vn_file_off)
                 self.verneed[filename] = []
                 
-                vernaux_addr = current_addr + 20
+                vernaux_addr = current_addr + 8
                 for _ in range(vn_cnt):
-                    vna_hash = self._read_memory_int(vernaux_addr + 8, 4)
-                    vna_name_off = self._read_memory_int(vernaux_addr + 12, 4)
-                    vna_next = self._read_memory_int(vernaux_addr + 16, 4)
+# Elf64_Vernaux: vna_hash@0 u32, vna_flags@4 u16,
+# vna_other@6 u16, vna_name@8 u32, vna_next@12 u32.
+                    vna_hash = self._read_memory_int(vernaux_addr + 0, 4)
+                    vna_name_off = self._read_memory_int(vernaux_addr + 8, 4)
+                    vna_next = self._read_memory_int(vernaux_addr + 12, 4)
                     
                     name = self._read_string(strtab + vna_name_off)
                     self.verneed[filename].append((vna_hash, name))
@@ -866,7 +872,7 @@ class ELFLoader:
                 else:
                     sym_value = self._resolve_external_symbol(sym_name)
                     if sym_value is None:
-                        if sym.binding == SymbolBinding.STB_WEAK:
+                        if sym.bind == SymbolBinding.STB_WEAK:
                             sym_value = 0
                         else:
                             logger.warning(f"Unresolved symbol: {sym_name}")
@@ -1397,6 +1403,8 @@ class ELFLoader:
         self.auxv.append(AuxvEntry(AuxvType.AT_PHENT, self.phdr_ent_size))
         self.auxv.append(AuxvEntry(AuxvType.AT_PHNUM, self.phdr_count))
         self.auxv.append(AuxvEntry(AuxvType.AT_PAGESZ, PAGE_SIZE))
+        # No interpreter image is loaded (PT_INTERP is not mapped), so there
+        # is no base address to report; 0 is the true value, not a placeholder.
         self.auxv.append(AuxvEntry(AuxvType.AT_BASE, 0))
         self.auxv.append(AuxvEntry(AuxvType.AT_FLAGS, 0))
         self.auxv.append(AuxvEntry(AuxvType.AT_ENTRY, self.entry_point))

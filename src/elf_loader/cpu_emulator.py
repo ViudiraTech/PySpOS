@@ -498,7 +498,7 @@ class CPUEmulator:
 # Point the stack, the instruction pointer and the flags at the entry state.
     def _init_registers(self) -> None:
         stack_top = self.loader.stack_top
-        if stack_top >= 0x7fff0000:
+        if self.is_64bit and stack_top >= 0x7fff0000:
             stack_top = 0x7ffefff0
         if self.is_64bit:
             self.state.regs[Register64.RSP] = stack_top
@@ -519,7 +519,7 @@ class CPUEmulator:
 # Build the 64-bit startup stack, auxv area included.
     def _setup_argv_envp_64(self, argv: List[str], envp: Dict[str, str]) -> None:
         stack_top = self.loader.stack_top
-        if stack_top >= 0x7fff0000:
+        if self.is_64bit and stack_top >= 0x7fff0000:
             stack_top = 0x7ffefff0
         rsp = stack_top & ~0xF
         
@@ -555,7 +555,7 @@ class CPUEmulator:
 # Build the 32-bit startup stack, auxv area included.
     def _setup_argv_envp_32(self, argv: List[str], envp: Dict[str, str]) -> None:
         stack_top = self.loader.stack_top
-        if stack_top >= 0x7fff0000:
+        if self.is_64bit and stack_top >= 0x7fff0000:
             stack_top = 0x7ffefff0
         esp = stack_top & ~0x3
         

@@ -646,13 +646,16 @@ class ELFDebugger:
         backtrace.append((ip, sym))
         
         max_frames = 20
+        word = 8 if self.runner.cpu.is_64bit else 4
         for _ in range(max_frames):
             try:
                 if bp == 0:
                     break
-                
-                ret_addr = self.runner.cpu.memory.read_qword(bp + 8)
-                next_bp = self.runner.cpu.memory.read_qword(bp)
+
+                read_slot = (self.runner.cpu.memory.read_qword if word == 8
+                             else self.runner.cpu.memory.read_dword)
+                ret_addr = read_slot(bp + word)
+                next_bp = read_slot(bp)
                 
                 if ret_addr == 0 or next_bp == 0:
                     break
