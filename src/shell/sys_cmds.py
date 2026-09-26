@@ -123,11 +123,22 @@ def cmd_shb():
     print(f"编码0x{code:04X}对应的字符：{chr(code)}")  # prints that character
 
 # List the entries of the current directory.
-def cmd_ls():
-    items = fs.list_dir()
+def cmd_ls(args: str = ""):
+    target = (args or "").strip()
+    if not target:
+        items = fs.list_dir()
+    else:
+        if not os.path.isdir(target):
+            printk.error(f"ls: 无法访问 {target}: 没有那个目录\n")
+            return 1
+        try:
+            items = sorted(os.listdir(target))
+        except OSError as exc:
+            printk.error(f"ls: 读取 {target} 失败: {exc}\n")
+            return 1
     for item in items:
         print(item)
-    print()
+    return 0
 
 # Change the working directory, keeping OLDPWD so cd - works.
 def cmd_cd(path: str = None):
