@@ -919,6 +919,21 @@ def mark_boot_success(root_dir, slot, manifest=None):
     save_state(root_dir, state)
 
 
+# Set the active slot directly and clear any pending switch.
+# This is the single writer for the active slot. The legacy current_slot file
+# is no longer authoritative: writing it alone left get_current_slot reading
+# the boot state instead, so a switch was silently dropped and the device kept
+# booting the old slot.
+def set_active_slot(root_dir, slot):
+    if slot not in SLOTS:
+        raise BootVerificationError("无效槽位")
+    state = load_state(root_dir)
+    state["active_slot"] = slot
+    state["pending_slot"] = None
+    state["attempts_remaining"] = 0
+    save_state(root_dir, state)
+
+
 # Mark a slot pending with three attempts and preserve the current active slot.
 def stage_slot(root_dir, slot, manifest=None):
     if slot not in SLOTS:

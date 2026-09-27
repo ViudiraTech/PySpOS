@@ -48,8 +48,6 @@ except Exception:
 # Slot layout: two immutable install targets plus the pointer to the active one.
 SLOT_A = "slot_a"
 SLOT_B = "slot_b"
-CURRENT_SLOT_FILE = os.path.join(root_dir, "current_slot")
-
 # Where downloaded update packages are staged.
 OTA_PACKAGE_DIR = os.path.join(root_dir, "ota")
 OTA_PACKAGE_NAME = "update.zip"
@@ -410,8 +408,9 @@ def verify_update_package(package_path: str, expected_hash: str = None) -> bool:
         logk.printl("ota", f"验证失败: {e}", boot_time)
         return False
 
-# The slot to boot: boot state first, then the
-# slot file, and finally slot_a is written out.
+# The slot to boot. The verified boot state is the single source of truth. The
+# legacy current_slot file is read at most once, to migrate a device that only
+# has that file, and is then no longer consulted.
 def get_current_slot() -> str:
     try:
         state = secure_boot.load_state(root_dir)
@@ -419,31 +418,23 @@ def get_current_slot() -> str:
             return state["active_slot"]
     except secure_boot.BootVerificationError:
         pass
-    if os.path.exists(CURRENT_SLOT_FILE):
-        with open(CURRENT_SLOT_FILE, 'r', encoding='utf-8') as f:
-            slot = f.read().strip()
-            if slot in [SLOT_A, SLOT_B]:
-                return slot
+    legacy = secure_boot._legacy_slot(root_dir)
+    if legacy:
+        try:
+            secure_boot.set_active_slot(root_dir, legacy)
+        except secure_boot.BootVerificationError:
+            pass
+        return legacy
     set_current_slot(SLOT_A)
     return SLOT_A
 
 
-# Write the active slot file atomically; the slot has to be slot_a or slot_b.
+# Switch the active slot. Delegates to the verified boot state, so the switch
+# cannot be silently dropped the way writing the legacy file on its own was.
 def set_current_slot(slot: str) -> None:
     if slot not in [SLOT_A, SLOT_B]:
         raise ValueError("无效槽位")
-    parent = os.path.dirname(CURRENT_SLOT_FILE)
-    os.makedirs(parent, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=".current-slot-", dir=parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(slot)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, CURRENT_SLOT_FILE)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+    secure_boot.set_active_slot(root_dir, slot)
     logk.printl("ota", f"已设置当前槽位为: {slot}", boot_time)
 
 # The slot that is not the active one, where an update would land.
@@ -669,7 +660,6 @@ def restart_system() -> bool:
 # Windows moves it aside and deletes it from a background thread, because files
 # there are still open; elsewhere it is removed directly.
 def _reset_slot_dir(slot_path: str, purpose: str) -> bool:
-    import tempfile
     import uuid
     if not os.path.exists(slot_path):
         return True
@@ -1042,7 +1032,8 @@ def install_update(package_path: str = None) -> bool:
     target_name = get_other_slot()
     if not install_package_to_slot(package_path, target_name):
         return False
-    set_current_slot(target_name)
+    # install_package_to_slot already marks the slot pending, so the next boot
+    # loads it. Switching active here would skip the rollback protection.
     return True
 
 
@@ -1106,7 +1097,9 @@ def switch_slot() -> bool:
     except secure_boot.BootVerificationError as exc:
         logk.printl("ota", f"无法设置待启动槽位: {exc}", boot_time)
         return False
-    set_current_slot(target)
+    # The slot is marked pending, not active: the bootloader tries it first and
+    # only promotes it once the boot succeeds, so a bad image rolls back instead
+    # of bricking the device. Switching active here would skip that protection.
     logk.printl("ota", f"槽位已标记为待启动: {target}", boot_time)
     logk.printl("ota", "请重启系统以加载新槽位的系统文件", boot_time)
     return True
@@ -1170,7 +1163,13 @@ def ota_init() -> bool:
         else:
             logk.printl("ota", f"槽位文件夹 {slot} 已存在", boot_time)
     
-    if not os.path.exists(CURRENT_SLOT_FILE):
+    # The boot state is the single source of truth for the active slot, so this
+    # checks it rather than the legacy current_slot file.
+    try:
+        has_slot = secure_boot.load_state(root_dir).get("active_slot") in (SLOT_A, SLOT_B)
+    except secure_boot.BootVerificationError:
+        has_slot = False
+    if not has_slot:
         try:
             set_current_slot(SLOT_A)
             logk.printl("ota", "设置默认当前槽位为 SLOT_A", boot_time)
