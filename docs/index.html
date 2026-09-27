@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 8（自研内核系统）；SpaceOS 6 / 7 已停止开发，仅作存档。">
   <title>GoutouStdio — PySpOS 与 SpaceOS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
   <script src="js/theme-init.js"></script>
@@ -27,8 +24,8 @@
           <li><a href="index.html" aria-current="page">首页</a></li>
           <li><a href="pyspos.html">PySpOS</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
-          <li><a href="spaceos6.html">SpaceOS 6</a></li>
-          <li><a href="spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="spaceos6.html">6 · 存档</a></li>
+          <li><a href="spaceos7.html">7 · 存档</a></li>
           <li><a href="requirements.html">配置要求</a></li>
           <li><a href="ota/index.html">下载</a></li>
           <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
@@ -42,183 +39,100 @@
   </header>
 
   <main id="main" class="site-main">
-    <div class="wrap page-head">
+    <div class="wrap page-head hero-home">
       <div class="page-head-grid">
         <div>
-          <span class="eyebrow">独立学生技术工作室 · est. 2022</span>
-          <h1>把操作系统的每一层都写一遍，写到能跑为止。</h1>
-          <p class="lede">2022 年，几个学生因为一个跑在 MP4 方案上的狗头 OS 聚在一起，从此开始一层一层往下写——Python 里的模拟系统、UEFI 上的真内核。现在维护 PySpOS 与 SpaceOS 8，SpaceOS 6 / 7 已经归档，过程全部公开。</p>
+          <span class="eyebrow">独立学生技术工作室 · 始于 2022</span>
+          <h1>从第一行代码，<br>到<span class="hero-accent">一个操作系统。</span></h1>
+          <p class="lede">从 Python 中的进程调度，到 UEFI 上的自研内核。我们是一群学生，把对操作系统的好奇，写成能运行、能阅读、能继续探索的开源项目。</p>
           <div class="actions">
-            <a class="btn btn-primary" href="pyspos.html">了解 PySpOS 3.2.0</a>
-            <a class="btn btn-secondary" href="spaceos8.html">查看 SpaceOS 8</a>
-            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">源码</a>
+            <a class="btn btn-primary" href="pyspos.html">探索 PySpOS <span aria-hidden="true">↗</span></a>
+            <a class="btn btn-secondary" href="spaceos8.html">认识 SpaceOS 8</a>
+
           </div>
-          <div class="meta-row" aria-label="维护状态">
-            <span>PySpOS v3.2.0 RC1 · 持续维护</span>
-            <span>SpaceOS 6 / 7 · 已停更</span>
-            <span>协议 · MIT / Apache-2.0</span>
-          </div>
-        </div>
-        <div class="term">
-          <div class="winbar">
-            <span class="winbar-title">pyspos — python launcher.py</span>
-            <button class="copy-btn" type="button" data-copy="term-index">复制命令</button>
-          </div>
-          <div class="term-body" id="term-index" aria-label="PySpOS 真实会话：开机问候、查看版本、运行 hello 应用">
-            <div class="t-line t-out">欢迎使用 PySpOS 操作系统，you！</div>
-            <div class="t-line">┌──(you@PySPOS)-[09:41:07]-(/PySpOS)</div>
-            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">osver</span></div>
-            <div class="t-line t-out">PySpOS 版本: 3.2.0, 开发阶段: RC 1</div>
-            <div class="t-line t-out">Python 版本: 3.12</div>
-            <div class="t-line">┌──(you@PySPOS)-[09:41:09]-(/PySpOS)</div>
-            <div class="t-line"><span class="t-p">└─$</span><span class="t-cmd">open hello</span></div>
-            <div class="t-line t-out">your username is: you</div>
-            <div class="t-line t-out">Hello from apps/hello.py!(hello count: 0)</div>
-            <div class="t-line t-out">Hello from apps/hello.py!(hello count: 1)</div>
-            <div class="t-line t-out">  …</div>
-            <div class="t-line">┌──(you@PySPOS)-[09:41:11]-(/PySpOS)</div>
-            <div class="t-line"><span class="t-p">└─$</span><span class="t-cursor" aria-hidden="true"></span></div>
+          <div class="hero-foot" aria-label="项目概况">
+            <span><strong>02</strong> 个活跃项目</span>
+            <span><strong>100%</strong> 开放源码</span>
+            <span><strong>Python / C</strong> 从模拟到内核</span>
           </div>
         </div>
-        <p class="term-note">格式与 <code>src/kernel.py</code>、<code>src/shell/sys_cmds.py</code>、<code>src/apps/hello.py</code> 的实际输出一致；时间、Python 版本、用户名随环境而变化。</p>
+        <figure class="system-figure" aria-labelledby="system-caption">
+          <figcaption id="system-caption"><span class="eyebrow">Inside PySpOS / 从用户态到内核</span></figcaption>
+          <div class="system-layer"><span class="layer-index">03</span><div><strong>你的第一条命令</strong><span>Shell · 应用程序 · ELF</span></div><span class="layer-code">$ open hello</span></div>
+          <div class="layer-path" aria-hidden="true">↓ syscall / 系统调用</div>
+          <div class="system-layer"><span class="layer-index">02</span><div><strong>系统如何作出决定</strong><span>EEVDF 调度 · 进程 · 权限</span></div><span class="layer-code">kernel.py</span></div>
+          <div class="layer-path" aria-hidden="true">↓ runtime / 运行环境</div>
+          <div class="system-layer"><span class="layer-index">01</span><div><strong>Python，真实的执行</strong><span>子进程 · 文件系统 · 宿主平台</span></div><span class="layer-code">Python 3.10+</span></div>
+          <p class="system-note">每一层都能打开源码，看到它如何工作。</p>
+        </figure>
       </div>
     </div>
 
-    <section class="section" aria-labelledby="products-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">作品</span>
-          <h2 class="section-title" id="products-title">进行中的，和已归档的</h2>
-          <p class="section-lede">四个都跑起来过，两个还在往前走。先看状态，再决定点进哪个。</p>
-        </div>
-        <ol class="index-list">
-          <li>
-            <span class="index-num" aria-hidden="true">01</span>
-            <div>
-              <div class="index-head">
-                <span class="index-kicker">Python · 用户态模拟 · 2022 — 进行中</span>
-                <h3>PySpOS</h3>
-                <span class="badge badge-ok">维护中</span>
-              </div>
-              <p class="index-desc">在用户态把进程调度、内存映射、文件系统和引导流程实现一遍。3.2.0 起应用是真子进程，调度器对标 Linux 6.6+ 的 EEVDF，ELF 由 Unicorn 执行真 x86 指令。</p>
-              <p class="index-meta">v3.2.0 RC1 · master · MIT</p>
-              <p class="index-links"><a href="pyspos.html">详情 →</a><a href="ota/index.html">下载</a></p>
-            </div>
-          </li>
-          <li>
-            <span class="index-num" aria-hidden="true">02</span>
-            <div>
-              <div class="index-head">
-                <span class="index-kicker">C · 真实内核 · 2026 — 进行中</span>
-                <h3>SpaceOS 8</h3>
-                <span class="badge badge-info">体验版</span>
-              </div>
-              <p class="index-desc">基于 Uinxed 的自研 UNIX-like 内核，配一整套自研用户态。内核已在实体服务器上跑通，能进桌面、跑 Linux 软件，OpenJDK 与 DOOM 已经能跑。第二版镜像修复了 xHCI USB HID。</p>
-              <p class="index-meta">1.0.0-alpha.1 · x86_64 · Apache-2.0</p>
-              <p class="index-links"><a href="spaceos8.html">详情 →</a><a href="spaceos8-download.html">下载镜像</a></p>
-            </div>
-          </li>
-          <li class="index-retired">
-            <span class="index-num" aria-hidden="true">03</span>
-            <div>
-              <div class="index-head">
-                <span class="index-kicker">存档 · 2024</span>
-                <h3>SpaceOS 6</h3>
-                <span class="badge">已停更</span>
-              </div>
-              <p class="index-desc">基于 Uinxed-Kernel 的正式尝试，第一次真正碰 UEFI 的路线。不再维护，不再接受反馈与移植。</p>
-              <p class="index-links"><a href="spaceos6.html">查看存档 →</a></p>
-            </div>
-          </li>
-          <li class="index-retired">
-            <span class="index-num" aria-hidden="true">04</span>
-            <div>
-              <div class="index-head">
-                <span class="index-kicker">存档 · 2026</span>
-                <h3>SpaceOS 7</h3>
-                <span class="badge">已停更</span>
-              </div>
-              <p class="index-desc">目标是完全自研内核、不依赖现成内核项目的路线。不再维护，不再接受反馈与移植。</p>
-              <p class="index-links"><a href="spaceos7.html">查看存档 →</a></p>
-            </div>
-          </li>
-        </ol>
-      </div>
-    </section>
+    <nav class="wrap project-index" aria-label="项目索引">
+      <span class="eyebrow">正在构建</span>
+      <a href="#pyspos-title">PySpOS <span aria-hidden="true">↓</span></a>
+      <a href="#spaceos-title">SpaceOS 8 <span aria-hidden="true">↓</span></a>
+      <a href="#archive-title" class="archive-link">历史项目与存档 <span aria-hidden="true">↓</span></a>
+    </nav>
 
-    <section class="section" aria-labelledby="featured-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">代表作</span>
-          <h2 class="section-title" id="featured-title">在真机器上跑起来的桌面</h2>
-          <p class="section-lede">SpaceOS 8 的 X11 兼容层上跑 DOOM，Minecraft 则是团队实测的试金石——下面这张截的是一次普通的启动。</p>
-        </div>
-        <figure class="shot-frame">
-          <div class="frame">
-            <div class="winbar">
-              <span class="winbar-title">weston-terminal — Minecraft · QEMU/KVM Q35</span>
-            </div>
-            <img src="spaceos8-minecraft.png"
-                 alt="Uinxed 内核下运行 Minecraft：世界完整渲染，生命值与饥饿条、快捷栏、准星均正常"
-                 loading="lazy" width="1356" height="924">
+    <section class="section project-story" data-product="PySpOS" data-status="active" aria-labelledby="pyspos-title">
+      <div class="wrap editorial-grid">
+        <header class="story-heading">
+          <span class="eyebrow">Python / 用户态模拟</span>
+          <h2 class="story-title" id="pyspos-title">PySpOS<span class="title-period">.</span></h2>
+          <p class="story-tagline">让系统原理，<br>成为可执行的代码。</p>
+          <p class="project-status"><span class="badge badge-ok">维护中</span> v3.2.0 RC1 · MIT</p>
+          <p class="story-links"><a href="pyspos.html">阅读项目介绍 ↗</a><a href="ota/index.html">下载与更新 ↗</a></p>
+        </header>
+        <div class="story-copy">
+          <p class="story-lead">一个可以运行，也可以逐行理解的模拟操作系统。</p>
+          <p>在 Python 中实现进程调度、内存映射、文件系统和引导流程。应用运行在真实子进程中，ELF 由 Unicorn 执行 x86 指令；改动源码后，你可以直接观察系统行为的变化。</p>
+          <dl class="story-details">
+            <div><dt>调度</dt><dd>EEVDF 虚拟截止期与 nice 权重</dd></div>
+            <div><dt>进程</dt><dd>真实 fork / exec、作业控制与信号</dd></div>
+            <div><dt>引导</dt><dd>OOBE、A/B 槽位与签名验证</dd></div>
+          </dl>
+          <div class="source-session">
+            <div class="session-label"><span>从这里开始 / Python 3.10+</span><button class="copy-btn" type="button" data-copy="quickstart">复制命令</button></div>
+            <div id="quickstart" class="session-transcript"><div><span class="t-p">$</span> <span class="t-cmd">git clone https://github.com/ViudiraTech/PySpOS.git</span></div><div><span class="t-p">$</span> <span class="t-cmd">cd PySpOS</span></div><div><span class="t-p">$</span> <span class="t-cmd">pip install -r requirements.txt</span></div><div><span class="t-p">$</span> <span class="t-cmd">python launcher.py</span></div></div>
           </div>
-          <figcaption>Uinxed 1.0.0-alpha.1 + Alpine Linux v3.24 + Weston。窗口、输入与渲染均正常。<a href="spaceos8.html">去 SpaceOS 8 细看 →</a></figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="numbers-title">
-      <div class="wrap">
-        <div class="band stat-band">
-          <span class="eyebrow">体量</span>
-          <h2 id="numbers-title">先看几个数字，再决定读多深</h2>
-          <ul>
-            <li><div class="stat-num">113</div><div class="stat-label">PySpOS 自动化测试</div></li>
-            <li><div class="stat-num">29.2 万</div><div class="stat-label">SpaceOS 8 用户态代码行</div></li>
-            <li><div class="stat-num">18.1 万</div><div class="stat-label">Uinxed 内核代码行</div></li>
-            <li><div class="stat-num">0–462</div><div class="stat-label">Linux 6.12 syscall 编号</div></li>
-          </ul>
         </div>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="how-title">
-      <div class="wrap">
-        <blockquote class="pullquote">
-          先做对，再做快。读源码的人，应该看到和真实内核一样的东西。
-          <cite>— GoutouStdio</cite>
-        </blockquote>
-        <div class="section-head">
-          <span class="eyebrow">做法</span>
-          <h2 class="section-title" id="how-title">六条工作习惯</h2>
-          <p class="section-lede">这几条原则贯穿 PySpOS 与 SpaceOS：读源码的人应该看到和真实内核一样的东西。</p>
+    <section class="section project-story" data-product="SpaceOS 8" data-status="active" aria-labelledby="spaceos-title">
+      <div class="wrap editorial-grid">
+        <header class="story-heading">
+          <span class="eyebrow">C / 自研内核与用户态</span>
+          <h2 class="story-title" id="spaceos-title">SpaceOS 8<span class="title-period">.</span></h2>
+          <p class="story-tagline">从 UEFI 启动，<br>一直写到桌面。</p>
+          <p class="project-status"><span class="badge badge-warn">抢先体验</span> x86_64 · Apache-2.0</p>
+          <p class="story-links"><a href="spaceos8.html">阅读项目介绍 ↗</a><a href="spaceos8-download.html">获取镜像 ↗</a></p>
+        </header>
+        <div class="story-copy">
+          <p class="story-lead">在真实硬件上，让自己写的内核接管系统。</p>
+          <p>基于 Uinxed 自研 UNIX-like 内核，配一整套自研用户态。从窗口合成器到浏览器，一层一层实现。内核已在实体服务器上跑通，OpenJDK 与 DOOM 已能运行，图形与部分 ABI 仍在补齐。</p>
+          <dl class="story-details">
+            <div><dt>内核</dt><dd>Uinxed 1.0.0-alpha.1 · 约 18.1 万行</dd></div>
+            <div><dt>用户态</dt><dd>SPUI 桌面、系统程序 · 约 29.2 万行</dd></div>
+            <div><dt>兼容</dt><dd>Linux 系统调用与 X11 兼容层</dd></div>
+          </dl>
         </div>
-        <ul class="rows rows-2col">
-          <li class="row row-info">
-            <div class="row-title">对标真实内核</div>
-            <div class="row-body"><p>调度器照着 Linux 6.6+ 的 EEVDF 实现：nice 权重表、vruntime 推进、虚拟截止期，一个不省。</p></div>
-          </li>
-          <li class="row row-info">
-            <div class="row-title">权限分层</div>
-            <div class="row-body"><p>Ring 0–3 分层，特权操作一律走 syscall 转发，不让子进程直接碰父进程内存。</p></div>
-          </li>
-          <li class="row row-info">
-            <div class="row-title">模块化</div>
-            <div class="row-body"><p>命令走元数据注册表。3.2.0 把 1217 行的 <code>main.py</code> 拆成了 <code>src/shell/*</code>。</p></div>
-          </li>
-          <li class="row row-info">
-            <div class="row-title">开源</div>
-            <div class="row-body"><p>核心代码全部在 GitHub 公开，MIT 协议，包括那些写砸了又重写的部分。</p></div>
-          </li>
-          <li class="row row-info">
-            <div class="row-title">自己写底层</div>
-            <div class="row-body"><p>SPF 脚本格式、SPFS 文件系统、curses 布局，都是为了让原理看得见而自己写的。</p></div>
-          </li>
-          <li class="row row-info">
-            <div class="row-title">社区驱动</div>
-            <div class="row-body"><p>GoutouStdio 工作室主导，社区开发者共同维护。学生自发组织的项目，不涉及商业活动。</p></div>
-          </li>
-        </ul>
+      </div>
+      <figure class="wrap desktop-evidence">
+        <img src="spaceos8-minecraft.png" alt="Uinxed 内核下运行 Minecraft，世界渲染与游戏界面正常" loading="lazy" width="1356" height="924">
+        <figcaption><span>一次真实的运行记录</span> Uinxed + Alpine Linux + Weston · QEMU/KVM Q35。窗口、输入与渲染正常。</figcaption>
+      </figure>
+    </section>
+
+    <section class="section" aria-labelledby="archive-title">
+      <div class="wrap editorial-grid">
+        <header class="story-heading"><span class="eyebrow">历史项目</span><h2 class="section-title" id="archive-title">走过的路线，<br>也留在这里。</h2></header>
+        <div class="archive-index">
+          <div data-product="SpaceOS 6" data-status="retired"><a href="spaceos6.html">SpaceOS 6 <span aria-hidden="true">↗</span></a><span>2024 · UEFI 的第一次正式尝试</span><span class="badge">已停更</span></div>
+          <div data-product="SpaceOS 7" data-status="retired"><a href="spaceos7.html">SpaceOS 7 <span aria-hidden="true">↗</span></a><span>2026 · 完全自研内核的探索</span><span class="badge">已停更</span></div>
+          <p>历史源码与说明继续保留。当前维护的项目是 <a href="pyspos.html">PySpOS</a> 与 <a href="spaceos8.html">SpaceOS 8</a>。</p>
+        </div>
       </div>
     </section>
 

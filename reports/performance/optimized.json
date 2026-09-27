@@ -1,0 +1,43 @@
+{
+  "environment": {
+    "python": "3.14.7",
+    "platform": "Linux-7.2.8+deb14-amd64-x86_64-with-glibc2.43"
+  },
+  "scheduler": [
+    {
+      "tasks": 1,
+      "ticks": 2000,
+      "median_s": 0.0017310089999682532,
+      "heap_entries": 0,
+      "timeline_entries": 84,
+      "speedup": 1.8528667384293398
+    },
+    {
+      "tasks": 32,
+      "ticks": 2000,
+      "median_s": 0.014390251000008902,
+      "heap_entries": 50,
+      "timeline_entries": 2001,
+      "speedup": 2.012263927848276
+    },
+    {
+      "tasks": 256,
+      "ticks": 2000,
+      "median_s": 0.06986676600001829,
+      "heap_entries": 326,
+      "timeline_entries": 2001,
+      "speedup": 2.562802921204475
+    },
+    {
+      "tasks": 1024,
+      "ticks": 2000,
+      "median_s": 0.275231768000026,
+      "heap_entries": 1928,
+      "timeline_entries": 2001,
+      "speedup": 2.607826942418819
+    }
+  ],
+  "retained_heap_entries_20k": 0,
+  "retained_timeline_entries_20k": 2048,
+  "trace_peak_bytes_20k": 211120
+}

@@ -11,7 +11,9 @@
 
 import heapq
 import itertools
+import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -200,11 +202,13 @@ class EEVDFRunQueue:
         self.min_slice = min_slice
         self.min_vruntime = 0.0     # cfs_rq->min_vruntime, monotonically increasing
         self.curr: Optional[PCB] = None
-        self._heap: list = []       # (deadline, vruntime, seq, pid)
-        self._seq = itertools.count()
+        self._heap: list = []       # (vruntime, pid, generation), lazy minimum index
+        self._seq = itertools.count(1)
         self._queued: Dict[int, PCB] = {}   # pid to PCB, for tasks currently on the run queue
+        self._queued_weight = 0
+        self._weighted_vruntime = 0.0  # weighted offsets from min_vruntime
         self.nr_switches = 0
-        self.timeline: List[Tuple[float, int, str]] = []  # (vtime, pid, event)
+        self.timeline = deque(maxlen=2048)  # bounded recent scheduling history
 
 # -- enqueue / dequeue ------------------------------------------------
 
@@ -216,18 +220,36 @@ class EEVDFRunQueue:
         if pcb.remote:
             return
         if pcb.state == TASK_RUNNING:
+            self.dequeue(pcb)
             if pcb.vruntime < self.min_vruntime:
                 pcb.vruntime = self.min_vruntime
             if pcb.deadline <= pcb.vruntime:
                 pcb.deadline = pcb.vruntime + self._vslice(pcb)
-            pcb._gen += 1
-            self._queued[pcb.pid] = pcb
-            heapq.heappush(self._heap,
-                            (pcb.deadline, pcb.vruntime, next(self._seq), pcb.pid, pcb._gen))
+            self._queue(pcb)
+
+    def _queue(self, pcb: PCB) -> None:
+        pcb._gen = next(self._seq)  # unique even when a PID is recycled
+        self._queued[pcb.pid] = pcb
+        self._queued_weight += pcb.weight
+        self._weighted_vruntime += pcb.weight * (pcb.vruntime - self.min_vruntime)
+        heapq.heappush(self._heap, (pcb.vruntime, pcb.pid, pcb._gen))
+        self._compact_heap()
+
+    def _compact_heap(self) -> None:
+        # Lazy invalidation must not retain one entry per context switch forever.
+        if len(self._heap) > 2 * len(self._queued) + 64:
+            self._heap = [(p.vruntime, p.pid, p._gen) for p in self._queued.values()]
+            heapq.heapify(self._heap)
 
 # Remove a task from the run queue by PID.
     def dequeue(self, pcb: PCB) -> None:
-        self._queued.pop(pcb.pid, None)   # heap entries are invalidated lazily, detected through _gen
+        queued = self._queued.pop(pcb.pid, None)
+        if queued is not None:
+            self._queued_weight -= queued.weight
+            self._weighted_vruntime -= queued.weight * (queued.vruntime - self.min_vruntime)
+            if not self._queued:
+                self._weighted_vruntime = 0.0
+        self._compact_heap()
         if self.curr is pcb:
             self.curr = None
 
@@ -247,7 +269,7 @@ class EEVDFRunQueue:
 
 # Sum the weights of every queued task.
     def _total_weight(self) -> int:
-        w = sum(p.weight for p in self._queued.values())
+        w = self._queued_weight
         if self.curr is not None and self.curr.pid not in self._queued:
             w += self.curr.weight
         return max(1, w)
@@ -258,28 +280,26 @@ class EEVDFRunQueue:
 
 # Return min_vruntime plus the weighted mean lag, Linux-style.
     def avg_vruntime(self) -> float:
-        ents = [p for p in self._queued.values() if p.state == TASK_RUNNING]
+        total_w = self._queued_weight
+        weighted = self._weighted_vruntime
         if self.curr is not None and self.curr.state == TASK_RUNNING \
                 and self.curr.pid not in self._queued:
-            ents.append(self.curr)
-        if not ents:
-            return self.min_vruntime
-        total_w = sum(p.weight for p in ents)
+            total_w += self.curr.weight
+            weighted += self.curr.weight * (self.curr.vruntime - self.min_vruntime)
         if total_w <= 0:
             return self.min_vruntime
-        s = sum(p.weight * (p.vruntime - self.min_vruntime) for p in ents)
-        return self.min_vruntime + s / total_w
+        return self.min_vruntime + weighted / total_w
 
 # Recompute min_vruntime from runnable, non-preempted tasks.
     def _update_min_vruntime(self) -> None:
-        cands = [p.vruntime for p in self._queued.values()
-                 if p.state == TASK_RUNNING]
+        while self._heap and self._live_entry(self._heap[0][1], self._heap[0][2]) is None:
+            heapq.heappop(self._heap)
+        minimum = self._heap[0][0] if self._heap else None
         if self.curr is not None and self.curr.state == TASK_RUNNING:
-            cands.append(self.curr.vruntime)
-        if cands:
-            m = min(cands)
-            if m > self.min_vruntime:
-                self.min_vruntime = m
+            minimum = self.curr.vruntime if minimum is None else min(minimum, self.curr.vruntime)
+        if minimum is not None and minimum > self.min_vruntime:
+            self._weighted_vruntime -= self._queued_weight * (minimum - self.min_vruntime)
+            self.min_vruntime = minimum
 
 # eligible <=> lag >= 0 <=> vruntime <= avg_vruntime。
     def eligible(self, pcb: PCB) -> bool:
@@ -287,16 +307,16 @@ class EEVDFRunQueue:
 
 # -- picking a task: pick_eevdf -----------------------------------------
 
-# Choose the eligible task with the smallest virtual runtime.
+# Choose the eligible task with the earliest virtual deadline.
     def pick_next(self) -> Optional[PCB]:
         avg = self.avg_vruntime()
         best = None
         best_key = None
         fallback = None
         fallback_key = None
-# eligible the heap top may be stale, so pop dead entries and scan; task counts are small enough that a full scan is safer.
-        cands = [p for p in self._queued.values() if p.state == TASK_RUNNING]
-        for p in cands:
+        for p in self._queued.values():
+            if p.state != TASK_RUNNING:
+                continue
             key = (p.deadline, p.vruntime, p.pid)
             if p.vruntime <= avg + 1e-9:      # eligible
                 if best_key is None or key < best_key:
@@ -367,10 +387,7 @@ class EEVDFRunQueue:
 # update_deadline: once the deadline has passed, push it out by one vslice
             if cur.vruntime >= cur.deadline - 1e-9:
                 cur.deadline = cur.vruntime + self._vslice(cur)
-            cur._gen += 1
-            self._queued[cur.pid] = cur
-            heapq.heappush(self._heap,
-                            (cur.deadline, cur.vruntime, next(self._seq), cur.pid, cur._gen))
+            self._queue(cur)
         self.curr = None
 
 # Make a task current, or clear the current task when given None.
@@ -415,6 +432,7 @@ class ProcessTable:
         self.jobs: Dict[int, Job] = {}
         self._job_seq = itertools.count(1)
         self.last_bg_pid: Optional[int] = None   # $!
+        self._state_changed = threading.Condition()
 # remote signal backend, registered by forkexec; without it remote tasks stay purely simulated
         self._remote_signal_backend = None
 
@@ -485,6 +503,8 @@ class ProcessTable:
             pass
 # Linux semantics: when a parent dies its children are re-parented to init, whose newly adopted zombies are reaped at once
         self.adopt_orphans(pid)
+        with self._state_changed:
+            self._state_changed.notify_all()
         return pcb
 
 # Settle CPU time for a real child and move it to Zombie.
@@ -529,13 +549,16 @@ class ProcessTable:
 
 # Block until a PID reaches a terminal state; timeout None waits forever.
     def wait_for(self, pid: int, timeout: Optional[float] = 30.0) -> Optional[PCB]:
-        deadline = None if timeout is None else time.time() + max(0.0, timeout)
-        while deadline is None or time.time() < deadline:
-            pcb = self.tasks.get(pid)
-            if pcb is None or pcb.state in TERMINAL_STATES:
-                return pcb
-            time.sleep(0.02)
-        return self.tasks.get(pid)
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        with self._state_changed:
+            while True:
+                pcb = self.tasks.get(pid)
+                if pcb is None or pcb.state in TERMINAL_STATES:
+                    return pcb
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    return pcb
+                self._state_changed.wait(remaining)
 
 # Release a Zombie PCB and free its PID, the simple release_task equivalent.
     def reap(self, pid: int) -> Optional[PCB]:
@@ -545,7 +568,10 @@ class ProcessTable:
         pcb.state = EXIT_DEAD
         self.rq.dequeue(pcb)
         self.pids.free(pid)
-        return self.tasks.pop(pid, None)
+        result = self.tasks.pop(pid, None)
+        with self._state_changed:
+            self._state_changed.notify_all()
+        return result
 
 # -- sleep / wake ------------------------------------------------------
 
@@ -730,6 +756,8 @@ class ProcessTable:
         avg_w = self.rq
         self.rq = EEVDFRunQueue(base_slice=avg_w.base_slice,
                                 min_slice=avg_w.min_slice)
+        with self._state_changed:
+            self._state_changed.notify_all()
 
 
 # the global process table, the teaching stand-in for the kernel's init_task plus global run queues

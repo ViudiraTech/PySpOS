@@ -1,0 +1,6 @@
+{
+  "idle_interval_s": 0.5,
+  "children": 25,
+  "baseline": {"idle_poll_sleeps": 10, "idle_parent_cpu_ms": 0.950231, "post_start_to_wait_median_ms": 20.297115, "post_start_to_wait_p95_ms": 40.461268},
+  "optimized": {"idle_poll_sleeps": 0, "idle_parent_cpu_ms": 0.068095, "post_start_to_wait_median_ms": 5.484962, "post_start_to_wait_p95_ms": 5.833729}
+}

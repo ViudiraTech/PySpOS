@@ -63,7 +63,10 @@ start.bat           # Windows
 跑测试：
 
 ```bash
-python3 -m pytest tests/ -q
+python3 -m pytest -q
+python3 -m pytest tests/process/ tests/shell/ -q  # 按子系统验证
+python3 -m pytest -m "not integration" -q        # 筛除主要进程与协议集成测试
+python3 tools/benchmark_runtime.py               # 调度性能与内存基准
 ```
 
 签名信任链按 Android Verified Boot 的边界实现：启动器固定公钥，先验签 manifest，再校验槽位文件和 `security_version`；LOCKED 状态拒绝未签名镜像，UNLOCKED 状态允许开发镜像但必须显示警告。ROOT 只影响运行时权限，不能改 OEM 公钥或签名。Token 不再是授权凭据。
@@ -198,7 +201,12 @@ PySpOS/
 │   ├── apps/             # 应用程序
 │   └── spfapps/          # SPF 脚本应用
 ├── splibc/               # SpLibC（C 实现，供 ELF 测试程序使用）
-├── tests/                # pytest 测试（112 项）
+├── tests/                # 按 boot/process/shell/formats/ui/apps/ota/common/web 分组
+├── tools/
+│   ├── checks/           # 静态网站、对比度与 OTA 清单检查
+│   ├── manual/           # PTY / ELF 手工诊断
+│   └── benchmark_runtime.py # 可重复的调度性能与内存基准
+├── reports/              # 性能数据与网页检查截图
 ├── build_update.py       # 唯一更新包构建入口
 └── requirements.txt
 ```

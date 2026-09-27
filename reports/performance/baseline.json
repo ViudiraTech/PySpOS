@@ -1,0 +1,34 @@
+{
+  "scheduler": [
+    {
+      "tasks": 1,
+      "ticks": 2000,
+      "median_s": 0.0032073289999630106,
+      "heap_entries": 84,
+      "timeline_entries": 84
+    },
+    {
+      "tasks": 32,
+      "ticks": 2000,
+      "median_s": 0.02895698300000049,
+      "heap_entries": 2032,
+      "timeline_entries": 2001
+    },
+    {
+      "tasks": 256,
+      "ticks": 2000,
+      "median_s": 0.17905475199995635,
+      "heap_entries": 2256,
+      "timeline_entries": 2001
+    },
+    {
+      "tasks": 1024,
+      "ticks": 2000,
+      "median_s": 0.7177568200000337,
+      "heap_entries": 3024,
+      "timeline_entries": 2001
+    }
+  ],
+  "retained_heap_entries_20k": 6667,
+  "trace_peak_bytes_20k": 2054562
+}

@@ -6,21 +6,21 @@
 
 :root {
   /* ---- 原始色板（主题无关） ---- */
-  --pg-ref-indigo-700: #4338ca;
-  --pg-ref-indigo-600: #4f46e5;
-  --pg-ref-indigo-200: #c7d2fe;
+  --pg-ref-indigo-700: #2454c6;
+  --pg-ref-indigo-600: #1d46ab;
+  --pg-ref-indigo-200: #9fbeff;
 
-  --pg-ref-ink-950: #131316;
-  --pg-ref-ink-900: #1b1b20;
+  --pg-ref-ink-950: #0c1424;
+  --pg-ref-ink-900: #121e32;
 
   --pg-ref-paper: #ffffff;
-  --pg-ref-paper-dim: #f4f4f1;
-  --pg-ref-line-light: #e3e3de;
-  --pg-ref-line-dark: #2c2c33;
+  --pg-ref-paper-dim: #edf2f8;
+  --pg-ref-line-light: #dce4ef;
+  --pg-ref-line-dark: #28374e;
 
   /* ---- 字体（展示 / 正文 / 等宽，三族封顶） ---- */
-  --pg-font-display: "Fraunces", georgia, "Noto Serif CJK SC",
-    "Songti SC", "STSong", serif;
+  --pg-font-display: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --pg-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI",
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Noto Sans CJK SC", arial, sans-serif;
@@ -34,9 +34,9 @@
   --pg-text-lg: 1.125rem;
   --pg-text-xl: 1.375rem;
   --pg-text-2xl: 1.75rem;
-  --pg-text-hero: clamp(2.5rem, 5vw + 1rem, 3.5rem);
+  --pg-text-hero: clamp(2.25rem, 4.3vw, 3.85rem);
 
-  --pg-leading-display: 1.12;
+  --pg-leading-display: 1.18;
   --pg-leading-tight: 1.3;
   --pg-leading-body: 1.75;
 
@@ -49,32 +49,35 @@
   --pg-space-6: 32px;
   --pg-space-7: 48px;
   --pg-space-8: 72px;
+  --pg-space-9: 96px;
+  --pg-control-h: 44px;
+  --pg-glow: 0 12px 30px rgb(36 84 198 / 0.18);
 
-  --pg-radius-sm: 6px;
-  --pg-radius-md: 10px;
-  --pg-radius-lg: 14px;
+  --pg-radius-sm: 8px;
+  --pg-radius-md: 16px;
+  --pg-radius-lg: 24px;
   --pg-radius-pill: 999px;
 
   /* 组件固定尺寸（字面值，主题无关） */
-  --pg-header-h: 64px;
-  --pg-icon-btn: 36px;
-  --pg-brand-mark: 30px;
-  --pg-blueprint: 28px;
+  --pg-header-h: 76px;
+  --pg-icon-btn: 40px;
+  --pg-brand-mark: 38px;
+  --pg-blueprint: 48px;
 
-  --pg-width: 72rem;
+  --pg-width: 78rem;
 
   --pg-duration: 160ms;
   --pg-ease: cubic-bezier(0.2, 0, 0.2, 1);
 
   /* ---- 终端窗：双主题下固定同一套深色 ---- */
-  --pg-term-bg: #0d1117;
-  --pg-term-bar: #010409;
-  --pg-term-line: #21262d;
+  --pg-term-bg: #0c1729;
+  --pg-term-bar: #122039;
+  --pg-term-line: #2b3c55;
   --pg-term-fg: #e6edf3;
-  --pg-term-dim: #8b949e;
+  --pg-term-dim: #a1b1c9;
   --pg-term-green: #7ee787;
   --pg-term-blue: #79c0ff;
-  --pg-term-btn-line: #30363d;
+  --pg-term-btn-line: #607592;
 }
 
 /* ---- 语义层：亮色（默认） ---- */
@@ -82,30 +85,30 @@
 body:not(.theme-dark) {
   color-scheme: light;
 
-  --pg-bg-page: var(--pg-ref-paper);
+  --pg-bg-page: #f8fafd;
   --pg-bg-raised: var(--pg-ref-paper);
   --pg-bg-sunken: var(--pg-ref-paper-dim);
   --pg-bg-code: var(--pg-ref-ink-900);
   --pg-fg-code-dim: #a2a2ad;
 
-  --pg-fg-1: #1b1b1f;
-  --pg-fg-2: #4b4b53;
-  --pg-fg-3: #707078;
+  --pg-fg-1: #18243b;
+  --pg-fg-2: #4d5e76;
+  --pg-fg-3: #5f6e84;
   --pg-fg-on-ink: #ffffff;
   --pg-fg-on-code: #e8e8ea;
 
   --pg-line-1: var(--pg-ref-line-light);
-  --pg-line-2: #d2d2cc;
+  --pg-line-2: #c5d1e1;
   /* 控件边界：按钮/窗框/步骤块的描边，3.0+ 对比度。
      line-1/line-2 只做纯装饰分隔线，不承载信息。 */
-  --pg-line-strong: #85857e;
+  --pg-line-strong: #78899f;
 
   --pg-ink: var(--pg-ref-ink-950);
-  --pg-ink-hover: #2b2b32;
+  --pg-ink-hover: #25354d;
 
   --pg-accent: var(--pg-ref-indigo-700);
   --pg-accent-hover: var(--pg-ref-indigo-600);
-  --pg-accent-soft: #eef0fe;
+  --pg-accent-soft: #eaf0ff;
 
   --pg-ok-fg: #065f46;
   --pg-ok-bg: #e9f5ef;
@@ -116,12 +119,12 @@ body:not(.theme-dark) {
   --pg-bad-fg: #991b1b;
   --pg-bad-bg: #fbecec;
   --pg-bad-line: #f0c4c4;
-  --pg-mute-fg: #4b4b53;
+  --pg-mute-fg: #4d5e76;
   --pg-mute-bg: var(--pg-ref-paper-dim);
   --pg-mute-line: var(--pg-ref-line-light);
 
   --pg-focus: var(--pg-ref-indigo-600);
-  --pg-shadow: 0 1px 2px rgb(20 20 25 / 0.07), 0 8px 24px rgb(20 20 25 / 0.08);
+  --pg-shadow: 0 2px 6px rgb(24 43 79 / 0.04), 0 20px 60px rgb(24 43 79 / 0.12);
 
   /* 反白带：极性翻转，全站只此一处用反色 */
   --pg-band-bg: var(--pg-ref-ink-950);
@@ -136,26 +139,26 @@ body.theme-dark {
 
   --pg-bg-page: var(--pg-ref-ink-950);
   --pg-bg-raised: var(--pg-ref-ink-900);
-  --pg-bg-sunken: #101014;
+  --pg-bg-sunken: #091120;
   --pg-bg-code: #0c0c0f;
-  --pg-fg-code-dim: #8d8d98;
+  --pg-fg-code-dim: #95a7c3;
 
-  --pg-fg-1: #ececf0;
-  --pg-fg-2: #b9b9c2;
-  --pg-fg-3: #8d8d98;
-  --pg-fg-on-ink: #131316;
+  --pg-fg-1: #eef3fc;
+  --pg-fg-2: #b6c5dc;
+  --pg-fg-3: #95a7c3;
+  --pg-fg-on-ink: #0c1424;
   --pg-fg-on-code: #e8e8ea;
 
   --pg-line-1: var(--pg-ref-line-dark);
-  --pg-line-2: #3d3d47;
-  --pg-line-strong: #6e6e78;
+  --pg-line-2: #354862;
+  --pg-line-strong: #687e9c;
 
   --pg-ink: #f2f2f5;
   --pg-ink-hover: #ffffff;
 
   --pg-accent: var(--pg-ref-indigo-200);
   --pg-accent-hover: #dde4ff;
-  --pg-accent-soft: #23233a;
+  --pg-accent-soft: #172b4c;
 
   --pg-ok-fg: #7dd3ae;
   --pg-ok-bg: #10251d;
@@ -166,16 +169,16 @@ body.theme-dark {
   --pg-bad-fg: #f1a3a3;
   --pg-bad-bg: #2b1517;
   --pg-bad-line: #5c2629;
-  --pg-mute-fg: #b9b9c2;
-  --pg-mute-bg: #232329;
+  --pg-mute-fg: #b6c5dc;
+  --pg-mute-bg: #17253b;
   --pg-mute-line: var(--pg-ref-line-dark);
 
   --pg-focus: var(--pg-ref-indigo-200);
   --pg-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
 
-  /* 暗色下反白带翻向纸色 */
-  --pg-band-bg: #f2f2f5;
-  --pg-band-fg: #131316;
-  --pg-band-mute: #55555e;
-  --pg-band-line: #d5d5d2;
+  /* 暗色主题下使用稍亮的深蓝面，维持阅读对比度。 */
+  --pg-band-bg: #172842;
+  --pg-band-fg: #eef3fc;
+  --pg-band-mute: #b6c5dc;
+  --pg-band-line: #354862;
 }

@@ -10,6 +10,7 @@
 '''
 
 import multiprocessing as mp
+from multiprocessing.connection import wait as wait_connections
 import base64
 import os
 import secrets
@@ -31,6 +32,10 @@ except ValueError:
     _CTX = mp.get_context()
 
 _pump_thread = None
+_pump_lock = threading.Lock()
+_pump_reader, _pump_writer = mp.Pipe(duplex=False)
+_pump_pending = False
+_watched_children = {}
 _relay_threads = {}
 # One RPC endpoint per child, keyed by its pid, holding the Listener to close
 # once the child is gone.
@@ -200,44 +205,54 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
 # parent side: the pump and the syscall service
 # --------------------------------------------------------------------------
 
-# Poll every child handle, turn an exit into a zombie with its CPU time settled,
-# and leave the reaping to wait.
+# Wait on process sentinels and a registration pipe; an idle shell never polls.
+# Keep the owning table and PCB so a reset/PID reuse cannot settle the wrong task.
 def _pump_loop():
+    global _pump_pending
     while True:
-        table = proc._table()
-        pids = list(table.handles.keys())
-        if not pids:
-            time.sleep(0.05)
-            continue
-        for pid in pids:
-            handle = table.handles.get(pid)
-            pcb = table.tasks.get(pid)
-            if handle is None or pcb is None:
+        with _pump_lock:
+            children = dict(_watched_children)
+        sentinels = {handle.sentinel: (pcb.pid, table, pcb, handle)
+                     for handle, (table, pcb) in children.items()}
+        ready = wait_connections([_pump_reader, *sentinels])
+        if _pump_reader in ready:
+            with _pump_lock:
+                _pump_reader.recv_bytes()
+                _pump_pending = False
+        for sentinel in ready:
+            if sentinel is _pump_reader:
                 continue
-            try:
-                alive = handle.is_alive()
-            except Exception:
-                alive = False
-            if not alive:
-                try:
-                    code = int(handle.exitcode or 0)
-                except Exception:
-                    code = 0
+            pid, table, pcb, handle = sentinels[sentinel]
+            handle.join()
+            code = int(handle.exitcode or 0)
+            with _pump_lock:
+                _watched_children.pop(handle, None)
+            if table.handles.get(pid) is handle:
                 table.handles.pop(pid, None)
                 _close_child_server(pid)
-                if pcb.state not in proc.TERMINAL_STATES:
+                if table.tasks.get(pid) is pcb and pcb.state not in proc.TERMINAL_STATES:
                     wall = (time.time() - pcb.start_time) * 1000.0
                     table.child_exited(pid, exit_code=code, wall_ms=wall)
-        time.sleep(0.03)
+
+
+def _watch_child(table, pcb, handle):
+    global _pump_pending
+    with _pump_lock:
+        _watched_children[handle] = (table, pcb)
+        if not _pump_pending:
+            _pump_writer.send_bytes(b"wake")
+            _pump_pending = True
+    _ensure_pump()
 
 
 # Start the pump thread once, and start it again if it ever died.
 def _ensure_pump():
     global _pump_thread
-    if _pump_thread is None or not _pump_thread.is_alive():
-        _pump_thread = threading.Thread(target=_pump_loop,
-                                        name="pyspos-pump", daemon=True)
-        _pump_thread.start()
+    with _pump_lock:
+        if _pump_thread is None or not _pump_thread.is_alive():
+            _pump_thread = threading.Thread(target=_pump_loop,
+                                            name="pyspos-pump", daemon=True)
+            _pump_thread.start()
 
 
 # Parent-side implementation of the privileged operations an app may request
@@ -510,7 +525,6 @@ def _relay_parent_side(out_r, in_w, background):
 # tees the output to a file.
 def fork_exec(payload, *, kind="app", background=False, nice=0,
               src_dir=None, apps_dir=None, env=None, log_path=None):
-    _ensure_pump()
     if src_dir is None:
         src_dir = os.path.dirname(os.path.abspath(__file__))
     if apps_dir is None:
@@ -573,7 +587,7 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
               out_fd, in_fd, parent_fds),
         daemon=False,
     )
-    proc._table().handles[pcb.pid] = handle
+    table = proc._table()
     try:
         handle.start()
     except Exception as e:
@@ -592,6 +606,8 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
         _close_child_server(pcb.pid)
         print(f"fork_exec: 子进程启动失败: {e}")
         return pcb
+    table.handles[pcb.pid] = handle
+    _watch_child(table, pcb, handle)
     # The parent must close its own copy of the ends the child uses, otherwise:
     #   - leaving out_w open means the parent's stdout read never sees EOF after the
     #     child exits;
