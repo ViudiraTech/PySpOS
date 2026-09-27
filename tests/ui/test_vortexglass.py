@@ -273,3 +273,22 @@ def test_update_payload_includes_compositor_and_gui_dependencies():
     assert {"requirements-gui.txt", "src/vortexglass/server.py",
             "src/vortexglass/qt_backend.py", "src/apps/vortexglassd.py",
             "src/apps/guicalc.py", "src/apps/guiclock.py", "src/apps/guicanvas.py"} <= files
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Unix-domain socket path limit")
+def test_long_endpoint_path_uses_a_short_private_socket(tmp_path):
+    endpoint = tmp_path / ("long-endpoint-" * 10) / "endpoint.json"
+    server = Server(endpoint, transport="unix")
+    server.open()
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    directory = server.socket_directory
+    try:
+        assert directory and len(os.fsencode(server.socket_path)) <= 100
+        assert directory.stat().st_mode & 0o777 == 0o700
+        with Client(endpoint) as client:
+            assert client.request("ping")["pong"]
+    finally:
+        server.stop()
+        thread.join(3)
+    assert not directory.exists() and not endpoint.exists()

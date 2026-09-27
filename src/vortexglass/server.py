@@ -19,6 +19,7 @@ import secrets
 import selectors
 import socket
 import threading
+import tempfile
 import time
 
 from . import PROTOCOL_VERSION
@@ -62,6 +63,7 @@ class Server:
         self.selector.register(self.wake_read, selectors.EVENT_READ, "wake")
         self.owns_endpoint = False
         self.socket_path = None
+        self.socket_directory = None
         self.owns_socket = False
         self.select_calls = 0
 
@@ -71,6 +73,11 @@ class Server:
             raise FileExistsError(f"endpoint already exists: {self.endpoint}")
         if self.transport == "unix":
             self.socket_path = self.endpoint.with_suffix(".sock")
+            # Darwin's sun_path is shorter than Linux's. Endpoint descriptors
+            # can live in long checkout/temp paths; their socket address needn't.
+            if len(os.fsencode(self.socket_path)) > 100:
+                self.socket_directory = Path(tempfile.mkdtemp(prefix="vg-", dir="/tmp"))
+                self.socket_path = self.socket_directory / "display.sock"
             self.listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.listener.bind(str(self.socket_path))
             self.owns_socket = True
@@ -289,3 +296,6 @@ class Server:
             self.endpoint.unlink(missing_ok=True)
         if self.socket_path and self.owns_socket:
             self.socket_path.unlink(missing_ok=True)
+        if self.socket_directory:
+            self.socket_directory.rmdir()
+            self.socket_directory = None
