@@ -9,6 +9,12 @@ VortexGlass 是由 PySpOS 的 PID 1 启动的真实后台服务。GUI 程序通�
 python3 -m pip install -r requirements.txt -r requirements-gui.txt
 ```
 
+精简的 Debian/Ubuntu 环境还需要 Qt 依赖的系统运行库：
+
+```sh
+sudo apt-get install libegl1 libgl1 libopengl0 libxkbcommon0 fonts-dejavu-core
+```
+
 正常启动 PySpOS 后，服务在 shell 进入命令循环前启动。`ps -a` 中可以看到
 `vortexglassd` 的 `kind=service`、`ppid=1`。EOF、关机和热重启都会先停止服务并清理端点。
 

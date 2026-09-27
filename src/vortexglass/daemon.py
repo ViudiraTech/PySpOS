@@ -53,13 +53,13 @@ def run(argv=None):
     except ImportError as exc:
         if options.offscreen:
             server.close()
-            raise SystemExit("VortexGlass offscreen rendering needs PyQt6; "
-                             "install requirements-gui.txt") from exc
+            raise SystemExit(f"VortexGlass Qt backend unavailable: {exc}; "
+                             "install requirements-gui.txt and Qt runtime libraries") from exc
         server.backend = "headless"
         signal.signal(signal.SIGTERM, lambda *_args: server.stop())
         signal.signal(signal.SIGINT, lambda *_args: server.stop())
-        print("VortexGlass: PyQt6 not installed; starting headless socket service. "
-              "Install requirements-gui.txt for desktop windows.", flush=True)
+        print(f"VortexGlass: Qt backend unavailable ({exc}); starting headless socket service. "
+              "Install requirements-gui.txt and Qt runtime libraries for desktop windows.", flush=True)
         server.run()
         return
     import spaceglass_theme as theme
