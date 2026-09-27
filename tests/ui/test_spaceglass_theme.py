@@ -23,9 +23,6 @@ import pytest
 import pngcodec
 import spaceglass_theme as theme
 
-# The stock VortexGlass theme that ships with Uinxed, used when it is present.
-STOCK_DIR = "/home/jitianyu/桌面/Uinxed-Kernel/user/assets/themes/vortexglass"
-
 # Build a synthetic RGBA image from a pixel callback.
 def make_image(width, height, pixel):
     data = bytearray()
@@ -74,8 +71,8 @@ def test_system_root_is_the_parent_of_the_working_directory():
     assert theme.system_root() == Path(os.getcwd()).resolve().parent
 
 
-def test_looks_like_theme_needs_every_file(tmp_path):
-    assert theme.looks_like_theme(STOCK_DIR) is True
+def test_looks_like_theme_needs_every_file(tmp_path, theme_dir):
+    assert theme.looks_like_theme(theme_dir) is True
     empty = tmp_path / "vortexglass"
     empty.mkdir()
     assert theme.looks_like_theme(str(empty)) is False
@@ -166,10 +163,8 @@ def test_load_theme_reports_missing_and_mismatched(tmp_path):
     assert theme.theme_complete(report) is False
 
 
-@pytest.mark.skipif(not os.path.isdir(STOCK_DIR),
-                    reason="stock VortexGlass theme is not installed")
-def test_stock_theme_is_complete_and_matches_the_inventory():
-    report = theme.load_theme(STOCK_DIR)
+def test_theme_is_complete_and_matches_the_inventory(theme_dir):
+    report = theme.load_theme(theme_dir)
     assert report["mismatched"] == []
     assert report["missing"] == []
     assert len(report["images"]) == 34
@@ -178,6 +173,8 @@ def test_stock_theme_is_complete_and_matches_the_inventory():
         assert (info.width, info.height, info.color) == (asset.width,
                                                          asset.height,
                                                          asset.color)
+        image = pngcodec.read_png(report["images"][asset.name])
+        assert (image.width, image.height) == (asset.width, asset.height)
 
 
 def test_title_buttons_sit_left_of_the_frame_edge():

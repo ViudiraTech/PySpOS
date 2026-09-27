@@ -37,8 +37,7 @@ requires_display = pytest.mark.skipif(
     reason="需要显示环境与 SPACEGLASS_TK_TESTS=1（建议在 xvfb-run 下运行，"
            "否则窗口会开在真实屏幕上）")
 
-# The stock theme, and the app file, loaded the way PySpOS launches an app.
-STOCK_DIR = "/home/jitianyu/桌面/Uinxed-Kernel/user/assets/themes/vortexglass"
+# The app file, loaded the way PySpOS launches an app.
 REPO = REPO_ROOT
 APP_PATH = os.path.join(REPO, "src", "apps", "spaceglass.py")
 
@@ -66,10 +65,8 @@ def app():
 
 
 @pytest.fixture
-def report():
-    if not os.path.isdir(STOCK_DIR):
-        pytest.skip("stock VortexGlass theme is not installed")
-    return theme.load_theme(STOCK_DIR)
+def report(theme_dir):
+    return theme.load_theme(theme_dir)
 
 
 @pytest.fixture
@@ -279,7 +276,7 @@ def test_main_renders_a_file_when_no_display_is_available(app, report,
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
     target = str(tmp_path / "guest.png")
     monkeypatch.setenv("PYSPOS_APP_ARGS", f"--render={target}")
-    monkeypatch.setenv(theme.ENV_THEME_DIR, STOCK_DIR)
+    monkeypatch.setenv(theme.ENV_THEME_DIR, report["directory"])
     app.main()
     assert os.path.isfile(target)
 
