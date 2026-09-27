@@ -156,6 +156,8 @@ DEMOS = {"calc": Calculator, "clock": Clock, "canvas": Canvas}
 
 
 def run_demo(kind="canvas", argv=None):
+    if argv is None and os.environ.get("PYSPOS_GUI_SESSION") != "1":
+        raise SystemExit("GUI client: 请先输入 gui 启动桌面，再从桌面里的 PTY shell 打开软件。")
     parser = argparse.ArgumentParser(description="VortexGlass socket GUI client")
     parser.add_argument("--endpoint")
     parser.add_argument("--capture", help="save a service-rendered PNG and exit")

@@ -39,6 +39,19 @@ cores = os.cpu_count()
 
 # Cached host user name: the lookup below is not free.
 _cached_username = None
+_shell_stop_requested = False
+
+
+# Activate the interactive session tracked by shell.service.
+def start_shell_session():
+    global _shell_stop_requested
+    _shell_stop_requested = False
+
+
+# Let the command loop unwind after the current service command returns.
+def stop_shell_session():
+    global _shell_stop_requested
+    _shell_stop_requested = True
 
 # Host user name, cached: $USER, getlogin, whoami, then pwd or win32api.
 def get_system_username() -> str:
@@ -150,11 +163,9 @@ def _fastboot_boot():
     raise SystemExit(0)
 
 
-# The main command loop: OOBE, boot commit, logo,
-# OTA init, then read and run until EOF or Ctrl-C.
+# Boot the declared unit graph, then read commands until EOF or Ctrl-C.
 def loop():
     from syslocale import _
-    import oobe
     import main as _main_mod
 
     # A pending fastboot request outranks the wizard and the shell: that is
@@ -165,44 +176,25 @@ def loop():
         bootmode.clear_mode(_main_mod.root_dir)
         _fastboot_boot()
 
-    # First-boot wizard: a missing etc/.oobe_done means run it (a factory reset deletes it).
-    # It lives in kernel.loop, not main.main(): the hotreset_env boot path enters
-    # kernel.loop() directly, so the wrong place here would skip OOBE on a real boot.
-    oobe_ok = oobe.maybe_run_oobe(_main_mod.root_dir)
-    if oobe_ok and os.environ.get("PYSPOS_BOOT_VERIFIED") == "1":
-        try:
-            import secure_boot
-            slot = os.environ.get("PYSPOS_BOOT_SLOT")
-            manifest = secure_boot.verify_slot(_main_mod.root_dir, slot, locked=True)
-            secure_boot.mark_boot_success(_main_mod.root_dir, slot, manifest)
-        except Exception as exc:
-            logk.printl("kernel", f"无法提交启动状态: {exc}", main.boot_time)
-            raise
-
     screen_clear()
-    username = main.bootcfg.get('display_name') or get_system_username()
     print(ascii_logo)
-
-    ota.ota_init()
-
-    logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心", main.boot_time)
-    print(_("boot.welcome", user=username))
-    print()
-    from vortexglass.service import manager as graphics_service
+    from boot_services import create_manager
+    manager = create_manager()
     try:
-        graphics_service.start()
-        logk.printl("kernel", "VortexGlass 合成器服务已启动（PID 1 子进程）", main.boot_time)
-    except (RuntimeError, OSError) as exc:
-        logk.printl("kernel", f"VortexGlass 服务未启动: {exc}", main.boot_time)
-    try:
+        manager.start("shell.service")
+        manager.units["shell.service"].detail["pid"] = 2
+        username = main.bootcfg.get('display_name') or get_system_username()
+        logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心", main.boot_time)
+        print(_("boot.welcome", user=username))
+        print()
         _command_loop()
     finally:
-        # EOF, shutdown and hotreset all unwind this block before the shell exits.
-        graphics_service.stop()
+        # EOF, failed boot, shutdown and hotreset unwind the same unit graph.
+        manager.shutdown()
 
 
 def _command_loop():
-    while 1:
+    while not _shell_stop_requested:
         try:
             prompt = input(print_prompt())
             main.handle_command(prompt)

@@ -49,7 +49,10 @@ def run(argv=None):
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
     try:
         from PyQt6.QtWidgets import QApplication
-        from .qt_backend import Backend
+        if options.offscreen:
+            from .qt_backend import Backend
+        else:
+            from .quick_backend import Backend
     except ImportError as exc:
         if options.offscreen:
             server.close()
@@ -76,6 +79,8 @@ def run(argv=None):
             raise
         print("VortexGlass: theme not installed, using built-in translucent frame", flush=True)
     app = QApplication(["VortexGlass"])
+    app.setApplicationName("VortexGlass")
+    app.setDesktopFileName("org.pyspos.VortexGlass")
     backend = Backend(server, report)
     print(f"VortexGlass Qt service: {options.endpoint}", flush=True)
     # Wake Qt on OS signals without a periodic Python timer. Otherwise an idle

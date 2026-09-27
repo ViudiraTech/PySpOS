@@ -1,0 +1,6 @@
+[Unit]
+Description=PID 1 process table
+
+[Service]
+Type=oneshot
+ExecStart=process-table

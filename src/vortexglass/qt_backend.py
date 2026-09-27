@@ -11,13 +11,15 @@
 
 import threading
 
-from PyQt6.QtCore import QByteArray, QBuffer, QIODevice, QObject, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QByteArray, QBuffer, QEvent, QIODevice, QObject, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QWidget
 
 import spaceglass_theme as theme
 
 from .protocol import ProtocolError
+from .frost import SceneFrost
+from .native_blur import NativeBlur
 
 
 def rgba(value):
@@ -63,13 +65,19 @@ class Renderer:
         painter.drawImage(QRectF(x, y + cap, width, height - cap * 2), image,
                           QRectF(0, min(theme.BORDER_MIDDLE_ROW, image.height() - 1), width, 1))
 
-    def render(self, window, hover=None, focused=True):
+    # Draw runtime glass first, then PNG artwork, client content and controls.
+    def render(self, window, hover=None, focused=True, *, frost=None,
+               frost_opacity=1.0, origin=(0, 0)):
         width = window.width + theme.SIDE_INSET * 2
         height = window.height + theme.TITLEBAR_HEIGHT + theme.BOTTOM_HEIGHT
         image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(Qt.GlobalColor.transparent)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if frost is not None:
+            painter.setOpacity(frost_opacity)
+            painter.drawImage(0, 0, frost)
+            painter.setOpacity(1)
         layout = theme.WindowLayout(theme.SIDE_INSET, theme.TITLEBAR_HEIGHT,
                                     window.width, window.height, window.title, focused)
         frame = layout.frame()
@@ -89,7 +97,15 @@ class Renderer:
             painter.save()
             painter.setClipRect(QRectF(*frame["title"]["strip"]))
             painter.setOpacity(0.22)
-            painter.drawImage(QRectF(0, 0, width, theme.TITLEBAR_HEIGHT), reflection)
+            # Match UX's screen-anchored, unscaled reflection texture.
+            source_x = origin[0] % reflection.width()
+            x = 0
+            while x < width:
+                span = min(width - x, reflection.width() - source_x)
+                painter.drawImage(QRectF(x, 0, span, theme.TITLEBAR_HEIGHT), reflection,
+                                  QRectF(source_x, 0, span, theme.TITLEBAR_HEIGHT))
+                x += span
+                source_x = 0
             painter.restore()
 
         painter.fillRect(QRectF(*frame["client"]), rgba(window.background))
@@ -167,6 +183,9 @@ class GlassWindow(QWidget):
         self.resize_origin = None
         self.cache_key = None
         self.cached_image = None
+        self.foreground_key = None
+        self.foreground_image = None
+        self.native_blur_requested = False
         self.syncing = True
         self.setMinimumSize(184, 128)
         self.setMaximumSize(1624, 1248)
@@ -174,6 +193,7 @@ class GlassWindow(QWidget):
         self.move(80 + (window.id % 8) * 36, 70 + (window.id % 8) * 30)
         self.syncing = False
         self.show()
+        self.native_blur_requested = self.backend.native_blur.apply(self)
 
     def layout(self):
         return theme.WindowLayout(theme.SIDE_INSET, theme.TITLEBAR_HEIGHT,
@@ -188,18 +208,46 @@ class GlassWindow(QWidget):
         self.syncing = False
         self.update()
 
+    # Cache sharp appearances separately so backdrop composition cannot recurse.
+    def foreground(self, window):
+        key = (window.revision, window.width, window.height, self.hover, self.isActiveWindow())
+        if key != self.foreground_key:
+            self.foreground_image = self.backend.renderer.render(window, self.hover, self.isActiveWindow())
+            self.foreground_key = key
+        return self.foreground_image
+
+    # Cache the foreground; the Mutter extension paints live glass behind this surface.
     def paintEvent(self, _event):
         window = self.backend.server.model.snapshot(self.window_id)
         if window is None:
             return
-        key = (window.revision, window.width, window.height, self.hover, self.isActiveWindow())
+        origin = self.mapToGlobal(self.rect().topLeft())
+        key = (window.revision, window.width, window.height, self.hover,
+               self.isActiveWindow(), self.backend.frost.revision, origin.x(), origin.y())
         if key != self.cache_key:
-            self.cached_image = self.backend.renderer.render(window, self.hover, self.isActiveWindow())
+            self.cached_image = self.backend.renderer.render(
+                window, self.hover, self.isActiveWindow(), frost=self.backend.frost.texture(self),
+                frost_opacity=0.35 if self.native_blur_requested else 1,
+                origin=(origin.x(), origin.y()))
             self.cache_key = key
         painter = QPainter(self)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         painter.drawImage(0, 0, self.cached_image)
         painter.end()
+
+    # Moving the glass changes background sampling, even for an unchanged app scene.
+    def moveEvent(self, _event):
+        if hasattr(self, "backend"):
+            self.backend.frost.invalidate()
+
+    # Keep service-owned stacking and focus changes in the sharp scene cache.
+    def event(self, event):
+        if hasattr(self, "window_id") and event.type() in (
+                QEvent.Type.WindowActivate, QEvent.Type.ZOrderChange):
+            self.backend.frost.raise_window(self.window_id)
+        if hasattr(self, "backend") and event.type() == QEvent.Type.WindowStateChange:
+            self.backend.frost.invalidate()
+        return super().event(event)
 
     def _emit(self, event):
         self.backend.server.emit(self.owner, {"window": self.window_id, **event})
@@ -227,7 +275,7 @@ class GlassWindow(QWidget):
         hover = self.layout().hit_button(point.x(), point.y())
         if hover != self.hover:
             self.hover = hover
-            self.update()
+            self.backend.frost.invalidate()
         if self.drag is not None:
             self.move(event.globalPosition().toPoint() - self.drag)
         if self.resize_origin:
@@ -237,7 +285,7 @@ class GlassWindow(QWidget):
 
     def leaveEvent(self, _event):
         self.hover = None
-        self.update()
+        self.backend.frost.invalidate()
 
     def mouseReleaseEvent(self, event):
         point = event.position().toPoint()
@@ -278,6 +326,8 @@ class GlassWindow(QWidget):
                 self.sync(window)
             return
         self._emit({"type": "resize", "width": width, "height": height})
+        self.backend.native_blur.apply(self)
+        self.backend.frost.invalidate()
 
     def closeEvent(self, event):
         window = self.backend.server.model.snapshot(self.window_id)
@@ -297,6 +347,8 @@ class Backend(QObject):
         self.server = server
         self.renderer = Renderer(report)
         self.windows = {}
+        self.frost = SceneFrost(self)
+        self.native_blur = NativeBlur()
         self.pending = set()
         self.pending_lock = threading.Lock()
         self.changed.connect(self._sync, Qt.ConnectionType.QueuedConnection)
@@ -327,6 +379,9 @@ class Backend(QObject):
                 widget.sync(window)
             else:
                 self.windows[window_id] = GlassWindow(self, window)
+                self.frost.raise_window(window_id)
+        self.frost.order = [window_id for window_id in self.frost.order if window_id in self.windows]
+        self.frost.invalidate()
 
     def _invoke(self, task):
         window, done, result = task
@@ -363,6 +418,7 @@ class Backend(QObject):
         try:
             return app.exec()
         finally:
+            self.native_blur.close()
             self.server.stop()
             thread.join(6)
             for widget in list(self.windows.values()):

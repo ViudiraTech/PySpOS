@@ -10,6 +10,7 @@
 '''
 
 import atexit
+from collections import deque
 import os
 from pathlib import Path
 import secrets
@@ -36,6 +37,8 @@ class ServiceManager:
         self.control = None
         self.previous_endpoint = None
         self.last_error = None
+        self.log_offset = 0
+        self.log_lines = deque(maxlen=512)
 
     def status(self):
         with self.lock:
@@ -60,6 +63,7 @@ class ServiceManager:
             self.stop()
             import forkexec
             self.directory = Path(tempfile.mkdtemp(prefix="pyspos-vg-"))
+            self.log_offset = 0
             self.endpoint = self.directory / "endpoint.json"
             self.previous_endpoint = os.environ.get(ENDPOINT_ENV)
             self.control = secrets.token_hex(32)
@@ -92,6 +96,27 @@ class ServiceManager:
             self.stop()
             raise RuntimeError(self.last_error)
 
+    # Retain unread child output before its temporary service directory disappears.
+    def _collect_logs(self):
+        if not self.directory:
+            return
+        try:
+            with (self.directory / "service.log").open("rb") as stream:
+                stream.seek(self.log_offset)
+                data = stream.read(65536)
+                self.log_offset = stream.tell()
+            self.log_lines.extend(data.decode("utf-8", "replace").splitlines())
+        except OSError:
+            pass
+
+    # Drain bounded child output into the system service journal.
+    def read_logs(self):
+        with self.lock:
+            self._collect_logs()
+            lines = list(self.log_lines)
+            self.log_lines.clear()
+            return lines
+
     def stop(self):
         with self.lock:
             handle = self.handle
@@ -108,6 +133,10 @@ class ServiceManager:
                 if handle.is_alive():
                     handle.kill()
                     handle.join(2)
+            if self.pcb and handle and not handle.is_alive():
+                # Join the output relay before collecting or removing its log file.
+                import forkexec
+                forkexec.wait(self.pcb.pid, timeout=2)
             if self.pcb and proc.get(self.pcb.pid) is self.pcb:
                 if self.pcb.state not in proc.TERMINAL_STATES:
                     proc.finish(self.pcb.pid, int(handle.exitcode or 0) if handle else 1)
@@ -118,6 +147,7 @@ class ServiceManager:
                 else:
                     os.environ[ENDPOINT_ENV] = self.previous_endpoint
             if self.directory:
+                self._collect_logs()
                 shutil.rmtree(self.directory, ignore_errors=True)
             self.pcb = self.handle = self.directory = self.endpoint = self.control = None
             self.previous_endpoint = None

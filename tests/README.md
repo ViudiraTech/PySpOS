@@ -25,3 +25,8 @@ VortexGlass 的 socket 与真实服务进程测试在 `ui/test_vortexglass.py`�
 网站检查既由 `tests/web/test_docs.py` 收集，也可单独执行 `python3 tools/checks/check_docs_html.py` 等脚本。手工 PTY 检查位于 `tools/manual/`，不进入 pytest 自动收集。原根目录的 ELF smoke 脚本现在是 `tools/manual/check_elf.py`。
 
 性能基准使用 `python3 tools/benchmark_runtime.py --output /tmp/pyspos-benchmark.json`。可用 `--baseline` 对比历史 JSON，用 `--process-module` 测量另一份实现。耗时取多轮中位数，不把机器速度作为 CI 断言。功能回归检查调度账本、公平性、状态唤醒与容量上限。
+
+`boot/test_service_manager.py` 覆盖 unit 图、循环检测、必需/可选失败、反向停止、重启与 journal；
+`process/test_stdin_ownership.py` 在真实 PTY 中检查前台应用退出后不吞 shell 输入。
+`ui/test_vortexglass_qt.py` 还验证 UX box blur、边缘折射、场景缓存与下层窗口更新。
+`tools/manual/check_vortexglass_frost.py --output /tmp/vortexglass-frost` 生成玻璃效果对比图和本机耗时记录。

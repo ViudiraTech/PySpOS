@@ -141,6 +141,8 @@ python3 fastboot_gui.py
 | `launcher.py --fastboot` | 开机直接进 fastboot，跳过 OOBE 与 shell |
 | `python3 fastboot_gui.py` | fastboot 图形客户端：刷写、擦除、解锁 BL、向进程发信号 |
 | `service vortexglass status` | 查看系统合成器；支持 start / stop / restart |
+| `systemctl list-units` | 列出初始化、目标与持续服务；支持依赖检查和生命周期管理 |
+| `journalctl -u vortexglass` | 查看当前启动的服务日志，包含子进程输出 |
 | `open guicalc &` / `open guiclock &` / `open guicanvas &` | 经 socket 通信的计算器、时钟与透明画布 |
 | `open spaceglass` | 使用系统合成器；无显示设备时保留离线主题 PNG 预览 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
@@ -338,6 +340,7 @@ Windows 7 及以上、Linux 各发行版、macOS。兼容性上更推荐 Windows
 
 VortexGlass 桌面功能需 `python3 -m pip install -r requirements-gui.txt`。
 [服务启动、GUI 示例与 socket API](docs/vortexglass.md) 有完整说明。
+[服务依赖、引导图与日志](docs/services.md) 说明 unit 文件、systemctl 和终端输入中继。
 
 VortexGlass 使用的主题素材来自
 [Uinxed-Kernel](https://github.com/ViudiraTech/Uinxed-Kernel)（Apache-2.0），

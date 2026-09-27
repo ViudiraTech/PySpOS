@@ -1,0 +1,9 @@
+[Unit]
+Description=Interactive shell
+Requires=default.target
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=shell-start
+ExecStop=shell-stop

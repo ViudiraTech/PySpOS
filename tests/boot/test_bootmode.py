@@ -187,14 +187,17 @@ def test_kernel_boot_path_runs_oobe_when_not_requested(monkeypatch):
         return False
 
     def fake_ota_init():
-        raise StopBoot()
+        raise StopBoot("OTA failed")
 
     monkeypatch.setattr(bootmode, "wants_fastboot", lambda _root: False)
     monkeypatch.setattr(kernel, "_fastboot_boot",
                         lambda: pytest.fail("fastboot must not run"))
     monkeypatch.setattr("oobe.maybe_run_oobe", fake_oobe)
     monkeypatch.setattr("ota.ota_init", fake_ota_init)
+    monkeypatch.setattr("vortexglass.service.manager.start", lambda: None)
+    monkeypatch.setattr("vortexglass.service.manager.stop", lambda: None)
     monkeypatch.setattr(kernel, "screen_clear", lambda: None)
-    with pytest.raises(StopBoot):
+    from service_manager import UnitError
+    with pytest.raises(UnitError, match="Required unit failed"):
         kernel.loop()
     assert calls == ["oobe"]

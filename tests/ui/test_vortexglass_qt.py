@@ -179,6 +179,64 @@ def test_theme_transparent_corners_are_not_flattened(qt_app, theme_dir):
     assert image.pixelColor(100, 0).alpha() == 80
 
 
+# Match UX's two integer box passes, including clamped pixels at every edge.
+def test_ux_box_filter_matches_reference():
+    np = pytest.importorskip("numpy")
+    from vortexglass.frost import box_blur
+    source = np.random.default_rng(42).integers(0, 256, (7, 9, 4), dtype=np.uint8)
+    expected = source.copy()
+    for axis in (1, 0):
+        output = np.empty_like(expected)
+        for y in range(7):
+            for x in range(9):
+                samples = [expected[y, min(8, max(0, x + k))] if axis == 1
+                           else expected[min(6, max(0, y + k)), x] for k in range(-2, 3)]
+                output[y, x] = np.asarray(samples, dtype=np.uint32).sum(axis=0) // 5
+        expected = output
+    assert np.array_equal(box_blur(source, 2), expected)
+    assert np.array_equal(box_blur(source, 0), source)
+
+
+# Refraction changes background samples at the edges and leaves the centre stable.
+def test_refraction_bends_only_edges_and_never_wraps():
+    np = pytest.importorskip("numpy")
+    from vortexglass.frost import CONTEXT, refract
+    yy, xx = np.mgrid[:52, :102]
+    source = np.stack((xx * 2, yy * 4, xx, np.full_like(xx, 255)), axis=-1).astype(np.uint8)
+    plain = refract(source, 80, 30, 0)
+    bent = refract(source, 80, 30, 3)
+    assert np.array_equal(plain, source[CONTEXT:CONTEXT + 30, CONTEXT:CONTEXT + 80])
+    assert np.array_equal(plain[12:-12, 12:-12], bent[12:-12, 12:-12])
+    assert not np.array_equal(plain[0, 0], bent[0, 0])
+    assert np.all(bent[..., 3] == 255)
+
+
+# Only lower windows enter the scene; cached textures refresh on lower-window changes.
+def test_scene_frost_uses_lower_windows_and_reuses_clean_textures(compositor):
+    server, backend, app = compositor
+    lower_id = server.model.create(1, {"background": "#ff0000", "width": 480, "height": 320})["window"]
+    upper_id = server.model.create(2, {"background": "#00000000", "width": 320, "height": 200})["window"]
+    spin(app, lambda: len(backend.windows) == 2)
+    lower, upper = backend.windows[lower_id], backend.windows[upper_id]
+    lower.move(0, 0)
+    upper.move(30, 70)
+    backend.frost.order = [lower_id, upper_id]
+    backend.frost.invalidate()
+    first = backend.frost.texture(upper)
+    count = backend.frost.compositions
+    assert first.pixelColor(100, 10).red() == 255
+    assert first.pixelColor(100, 10).green() == 0
+    assert first.pixelColor(100, 100).alpha() == 0
+    assert backend.frost.texture(upper) is first
+    assert backend.frost.compositions == count
+    server.model.present(1, {"window": lower_id, "items": [], "background": "#008000"})
+    spin(app, lambda: backend.frost.revision > 0 and not backend.pending)
+    second = backend.frost.texture(upper)
+    assert second.pixelColor(100, 10).green() == 128
+    assert second.pixelColor(100, 10).red() == 0
+    assert second is not first
+
+
 def test_real_gui_service_renders_and_cleans_up_on_termination(tmp_path, theme_dir):
     endpoint = tmp_path / "endpoint.json"
     child = subprocess.Popen([sys.executable, "-m", "vortexglass.daemon", "--offscreen",

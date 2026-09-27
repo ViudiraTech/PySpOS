@@ -1,0 +1,8 @@
+[Unit]
+Description=System locale
+Requires=process-table.service
+After=process-table.service
+
+[Service]
+Type=oneshot
+ExecStart=locale

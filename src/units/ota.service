@@ -1,0 +1,8 @@
+[Unit]
+Description=OTA state initialization
+Requires=sysinit.target
+After=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=ota

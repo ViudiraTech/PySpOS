@@ -1,0 +1,9 @@
+[Unit]
+Description=VortexGlass compositor
+Requires=sysinit.target
+After=sysinit.target
+
+[Service]
+Type=simple
+ExecStart=vortexglass-start
+ExecStop=vortexglass-stop

@@ -42,6 +42,9 @@ def _verify_boot_context(pinned_slot=None):
         target = os.path.realpath(os.path.join(root_dir, pinned_slot))
         if here != target:
             raise RuntimeError("热重启期间指定槽位发生变化")
+        import secure_boot
+        locked = os.environ.get("PYSPOS_BOOT_LOCKED") == "1"
+        secure_boot.verify_slot(root_dir, pinned_slot, locked=locked)
         return
     import secure_boot
     locked = os.environ.get("PYSPOS_BOOT_LOCKED") == "1"
@@ -95,19 +98,20 @@ def _boot_kernel():
 # Supervise the shell child, restarting it for as long as a hot restart is
 # requested.
 def run(pinned_slot=None):
+    from service_manager import ServiceManager, Unit
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    restart_count = 0
 
     while True:
-        _verify_boot_context(pinned_slot)
-        restart_count += 1
-        clear_flag()
+        context = {"child": None}
+        manager = ServiceManager()
 
-        # argv[0] reports the shell name and executable is the real python, so keep them apart:
-        # otherwise python reads argv[0] as the script name and flags like -u are lost.
-        cmd = [SHELL_ARGV0, '-u', os.path.abspath(__file__), '--kernel']
-        
-        try:
+        # Verify each boot before launching a fresh interpreter.
+        def verify():
+            _verify_boot_context(pinned_slot)
+            clear_flag()
+
+        # Return as soon as the child is created, then supervise its exit below.
+        def start():
             child_env = os.environ.copy()
             root_dir = os.path.dirname(script_dir)
             python_paths = [p for p in (root_dir, script_dir)
@@ -117,8 +121,9 @@ def run(pinned_slot=None):
                 python_paths.append(old_pythonpath)
             child_env["PYTHONPATH"] = os.pathsep.join(python_paths)
             child_env[SUPERVISED_ENV] = "1"
-            process = subprocess.Popen(
-                cmd,
+            # Keep the meaningful argv[0] separate from the Python executable.
+            child = subprocess.Popen(
+                [SHELL_ARGV0, '-u', os.path.abspath(__file__), '--kernel'],
                 executable=sys.executable,
                 cwd=script_dir,
                 stdin=sys.stdin,
@@ -126,22 +131,37 @@ def run(pinned_slot=None):
                 stderr=sys.stderr,
                 env=child_env
             )
-            
-            return_code = process.wait()
-            
+            context["child"] = child
+            return {"pid": child.pid}
+
+        # Gracefully stop a still-running interpreter on supervision failure.
+        def stop():
+            child = context["child"]
+            if child is not None and child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+
+        manager.add(Unit("boot-verify.service", "Boot context verification", start=verify))
+        manager.add(Unit("runtime.service", "PySpOS runtime", kind="simple", start=start, stop=stop,
+                         requires=("boot-verify.service",), after=("boot-verify.service",)))
+        try:
+            manager.start("runtime.service")
+            return_code = context["child"].wait()
             if check_flag():
+                manager.journal.write("runtime.service", "Restart requested; rebuilding runtime.")
                 continue
-            else:
-                break
-                
+            if return_code:
+                manager.journal.write("runtime.service", f"Runtime exited with status {return_code}.",
+                                      result="failed")
+            return return_code
         except KeyboardInterrupt:
-            if process.poll() is None:
-                process.terminate()
-                process.wait()
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            break
+            return 130
+        finally:
+            manager.shutdown()
 
 # Ask for a hot restart: set the flag and exit 42, letting the supervisor's loop
 # restart us.

@@ -1,0 +1,8 @@
+[Unit]
+Description=Verified boot commit
+Requires=oobe.service
+After=oobe.service
+
+[Service]
+Type=oneshot
+ExecStart=boot-commit

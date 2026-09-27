@@ -1,0 +1,8 @@
+[Unit]
+Description=First boot setup
+Requires=locale.service
+After=locale.service
+
+[Service]
+Type=oneshot
+ExecStart=oobe

@@ -37,6 +37,7 @@ _pump_reader, _pump_writer = mp.Pipe(duplex=False)
 _pump_pending = False
 _watched_children = {}
 _relay_threads = {}
+_input_relays = {}
 # One RPC endpoint per child, keyed by its pid, holding the Listener to close
 # once the child is gone.
 _child_servers = {}
@@ -225,6 +226,8 @@ def _pump_loop():
             pid, table, pcb, handle = sentinels[sentinel]
             handle.join()
             code = int(handle.exitcode or 0)
+            # Release terminal ownership before publishing the child's exit.
+            _finish_input_relay(pcb.pid)
             with _pump_lock:
                 _watched_children.pop(handle, None)
             if table.handles.get(pid) is handle:
@@ -456,8 +459,8 @@ def _signal_backend(pcb, signum):
 # public entry points
 # --------------------------------------------------------------------------
 
-# Relay stdin as raw bytes, pulled out so the log and tee paths can reuse it.
-def _pump_in_relay(in_w, background):
+# Relay only ready bytes while the child lives; never leave a reader at the prompt.
+def _pump_in_relay(in_w, background, sentinel=None, stopped=None):
     if in_w is None:
         return
     if background:
@@ -469,10 +472,54 @@ def _pump_in_relay(in_w, background):
             pass
         return
     try:
+        stream = sys.stdin
+        try:
+            input_fd = stream.fileno()
+        except (OSError, ValueError, AttributeError):
+            input_fd = None
+        console_line = []
         while True:
-            buf = getattr(sys.stdin, "buffer", None)
-            data = buf.read(1) if buf is not None else \
-                sys.stdin.read(1).encode("utf-8")
+            if stopped is not None and stopped.is_set():
+                break
+            if input_fd is not None and os.name == "posix" and sentinel is not None:
+                ready = wait_connections((sentinel, input_fd))
+                if sentinel in ready or (stopped is not None and stopped.is_set()):
+                    break
+                if input_fd not in ready:
+                    continue
+                # BufferedReader.read(1) can prefetch a whole future shell line.
+                # Read one kernel byte so all unread typeahead stays on the TTY.
+                data = os.read(input_fd, 1)
+            elif os.name == "nt" and input_fd is not None and stream.isatty():
+                import msvcrt
+                if not msvcrt.kbhit():
+                    if stopped is not None:
+                        stopped.wait(0.02)
+                    continue
+                char = msvcrt.getwch()
+                if char in ("\x00", "\xe0"):
+                    msvcrt.getwch()
+                    continue
+                if char == "\b":
+                    if console_line:
+                        console_line.pop()
+                        sys.stdout.write("\b \b")
+                        sys.stdout.flush()
+                    continue
+                if char == "\x1a" and not console_line:
+                    break
+                sys.stdout.write("\n" if char == "\r" else char)
+                sys.stdout.flush()
+                if char != "\r":
+                    console_line.append(char)
+                    continue
+                # Windows emits UTF-16 surrogate pairs as separate console keys.
+                line = "".join(console_line).encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+                data = (line + "\n").encode("utf-8")
+                console_line.clear()
+            else:
+                buf = getattr(stream, "buffer", None)
+                data = buf.read(1) if buf is not None else stream.read(1).encode("utf-8")
             if not data:
                 break
             os.write(in_w, data)
@@ -483,6 +530,16 @@ def _pump_in_relay(in_w, background):
             os.close(in_w)
         except (OSError, TypeError):
             pass
+
+
+# Cancel and join the child's input pump before the shell can read again.
+def _finish_input_relay(pid):
+    relay = _input_relays.pop(pid, None)
+    if relay:
+        thread, stopped = relay
+        stopped.set()
+        if thread is not threading.current_thread():
+            thread.join(timeout=1)
 
 
 # Forward the child's stdout to the parent terminal and, for foreground work,
@@ -514,8 +571,6 @@ def _relay_parent_side(out_r, in_w, background):
 
     output_thread = threading.Thread(target=_pump_out, daemon=True)
     output_thread.start()
-    threading.Thread(target=_pump_in_relay, args=(in_w, background),
-                     daemon=True).start()
     return [output_thread]
 
 
@@ -607,7 +662,6 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
         print(f"fork_exec: 子进程启动失败: {e}")
         return pcb
     table.handles[pcb.pid] = handle
-    _watch_child(table, pcb, handle)
     # The parent must close its own copy of the ends the child uses, otherwise:
     #   - leaving out_w open means the parent's stdout read never sees EOF after the
     #     child exits;
@@ -623,11 +677,16 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
             # Write to the log **and** keep printing to the terminal: for a background job,
             # `cmd > log` means keep a copy, not swallow the terminal output.
             _relay_threads[pcb.pid] = _log_relay(out_r, log_path, echo=not background)
-            if not background and in_w is not None:
-                threading.Thread(target=_pump_in_relay, args=(in_w, False),
-                                 daemon=True).start()
         else:
             _relay_threads[pcb.pid] = _relay_parent_side(out_r, in_w, background)
+    if not background and in_w is not None:
+        stopped = threading.Event()
+        thread = threading.Thread(target=_pump_in_relay,
+                                  args=(in_w, False, handle.sentinel, stopped),
+                                  name=f"pyspos-input-{pcb.pid}", daemon=True)
+        _input_relays[pcb.pid] = (thread, stopped)
+        thread.start()
+    _watch_child(table, pcb, handle)
     proc._table().set_remote_signal_backend(_signal_backend)
     return pcb
 
@@ -665,11 +724,13 @@ def _log_relay(out_r, log_path, echo=False):
 # Wait for a child to end and reap it, the wait
 # semantics, then drop the entry from the table.
 # The output relays are joined here, so everything the child wrote has reached
-# the terminal and the log before wait() returns. The stdin pump is deliberately
-# left alone: on an interactive terminal it is blocked reading the user's next
-# keystroke and has nothing left to deliver to a child that is gone.
+# the terminal and the log before wait() returns. The input relay is cancelled
+# and joined too, so an exited app cannot consume the next shell command.
 def wait(pid, timeout=30.0):
     pcb = proc.wait_for(pid, timeout=timeout)
+    if pcb is None:
+        return None
+    _finish_input_relay(pid)
     for thread in _relay_threads.pop(pid, []):
         try:
             thread.join(timeout=1)

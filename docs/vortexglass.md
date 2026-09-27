@@ -36,6 +36,35 @@ open guicanvas &
 Linux/X11 需要支持透明窗口的桌面合成器；Qt 6 的桌面功能取决于宿主系统支持。
 这里的服务管理 PySpOS 应用窗口，并不替换宿主 Wayland/X11 显示服务器。
 
+## 运行时毛玻璃与折射
+
+玻璃边框沿用 Uinxed-Kernel 的 `wm_frost_rt` / `gfx_blur_rect` 思路：合成锐利背景和
+位于当前窗口下方的 PySpOS 窗口，对固定扩展区域做半径 8 的横向、纵向整数 box blur，
+再裁回玻璃区域。实现使用 NumPy 前缀和，工作量随像素数增长，不随模糊半径增长。
+折射独立于反光贴图：边缘的浅透镜改变背景采样坐标，双线性插值后才覆盖原主题 PNG。
+`reflection.png` 保持原尺寸并锚定屏幕横坐标，拖动时窗口从光带下经过。
+
+处理范围为标题栏、两侧和底部的玻璃带，客户区仍由应用的 RGBA 决定，完全透明的
+画布保持透明。四条玻璃带独立取上下文，避免客户区的大面积像素计算。大窗口采用
+二分之一分辨率过滤，再平滑放大；这是性能近似，普通窗口使用原分辨率过滤。
+纹理按场景修订号、位置和尺寸缓存，内容、位置、层叠顺序发生变化才重算，无定时轮询。
+
+壁纸优先取 `PYSPOS_GLASS_WALLPAPER` 指定的本地图片，其次读取 Plasma 的壁纸配置；
+没有可用图片时使用纯色背景。改变壁纸后重启服务。软件场景包含本服务管理的窗口，
+不读取宿主其他应用的画面。Qt 的 X11/xcb 平台还会请求 KWin 对玻璃带做 GPU 背景模糊，
+能否生效取决于宿主合成器及其模糊配置；原生 Wayland 平台目前使用软件场景，
+不提供宿主其他应用的折射采样。
+
+socket `snapshot` 返回可复用的透明前景 PNG，保持原 API 语义；桌面背景的玻璃效果
+只在宿主窗口绘制时合成。对比图与性能检查可用：
+
+```sh
+python3 tools/manual/check_vortexglass_frost.py --output /tmp/vortexglass-frost --theme-dir /path/to/vortexglass
+```
+
+工具生成 `comparison.png` 与 `review.json`，分别检查绘制结果和完整重算、纹理缓存命中的耗时。
+耗时为本机中位数，不作为跨设备 FPS 保证。GUI 依赖现在包括 `PyQt6` 和 `numpy`。
+
 ## 主题与无显示环境
 
 主题优先使用 `VORTEXGLASS_THEME_DIR` 或系统树的 `assets/themes/vortexglass/`，

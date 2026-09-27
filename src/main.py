@@ -73,21 +73,8 @@ def require_root(operation):
 
 
 
-# Boot PySpOS: report the trust state, offer OOBE, then enter the command loop.
+# Boot PySpOS through the same unit graph used by the hot-restart child.
 def main():
-    import syslocale
-    from syslocale import _
-    syslocale.init_from_bootcfg(bootcfg)
-    logk.printl("main", _("boot.loading"), boot_time)
-    logk.printl("main", f"Bootloader：{ _('boot.locked') if boot_locked else _('boot.unlocked')}，ROOT 权限：{ _('boot.root_off') if not rootstate else _('boot.root_on')}", boot_time)
-    logk.printl("main", f"{_('boot.loaded')}{sys.platform}", boot_time)
-    logk.printl("main", _("boot.root_enabled") if rootstate else _("boot.root_disabled"), boot_time)
-
-    # OOBE really runs inside kernel.loop() (that also covers the hotreset_env path); the call
-    # here only serves the compatibility case of starting with `python main.py`.
-    import oobe
-    oobe.maybe_run_oobe(root_dir)
-
     kernel.loop()
 
 # ---- shell package: dispatch and command implementations ----

@@ -32,7 +32,7 @@ def test_kernel_stops_compositor_on_shutdown_and_hotreset(monkeypatch, exit_code
     with pytest.raises(SystemExit) as result:
         kernel.loop()
     assert result.value.code == exit_code
-    assert calls == ["start", "shell", "stop"]
+    assert calls == ["shell"]
 
 
 def test_missing_graphics_backend_does_not_prevent_shell_boot(monkeypatch):
@@ -51,4 +51,5 @@ def test_missing_graphics_backend_does_not_prevent_shell_boot(monkeypatch):
 
     monkeypatch.setattr(manager, "start", fail)
     kernel.loop()
-    assert calls == ["shell", "stop"]
+    # Text boot never opens the optional desktop or imports a graphics backend.
+    assert calls == ["shell"]

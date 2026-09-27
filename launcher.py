@@ -22,8 +22,57 @@ def get_boot_time():
 
 
 # Write a launcher status message and flush it immediately.
-def _log(message):
-    print(f"[launcher] {message}", flush=True)
+def _log(message, failed=False):
+    print(f"{'[FAILED]' if failed else '[  OK  ]'} bootloader: {message}", flush=True)
+
+
+# Prepare the verified runtime through a dependency transaction when supported.
+def _prepare_runtime(root_dir, system_path, selection, locked, args):
+    sys.path.insert(0, system_path)
+
+    # Establish the terminal before any interactive boot service can start.
+    def terminal():
+        ttyutil = _load_terminal_helper(system_path)
+        if ttyutil is not None and hasattr(ttyutil, "read_choice"):
+            ttyutil.read_choice = _read_choice
+
+    # Publish the verified selection and the selected runtime's import paths.
+    def context():
+        apps_path = os.path.join(system_path, "apps")
+        if os.path.isdir(apps_path) and apps_path not in sys.path:
+            sys.path.insert(0, apps_path)
+        os.chdir(system_path)
+        os.environ.update({
+            "PYSPOS_BOOT_ROOT": root_dir, "PYSPOS_BOOT_SYSTEM": system_path,
+            "PYSPOS_BOOT_SLOT": selection["slot"] if selection else "",
+            "PYSPOS_BOOT_VERIFIED": "1" if selection and selection.get("manifest") else "0",
+            "PYSPOS_BOOT_LOCKED": "1" if locked else "0"})
+        sys._launcher_detected = True
+
+    # Record a one-boot fastboot request before the supervised kernel starts.
+    def request():
+        if args.fastboot:
+            import bootmode
+            if not bootmode.request_mode(root_dir, bootmode.MODE_FASTBOOT):
+                raise RuntimeError("无法写入 fastboot 启动请求")
+
+    # Only import the manager from a runtime that passed slot verification.
+    if not os.path.isfile(os.path.join(system_path, "service_manager.py")):
+        terminal()
+        context()
+        request()
+        return None
+    from service_manager import ServiceManager, Unit
+    manager = ServiceManager()
+    manager.add(Unit("terminal.service", "Boot terminal", start=terminal))
+    manager.add(Unit("boot-context.service", "Verified boot context", start=context,
+                     requires=("terminal.service",), after=("terminal.service",)))
+    manager.add(Unit("boot-request.service", "Boot mode request", start=request,
+                     requires=("boot-context.service",), after=("boot-context.service",)))
+    manager.add(Unit("bootloader.target", "Verified runtime handoff", kind="target",
+                     requires=("boot-request.service",)))
+    manager.start("bootloader.target")
+    return manager
 
 
 # Read a validated choice, returning the default after interruption or exhaustion.
@@ -69,14 +118,13 @@ def main(argv=None):
                         help="开机直接进入 fastboot 模式（不跑 OOBE 与 shell）")
     args = parser.parse_args(argv)
 
-    boot_time = get_boot_time()
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = script_dir
 
     try:
         import secure_boot
     except Exception as exc:
-        _log(f"无法加载 Bootloader 验证器: {exc}")
+        _log(f"无法加载 Bootloader 验证器: {exc}", failed=True)
         return 1
 
     try:
@@ -86,20 +134,20 @@ def main(argv=None):
             root_dir, locked, legacy_slot=_read_legacy_slot(root_dir),
             preferred_slot=args.slot)
     except secure_boot.BootVerificationError as exc:
-        _log(f"启动被拒绝: {exc}")
+        _log(f"启动被拒绝: {exc}", failed=True)
         return 1
     except Exception as exc:
-        _log(f"启动验证失败: {exc}")
+        _log(f"启动验证失败: {exc}", failed=True)
         return 1
 
     if args.slot is not None and (selection is None or selection["slot"] != args.slot):
         # Honor an explicitly selected slot; never silently switch to another slot.
-        _log(f"启动被拒绝: 槽位 {args.slot} 未通过验证")
+        _log(f"启动被拒绝: 槽位 {args.slot} 未通过验证", failed=True)
         return 1
 
     if selection is None:
         if locked:
-            _log("锁定模式禁止回退到未签名的 src 目录")
+            _log("锁定模式禁止回退到未签名的 src 目录", failed=True)
             return 1
         system_path = os.path.join(root_dir, "src")
         _log("未找到可启动槽位，进入未签名开发模式")
@@ -113,37 +161,14 @@ def main(argv=None):
 
     main_py = os.path.join(system_path, "main.py")
     if not os.path.isfile(main_py):
-        _log(f"错误: 找不到 main.py: {main_py}")
+        _log(f"错误: 找不到 main.py: {main_py}", failed=True)
         return 1
 
-    ttyutil = _load_terminal_helper(system_path)
-    if ttyutil is not None and hasattr(ttyutil, "read_choice"):
-        ttyutil.read_choice = _read_choice
-
-    apps_path = os.path.join(system_path, "apps")
-    if os.path.isdir(apps_path) and apps_path not in sys.path:
-        sys.path.insert(0, apps_path)
-
-    os.chdir(system_path)
-    _log(f"工作目录: {os.getcwd()}")
-    _log(f"Bootloader 状态: {'LOCKED' if locked else 'UNLOCKED'}")
-
-    os.environ["PYSPOS_BOOT_ROOT"] = root_dir
-    os.environ["PYSPOS_BOOT_SYSTEM"] = system_path
-    os.environ["PYSPOS_BOOT_SLOT"] = selection["slot"] if selection else ""
-    os.environ["PYSPOS_BOOT_VERIFIED"] = "1" if selection and selection.get("manifest") else "0"
-    os.environ["PYSPOS_BOOT_LOCKED"] = "1" if locked else "0"
-    sys._launcher_detected = True
-
-    if args.fastboot:
-        # Record the request before the kernel starts: kernel.loop() reads it,
-        # enters fastboot instead of the shell, and consumes it, so this only
-        # affects the boot that is starting now.
-        import bootmode
-        if bootmode.request_mode(root_dir, bootmode.MODE_FASTBOOT):
-            _log("已请求本次开机直接进入 fastboot 模式")
-        else:
-            _log("警告: 无法写入 fastboot 启动请求，将正常启动")
+    try:
+        manager = _prepare_runtime(root_dir, system_path, selection, locked, args)
+    except Exception as exc:
+        _log(f"运行环境初始化失败: {exc}", failed=True)
+        return 1
 
     if args.slot is not None:
         # Pin the requested slot while retaining supervision for hot resets.
@@ -151,7 +176,10 @@ def main(argv=None):
     try:
         _log("启动热重启环境...")
         import hotreset_env
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as exc:
+        if exc.name != "hotreset_env":
+            _log(f"热重启环境导入失败: {exc}", failed=True)
+            return 1
         # Older slots lack hotreset_env, so call their main.main() directly.
         _log("槽位版本较旧（无热重启环境），直接启动...")
         try:
@@ -164,13 +192,16 @@ def main(argv=None):
             return 1
         return 0
     try:
-        hotreset_env.run(pinned_slot=args.slot)
+        result = hotreset_env.run(pinned_slot=args.slot)
     except Exception as exc:
-        _log(f"启动失败: {exc}")
+        _log(f"启动失败: {exc}", failed=True)
         import traceback
         traceback.print_exc()
         return 1
-    return 0
+    finally:
+        if manager:
+            manager.shutdown()
+    return int(result or 0)
 
 
 if __name__ == "__main__":

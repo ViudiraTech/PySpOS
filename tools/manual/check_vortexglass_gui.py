@@ -33,7 +33,16 @@ def run():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--theme-dir")
     parser.add_argument("--desktop", action="store_true", help="use the display (e.g. under xvfb-run)")
+    parser.add_argument("--quick-review", action="store_true", help="review the GPU desktop and real PTY")
+    parser.add_argument("--dependency-dir", type=Path)
     options = parser.parse_args()
+    if options.dependency_dir:
+        sys.path.insert(0, str(options.dependency_dir))
+        os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, (
+            str(options.dependency_dir), str(REPO / "src"), os.environ.get("PYTHONPATH"))))
+    if options.quick_review:
+        from check_vortexglass_desktop import review
+        return review(options.output, options.theme_dir)
     options.output.mkdir(parents=True, exist_ok=True)
     proc.boot_system()
     manager = ServiceManager()
@@ -46,17 +55,17 @@ def run():
             image_path = options.output / f"{name}.png"
             arguments = shlex.join(["--capture", str(image_path), "--duration", "3"])
             pcb = forkexec.fork_exec(f"app:{name}.py", background=True,
-                                     env={"PYSPOS_APP_ARGS": arguments})
+                                     env={"PYSPOS_APP_ARGS": arguments, "PYSPOS_GUI_SESSION": "1"})
             children.append(pcb)
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             with Client() as client:
                 windows = client.request("status")["windows"]
-            if windows == 3 and all((options.output / f"{name}.png").exists()
+            if windows == (4 if options.desktop else 3) and all((options.output / f"{name}.png").exists()
                                     for name in ("guicalc", "guiclock", "guicanvas")):
                 break
             time.sleep(0.02)
-        assert windows == 3, "three independent GUI clients must own three compositor windows"
+        assert windows == (4 if options.desktop else 3), "three clients and the desktop PTY must be present"
         for pcb, name in zip(children, ("guicalc", "guiclock", "guicanvas")):
             image = pngcodec.read_png(str(options.output / f"{name}.png"))
             alpha = image.pixels[3::4]
@@ -70,7 +79,7 @@ def run():
             assert finished and finished.exit_code == 0, f"{name} failed"
         with Client() as client:
             result["remaining_windows"] = client.request("status")["windows"]
-        assert result["remaining_windows"] == 0
+        assert result["remaining_windows"] == (1 if options.desktop else 0)
         endpoint = manager.endpoint
         manager.stop()
         result["endpoint_removed"] = not endpoint.exists()
