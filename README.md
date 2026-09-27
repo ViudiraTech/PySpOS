@@ -42,9 +42,9 @@ ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Win
 
 ## 🚀 快速开始
 
-前置：Python 3.10+。CI 每次提交在 Linux / 3.12 上跑测试与 lint；发版时
-（Release 或手动触发）额外跑 Linux 3.10 / 3.12 / 3.14 与 macOS、Windows
-的全平台矩阵。
+前置：Python 3.10+。日常 CI 在 Linux / 3.12 上跑测试、lint 与文档检查。
+独立的 `Cross-platform tests` 工作流在发布 Release 或手动触发时运行
+Linux 3.10 / 3.12 / 3.14 与 macOS、Windows 的全平台矩阵。
 
 ```bash
 git clone https://github.com/ViudiraTech/PySpOS.git

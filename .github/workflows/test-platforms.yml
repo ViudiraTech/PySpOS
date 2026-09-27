@@ -1,0 +1,70 @@
+name: Cross-platform tests
+
+# 全平台检查只在发布 Release 或手动运行时创建，避免日常 CI 出现跳过项。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 发版档：Release 发布时 / 手动触发，跑全平台矩阵 ──────────────
+  # macOS 默认走 multiprocessing 的 spawn 启动方式，正好压到 forkexec 的
+  # spawn 分支；Windows 覆盖 README 声明的跨平台支持。
+  test-full:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    # 不因某个平台变红就掐掉其余：发版门禁要看清全部失败，而不是只看第一个
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.14"
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          # 依赖清单进 key：否则依赖更新后会静默复用旧缓存
+          key: pip-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Show environment
+        run: |
+          python -VV
+          python -c "import unicorn; print('unicorn', unicorn.__version__)"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q -p no:warnings
+
+      # 测试会写 etc/ 与题库 history，确认没污染仓库副本
+      - name: Check working tree stays clean
+        run: |
+          if [ -n "$(git status --porcelain -- src/apps/question_bank.json)" ]; then
+            echo "::error::测试污染了 question_bank.json"
+            exit 1
+          fi
