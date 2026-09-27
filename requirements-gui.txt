@@ -1,0 +1,2 @@
+# VortexGlass 桌面/离屏绘制后端；socket 客户端与无显示服务只需要标准库。
+PyQt6>=6.6

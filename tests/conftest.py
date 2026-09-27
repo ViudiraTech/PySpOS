@@ -1,4 +1,13 @@
-"""Shared bootstrap and isolation for the whole regression suite."""
+'''
+ *
+ *      conftest.py
+ *      Shared bootstrap and host-state isolation for the regression suite.
+ *
+ *      2026/9/27 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import sys
 from pathlib import Path
@@ -27,6 +36,8 @@ def pytest_collection_modifyitems(items):
     integration = {
         "process/test_fork_exec.py", "process/test_fork_stdio_relay.py",
         "shell/test_hostexec.py", "ui/test_fastboot_gui.py", "ota/test_fastboot.py",
+        "ui/test_vortexglass.py",
+        "ui/test_vortexglass_qt.py",
     }
     for item in items:
         relative = Path(item.path).relative_to(REPO / "tests").as_posix()

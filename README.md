@@ -34,7 +34,7 @@ PySpOS 是一个教学向的**模拟操作系统**：在用户态把进程调度
 | Shell | 元数据驱动的命令注册表、分组 help、Tab 补全、管道与重定向 | `src/commands.py` |
 | OTA | A/B 槽位、Ed25519 镜像验签、云端更新与本地回滚（Recovery 可从云端选版本装到指定槽位） | `src/ota.py` `secure_boot.py` |
 | Fastboot | AOSP fastboot 协议服务端（只响应请求，不带本地界面）+ Tk 图形客户端；解锁 BL 会清数据 | `src/fastboot.py` `fastboot_gui.py` |
-| 毛玻璃 | SpaceGlass 窗口：按 compositor 规则绘制 VortexGlass 边框，有显示时开真窗口，无显示时渲染成 PNG | `src/apps/spaceglass.py` `src/spaceglass_theme.py` |
+| 毛玻璃 | VortexGlass 系统合成器：PID 1 服务、透明无边框窗口、socket GUI 客户端 | `src/vortexglass/` `src/apps/guicalc.py` |
 
 ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Windows 也能跑。
 
@@ -140,7 +140,9 @@ python3 fastboot_gui.py
 | `fastboot` / `reboot bootloader` | 进入 fastboot 模式（只跑协议，无本地界面） |
 | `launcher.py --fastboot` | 开机直接进 fastboot，跳过 OOBE 与 shell |
 | `python3 fastboot_gui.py` | fastboot 图形客户端：刷写、擦除、解锁 BL、向进程发信号 |
-| `open spaceglass` | SpaceGlass 毛玻璃窗口：无显示设备时把窗口渲染成 PNG |
+| `service vortexglass status` | 查看系统合成器；支持 start / stop / restart |
+| `open guicalc &` / `open guiclock &` / `open guicanvas &` | 经 socket 通信的计算器、时钟与透明画布 |
+| `open spaceglass` | 使用系统合成器；无显示设备时保留离线主题 PNG 预览 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |
 | `ps` `kill <pid>` `signal <pid> SIGTERM` | 进程管理与信号 |
@@ -244,7 +246,7 @@ apps 通过 `src/apps/api.py` 以 syscall RPC 请求特权操作，避免直接�
 - [x] 真子进程 fork/exec + PID 1 init 语义 + 后台作业
 - [x] OOBE 首次开机向导 + 真实时区语言
 - [ ] 动态链接（INTERP）与 TLS 支持
-- [x] SpaceGlass 毛玻璃窗口（VortexGlass 边框、标题栏按钮、orb 与斜向反光）
+- [x] VortexGlass 系统合成器（透明无边框、socket GUI、PID 1 生命周期管理）
 - [x] 可操控 PySpOS 的图形化 app（发 signal、解锁 BL 等）
 
 <a id="faq"></a>
@@ -334,7 +336,10 @@ Windows 7 及以上、Linux 各发行版、macOS。兼容性上更推荐 Windows
 
 [MIT License](LICENSE) © 2022-2026 GoutouStdio
 
-`open spaceglass` 使用的 VortexGlass 主题素材来自
+VortexGlass 桌面功能需 `python3 -m pip install -r requirements-gui.txt`。
+[服务启动、GUI 示例与 socket API](docs/vortexglass.md) 有完整说明。
+
+VortexGlass 使用的主题素材来自
 [Uinxed-Kernel](https://github.com/ViudiraTech/Uinxed-Kernel)（Apache-2.0），
 PySpOS 不内置这份素材：app 会按系统树 → 系统主题目录 → 桌面/家目录的顺序
 自动搜索名为 `vortexglass` 且 34 个文件齐全的目录，也可以用

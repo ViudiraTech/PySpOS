@@ -1,4 +1,13 @@
-"""Portable theme artwork for UI tests, generated without external packages."""
+'''
+ *
+ *      conftest.py
+ *      Portable theme artwork for UI tests, generated without external packages.
+ *
+ *      2026/9/27 By GoutouStdio
+ *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
+ *
+ */
+'''
 
 import struct
 import zlib

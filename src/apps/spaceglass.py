@@ -1,13 +1,11 @@
 '''
  *
  *      spaceglass.py
- *      VortexGlass window-shell app: glass frame, caption buttons, orb, sheen.
+ *      VortexGlass socket GUI demo and compatible offline theme renderer.
  *
- *      The frame is painted in plain RGBA by spaceglass_theme and handed to Tk
- *      as PNG bytes, because Tk 8.6 photo images cannot resize an image and
- *      have no alpha channel at all, while every VortexGlass strip relies on
- *      both. A PySpOS guest has no display server, so the same painter also
- *      renders the finished window straight to a PNG when Tk is unavailable.
+ *      Interactive windows belong to the system compositor and are requested
+ *      over its local socket. The legacy painter remains available for offline
+ *      theme previews and compatibility checks without a display server.
  *
  *      2026/9/27 By GoutouStdio
  *      Copyright (C) 2022-2026 GoutouStdio, based on the MIT license.
@@ -536,8 +534,8 @@ def parse_args(argv):
 
 # Report whether an interactive window can be opened on this machine.
 def display_available():
-    return TK_AVAILABLE and bool(os.environ.get("DISPLAY") or
-                                 os.environ.get("WAYLAND_DISPLAY"))
+    return bool(os.name == "nt" or sys.platform == "darwin" or
+                os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
 # Write the window to a PNG file and report where it went.
@@ -553,6 +551,13 @@ def render_to_file(pixels, options):
 # Load the theme, then show a real window or render one to a file.
 def main():
     options = parse_args(app_args())
+    interactive = options["window"] or (options["render"] is None and display_available())
+    if interactive and options["theme_dir"] is None:
+        from vortexglass.demos import run_demo
+        arguments = ["--title", options["title"], "--size",
+                     f"{options['width']}x{options['height']}"]
+        run_demo("canvas", arguments)
+        return
     try:
         report = theme.load_theme(options["theme_dir"])
     except FileNotFoundError as exc:
@@ -565,16 +570,12 @@ def main():
             print(f"invalid theme image: {problem}")
         raise SystemExit(1)
     print(f"VortexGlass theme: {report['directory']}")
-    pixels = ThemePixels(report)
-    if options["window"] or (options["render"] is None and display_available()):
-        try:
-            window = SpaceGlassWindow(report, options["title"],
-                                      options["width"], options["height"])
-        except tk.TclError as exc:
-            print(f"cannot open display: {exc}")
-            raise SystemExit(1)
-        window.run()
+    if interactive:
+        from vortexglass.demos import run_demo
+        run_demo("canvas", ["--title", options["title"], "--size",
+                            f"{options['width']}x{options['height']}"])
         return
+    pixels = ThemePixels(report)
     render_to_file(pixels, options)
 
 

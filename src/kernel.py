@@ -188,6 +188,20 @@ def loop():
     logk.printl("kernel", f"你有 {cores} 个 CPU 逻辑核心", main.boot_time)
     print(_("boot.welcome", user=username))
     print()
+    from vortexglass.service import manager as graphics_service
+    try:
+        graphics_service.start()
+        logk.printl("kernel", "VortexGlass 合成器服务已启动（PID 1 子进程）", main.boot_time)
+    except (RuntimeError, OSError) as exc:
+        logk.printl("kernel", f"VortexGlass 服务未启动: {exc}", main.boot_time)
+    try:
+        _command_loop()
+    finally:
+        # EOF, shutdown and hotreset all unwind this block before the shell exits.
+        graphics_service.stop()
+
+
+def _command_loop():
     while 1:
         try:
             prompt = input(print_prompt())

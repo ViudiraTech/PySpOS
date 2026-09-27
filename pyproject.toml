@@ -38,6 +38,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.1"]
+gui = ["PyQt6>=6.6"]
 
 [project.urls]
 Homepage = "https://viudiratech.rainyland.top"

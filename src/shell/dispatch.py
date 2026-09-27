@@ -15,7 +15,7 @@ import commands as cmd_registry
 import printk
 import main
 
-from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds
+from . import sys_cmds, elf_cmd, ota_cmds, proc_cmds, pkg_cmds, service_cmds
 from . import filter_cmds, hostexec, shexec, fastfetch_cmd
 
 # command history, used by the history command and by readline persistence
@@ -121,6 +121,7 @@ _REG = [
     ("shutdown", sys_cmds.cmd_shutdown, "关闭 PySpOS", "shutdown", "system", [], False),
     ("history", sys_cmds.cmd_history, "查看命令历史", "history", "system", [], False),
     ("sysmon", proc_cmds.cmd_sysmon, "系统总览（版本/槽位/进程/OTA）", "sysmon", "system", [], False),
+    ("service", service_cmds.cmd_service, "管理 VortexGlass 系统服务", "service vortexglass start|stop|restart|status", "system", [], True),
     # file
     ("ls", sys_cmds.cmd_ls, "列出目录内容", "ls", "file", ["dir"], False),
     ("cd", sys_cmds.cmd_cd, "切换目录", "cd [路径]", "file", [], True),

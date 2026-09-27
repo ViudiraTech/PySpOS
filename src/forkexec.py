@@ -524,7 +524,7 @@ def _relay_parent_side(out_r, in_w, background):
 # relayed to the terminal, so the shell is not blocked. log_path additionally
 # tees the output to a file.
 def fork_exec(payload, *, kind="app", background=False, nice=0,
-              src_dir=None, apps_dir=None, env=None, log_path=None):
+              src_dir=None, apps_dir=None, env=None, log_path=None, ppid=0):
     if src_dir is None:
         src_dir = os.path.dirname(os.path.abspath(__file__))
     if apps_dir is None:
@@ -533,7 +533,7 @@ def fork_exec(payload, *, kind="app", background=False, nice=0,
     comm = payload.split(":", 1)[-1]
     if comm.endswith(".py"):
         comm = comm[:-3]
-    pcb = proc.spawn(comm, kind=kind, nice=nice, remote=True,
+    pcb = proc.spawn(comm, kind=kind, nice=nice, remote=True, ppid=ppid,
                      note="real child process")
 
     # A private RPC endpoint per child: the shared key only proves the caller is

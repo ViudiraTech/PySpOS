@@ -25,7 +25,7 @@ EXCLUDE_FILES = {'.hotreset'}
 # current_slot is build-host state, so it must not be packaged with a new system.
 ROOT_FILES = [
     'launcher.py', 'start.bat', 'start.sh', 'build_update.py',
-    'requirements.txt', 'pyproject.toml', 'LICENSE', 'README.md',
+    'requirements.txt', 'requirements-gui.txt', 'pyproject.toml', 'LICENSE', 'README.md',
     'secure_boot.py',
 ]
 
