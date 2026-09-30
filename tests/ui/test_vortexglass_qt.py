@@ -115,6 +115,19 @@ def test_png_snapshot_uses_service_renderer_and_keeps_alpha(compositor):
         assert len(backend.windows) == 1
 
 
+def test_application_uploaded_rgba_is_blended_by_the_host_window(compositor):
+    server, backend, app = compositor
+    with Client(server.endpoint) as client:
+        window = client.create("client-rendered", 160, 80, "#00000000",
+                               min_width=160, min_height=80)
+        client.present_pixels(window, 160, 80, bytes((220, 20, 30, 128)) * (160 * 80))
+        spin(app, lambda: window in backend.windows)
+        image = backend.renderer.render(server.model.snapshot(window))
+        pixel = image.pixelColor(theme.SIDE_INSET + 5, theme.TITLEBAR_HEIGHT + 5)
+        assert pixel.red() > 190 and pixel.alpha() > 0
+        assert server.model.snapshot(window).pixels[:4] == bytes((220, 20, 30, 128))
+
+
 def test_native_mouse_and_keyboard_reach_only_the_owning_client(compositor):
     server, backend, app = compositor
     with Client(server.endpoint) as client, Client(server.endpoint) as other:

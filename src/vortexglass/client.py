@@ -81,15 +81,46 @@ class Client:
                     raise ProtocolError(message.get("error", "compositor rejected request"))
                 return message["result"]
 
-    def create(self, title="PySpOS", width=480, height=320, background="#162032e8"):
+    def create(self, title="PySpOS", width=480, height=320, background="#162032e8", **options):
         return self.request("create", title=title, width=width, height=height,
-                            background=background)["window"]
+                            background=background, **options)["window"]
 
     def present(self, window, items, **options):
         return self.request("present", window=window, items=items, **options)
 
     def destroy(self, window):
         return self.request("destroy", window=window)
+
+    def resize(self, window, width, height):
+        return self.request("resize", window=window, width=width, height=height)
+
+    def set_title(self, window, title):
+        return self.request("set_title", window=window, title=title)
+
+    def present_pixels(self, window, width, height, pixels):
+        """Atomically submit tightly packed, straight-alpha RGBA bytes."""
+        if type(width) is not int or type(height) is not int:
+            raise ValueError("pixel dimensions must be integers")
+        pixels = memoryview(pixels).cast("B")
+        if len(pixels) != width * height * 4:
+            raise ValueError("expected width * height * 4 RGBA bytes")
+        if "pixel-buffer" not in self.info.get("capabilities", []):
+            raise ProtocolError("compositor does not support pixel buffers")
+        with self.lock:
+            upload = self.request("buffer_begin", window=window, width=width,
+                                  height=height, format="rgba8888")
+            buffer_id, chunk_size = upload["buffer"], upload["chunk_size"]
+            try:
+                for offset in range(0, len(pixels), chunk_size):
+                    data = base64.b64encode(pixels[offset:offset + chunk_size]).decode("ascii")
+                    self.request("buffer_write", buffer=buffer_id, offset=offset, data=data)
+                return self.request("buffer_commit", buffer=buffer_id)
+            except BaseException:
+                try:
+                    self.request("buffer_cancel", buffer=buffer_id)
+                except (OSError, ProtocolError):
+                    pass
+                raise
 
     def snapshot(self, window):
         return base64.b64decode(self.request("snapshot", window=window)["png"], validate=True)

@@ -165,7 +165,8 @@ class Server:
                 raise ProtocolError("authentication or protocol version failed")
             peer.authenticated = True
             return {"version": PROTOCOL_VERSION, "backend": self.backend,
-                    "capabilities": ["display-list", "input", "rgba", "frameless"]}
+                    "capabilities": ["display-list", "input", "rgba", "frameless",
+                                     "pixel-buffer", "pointer", "scroll", "focus", "set-title"]}
         if operation == "ping":
             return {"pong": True}
         if operation == "status":
@@ -186,6 +187,10 @@ class Server:
             return self.model.present(peer.owner, message)
         if operation == "resize":
             return self.model.resize(peer.owner, message)
+        if operation == "set_title":
+            return self.model.set_title(peer.owner, message)
+        if operation in ("buffer_begin", "buffer_write", "buffer_commit", "buffer_cancel"):
+            return getattr(self.model, operation)(peer.owner, message)
         if operation == "destroy":
             return self.model.destroy(peer.owner, message.get("window"))
         if operation == "snapshot":

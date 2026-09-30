@@ -34,7 +34,7 @@ PySpOS 是一个教学向的**模拟操作系统**：在用户态把进程调度
 | Shell | 元数据驱动的命令注册表、分组 help、Tab 补全、管道与重定向 | `src/commands.py` |
 | OTA | A/B 槽位、Ed25519 镜像验签、云端更新与本地回滚（Recovery 可从云端选版本装到指定槽位） | `src/ota.py` `secure_boot.py` |
 | Fastboot | AOSP fastboot 协议服务端（只响应请求，不带本地界面）+ Tk 图形客户端；解锁 BL 会清数据 | `src/fastboot.py` `fastboot_gui.py` |
-| 毛玻璃 | VortexGlass 系统合成器：PID 1 服务、透明无边框窗口、socket GUI 客户端 | `src/vortexglass/` `src/apps/guicalc.py` |
+| 毛玻璃 | VortexGlass 系统合成器、应用自绘 RGBA 提交、socket GUI SDK | `src/vortexglass/` `src/apps/` |
 
 ELF 同时保留自研模拟器（`SpaceCPU 1 Pro`）作为无依赖兜底，Windows 也能跑。
 
@@ -143,7 +143,8 @@ python3 fastboot_gui.py
 | `service vortexglass status` | 查看系统合成器；支持 start / stop / restart |
 | `systemctl list-units` | 列出初始化、目标与持续服务；支持依赖检查和生命周期管理 |
 | `journalctl -u vortexglass` | 查看当前启动的服务日志，包含子进程输出 |
-| `open guicalc &` / `open guiclock &` / `open guicanvas &` | 经 socket 通信的计算器、时钟与透明画布 |
+| `open guicalc &` / `open guifiles &` / `open guinotes &` | 独立计算器、文件浏览器与可编辑记事本 |
+| `open guiclock &` / `open guicanvas &` / `open guimonitor &` | 时钟、可绘制透明画布与系统监视器 |
 | `open spaceglass` | 使用系统合成器；无显示设备时保留离线主题 PNG 预览 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |

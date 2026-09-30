@@ -68,6 +68,10 @@
 
   --pg-duration: 160ms;
   --pg-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --pg-reveal-duration: 640ms;
+  --pg-reveal-delay: 0ms;
+  --pg-reveal-distance: 24px;
+  --pg-scroll-progress: 0;
 
   /* ---- 终端窗：双主题下固定同一套深色 ---- */
   --pg-term-bg: #0c1729;

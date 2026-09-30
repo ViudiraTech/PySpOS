@@ -29,8 +29,8 @@ def cmd_gui():
     manager = get_manager()
     try:
         manager.start("vortexglass.service")
-        while graphics.handle and graphics.handle.is_alive():
-            graphics.handle.join(0.5)
+        if graphics.handle:
+            graphics.handle.join()
         return 0
     except KeyboardInterrupt:
         return 130

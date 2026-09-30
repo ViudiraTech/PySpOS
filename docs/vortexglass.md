@@ -1,7 +1,8 @@
 # VortexGlass 系统合成器
 
-VortexGlass 是由 PySpOS 的 PID 1 启动的真实后台服务。GUI 程序通过本机 socket
-提交显示列表，由服务创建和绘制所有宿主窗口；客户端不导入 Qt，也不创建 Tk 根窗口。
+VortexGlass 是由 PySpOS 的 PID 1 启动的真实后台服务。独立应用通过本机 socket
+申请窗口、提交画面和接收事件；合成器管理宿主窗口、焦点、输入与装饰，应用自己实现
+界面和业务逻辑。应用不需要导入 Qt，也不需要改动合成器代码。
 
 ## 安装与启动
 
@@ -26,8 +27,9 @@ open guiclock &
 open guicanvas &
 ```
 
-`guicalc` 演示按钮、键盘输入与计算；`guiclock` 每秒更新一次；`guicanvas`
-演示完全透明的客户区、半透明图形、透明度按钮与鼠标点击。标题栏支持拖动、最小化、
+`guicalc` 提供计算器，`guiclock` 刷新本地时间，`guicanvas` 提供透明画布、鼠标绘图、撤销
+与 PNG 导出；`guifiles` 支持目录浏览和分页，点击 UTF-8 文件可以在独立记事本窗口编辑，
+`guinotes` 支持多行编辑、撤销和保存，`guimonitor` 查看系统状态。标题栏支持拖动、最小化、
 最大化和关闭，右下角支持调整大小。`open spaceglass --window` 也使用同一 socket 服务。
 `open spaceglass --render=preview.png` 保留旧的离线主题预览。
 
@@ -93,6 +95,47 @@ PYTHONPATH=src python3 -m vortexglass.demos canvas --endpoint /tmp/my-vortexglas
 
 ## Socket API
 
+PySpOS 的职责划分参照成熟合成器的 client/surface 与 compositor/shell 分工：Wayland
+让客户端提交自己的图像缓冲区，再由 compositor 定义窗口管理和扩展 shell 协议；VortexGlass
+采用更易跨平台部署的本机 JSON socket，并提供 Python SDK。架构参考
+[Wayland 的 client-rendered buffer 与 surface commit](https://wayland.freedesktop.org/docs/book/Architecture.html)、
+[wlroots 的 tinywl 最小 compositor 示例](https://github.com/swaywm/wlroots/tree/master/tinywl)、
+[Qt Wayland 的 compositor 与 client shell 双端协议](https://doc.qt.io/qt-6/qtwaylandcompositor-custom-shell-example.html)。
+这里实现的是 VortexGlass 的 API，不是可以接入 GTK、Qt 或 `wl_surface` 的 Wayland display server。
+
+推荐应用使用 `vortexglass.application.View` 与 `Application`：应用模块持有窗口状态，
+定义 `scene()` 或自行实现 `paint()`，处理点击、键盘、指针和滚轮事件。事件含 `window`
+ID，所以一个 `Application` 可以打开多扇互不相同的窗口。设置 `interval = 1` 可每秒
+请求重绘；其他应用没有定时器时，事件循环会阻塞等待。低层调用者仍可直接使用 `Client`。
+
+```python
+from vortexglass.application import Application, View
+from vortexglass.drawing import button, label
+
+class Counter(View):
+    title, size = "独立应用", (360, 180)
+    def __init__(self): self.value = 0
+    def scene(self, width, _height):
+        return [label(24, 24, f"计数：{self.value}", 28),
+                button("add", 24, 86, width - 48, 44, "增加")]
+    def handle(self, event):
+        if event["type"] == "click" and event.get("target") == "add":
+            self.value += 1
+            return True
+        return False
+
+with Application() as app:
+    app.open(Counter())
+    app.run()
+```
+
+完整的独立应用和光栅绘制样例位于 [`examples/gui_counter/`](../examples/gui_counter/)。
+若需接入任意绘制库，`Surface.present_pixels()` 接受紧密排列、每像素 RGBA8888 的 bytes；
+应用端自行生成像素，不限于合成器内置的矩形、文字、按钮和直线。SDK 会将 RGBA 缓冲区
+切为 64 KiB 的顺序分块，全部上传完成后才原子切换当前画面。
+
+更高级或其他语言的客户端可以直接实现下表 JSON socket 操作，无需 Python 界面层代码。
+
 端点描述文件记录协议版本、transport、地址和随机连接令牌。Unix 默认使用
 AF_UNIX，Windows 使用绑定 `127.0.0.1` 的 TCP；Unix 描述文件和 socket 权限均为 `0600`。
 PySpOS 每次启动创建独立的临时运行目录，并把端点位置传给子进程。
@@ -126,15 +169,20 @@ with Client() as gui:
 | `create` | 创建标题、尺寸和 RGBA 背景指定的窗口 |
 | `present` | 原子替换显示列表，可同步修改背景色 |
 | `resize` / `destroy` | 调整尺寸或销毁本连接的窗口 |
+| `set_title` | 修改自有窗口的标题 |
+| `buffer_begin` / `buffer_write` / `buffer_commit` / `buffer_cancel` | 有大小限制的 RGBA8888 分块上传；只有 `commit` 替换已显示画面 |
 | `snapshot` | 取回本连接窗口的 PNG，需 Qt 后端 |
 
 显示列表支持 `rect`、`text`、`button`、`line`；颜色格式为 `#RRGGBB` 或
-`#RRGGBBAA`。事件包括 `click`、`key`、`resize`、`state`、`close`，坐标相对于客户区。
+`#RRGGBBAA`。文字支持 `sans-serif` 和 `monospace`。`create` 可选订阅 `pointer`、`scroll`、
+`focus` 事件；事件包含 `click`、带整数 key 和可移植 `name` / `mods` 名称的 `key`、指针
+`press` / `move` / `release`、滚动增量、`resize`、`state` 与 `close`。坐标相对于客户区。
 每个窗口归创建它的连接所有，其他连接不能更新、销毁或截图。断开连接自动回收全部
 所属窗口，关闭单个窗口不退出合成器服务。停止整个服务需要监督进程独有的控制令牌。
 
 为限制资源占用，每条 JSON 最大 256 KiB，每个显示列表最多 256 项，每个连接最多
-8 个窗口，全局最多 32 个窗口和 800 万客户区像素；慢客户端的待发送数据有 1 MiB 上限。
+8 个窗口，全局最多 32 个窗口和 800 万客户区像素，每连接单笔上传及全局缓冲暂存都受
+像素预算限制；慢客户端的待发送数据有 1 MiB 上限。
 服务用 selector 等待 socket，Qt 通过排队信号合并重绘，空闲时不轮询。
 
 ## 验证

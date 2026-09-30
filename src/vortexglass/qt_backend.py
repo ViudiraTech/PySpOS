@@ -20,6 +20,7 @@ import spaceglass_theme as theme
 from .protocol import ProtocolError
 from .frost import SceneFrost
 from .native_blur import NativeBlur
+from .input import key_event
 
 
 def rgba(value):
@@ -67,10 +68,12 @@ class Renderer:
 
     # Draw runtime glass first, then PNG artwork, client content and controls.
     def render(self, window, hover=None, focused=True, *, frost=None,
-               frost_opacity=1.0, origin=(0, 0)):
+               frost_opacity=1.0, origin=(0, 0), scale=1.0):
         width = window.width + theme.SIDE_INSET * 2
         height = window.height + theme.TITLEBAR_HEIGHT + theme.BOTTOM_HEIGHT
-        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image = QImage(round(width * scale), round(height * scale),
+                       QImage.Format.Format_ARGB32_Premultiplied)
+        image.setDevicePixelRatio(scale)
         image.fill(Qt.GlobalColor.transparent)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -112,6 +115,10 @@ class Renderer:
         painter.save()
         painter.setClipRect(QRectF(*frame["client"]))
         painter.translate(theme.SIDE_INSET, theme.TITLEBAR_HEIGHT)
+        if window.pixels is not None:
+            pw, ph = window.pixel_size
+            surface = QImage(window.pixels, pw, ph, pw * 4, QImage.Format.Format_RGBA8888)
+            painter.drawImage(0, 0, surface)
         for item in window.items:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(rgba(item["color"]))
@@ -119,7 +126,7 @@ class Renderer:
                 painter.drawRoundedRect(QRectF(item["x"], item["y"], item["width"], item["height"]),
                                         item["radius"], item["radius"])
             if item["type"] in ("text", "button"):
-                font = QFont("sans-serif")
+                font = QFont(item.get("font", "sans-serif"))
                 font.setPixelSize(item["size"])
                 painter.setFont(font)
                 painter.setPen(rgba(item.get("foreground", item["color"])))
@@ -187,7 +194,7 @@ class GlassWindow(QWidget):
         self.foreground_image = None
         self.native_blur_requested = False
         self.syncing = True
-        self.setMinimumSize(184, 128)
+        self.setMinimumSize(window.min_width + 24, window.min_height + 48)
         self.setMaximumSize(1624, 1248)
         self.sync(window)
         self.move(80 + (window.id % 8) * 36, 70 + (window.id % 8) * 30)
@@ -252,8 +259,30 @@ class GlassWindow(QWidget):
     def _emit(self, event):
         self.backend.server.emit(self.owner, {"window": self.window_id, **event})
 
+    def _optional(self, event):
+        window = self.backend.server.model.snapshot(self.window_id)
+        if window and event["type"] in window.input_events:
+            self._emit(event)
+
+    def _pointer(self, event, phase):
+        point = event.position().toPoint()
+        x, y = point.x() - theme.SIDE_INSET, point.y() - theme.TITLEBAR_HEIGHT
+        if 0 <= x < self.width() - 24 and 0 <= y < self.height() - 48:
+            self._optional({"type": "pointer", "phase": phase, "x": x, "y": y,
+                            "button": {1: "left", 2: "right", 4: "middle"}.get(event.button().value),
+                            "buttons": event.buttons().value, "modifiers": event.modifiers().value})
+
+    def focusInEvent(self, event):
+        self._optional({"type": "focus", "focused": True})
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        self._optional({"type": "focus", "focused": False})
+        super().focusOutEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
+            self._pointer(event, "press")
             return
         point = event.position().toPoint()
         self.pressed = self.layout().hit_button(point.x(), point.y())
@@ -269,6 +298,7 @@ class GlassWindow(QWidget):
             x, y = point.x() - theme.SIDE_INSET, point.y() - theme.TITLEBAR_HEIGHT
             target = self.backend.server.model.button_at(self.window_id, x, y)
             self._emit({"type": "click", "target": target, "x": x, "y": y})
+            self._pointer(event, "press")
 
     def mouseMoveEvent(self, event):
         point = event.position().toPoint()
@@ -282,12 +312,16 @@ class GlassWindow(QWidget):
             origin, size = self.resize_origin
             delta = event.globalPosition().toPoint() - origin
             self.resize(size.width() + delta.x(), size.height() + delta.y())
+        if self.drag is None and self.resize_origin is None and not self.pressed:
+            self._pointer(event, "move")
 
     def leaveEvent(self, _event):
         self.hover = None
         self.backend.frost.invalidate()
 
     def mouseReleaseEvent(self, event):
+        if not self.pressed and self.drag is None and self.resize_origin is None:
+            self._pointer(event, "release")
         point = event.position().toPoint()
         pressed, self.pressed = self.pressed, None
         self.drag = self.resize_origin = None
@@ -310,8 +344,14 @@ class GlassWindow(QWidget):
             self.toggle_maximize()
 
     def keyPressEvent(self, event):
-        self._emit({"type": "key", "key": event.key(), "text": event.text(),
-                    "modifiers": event.modifiers().value})
+        self._emit(key_event(event.key(), event.text(), event.modifiers().value))
+
+    def wheelEvent(self, event):
+        point = event.position().toPoint()
+        self._optional({"type": "scroll", "x": point.x() - theme.SIDE_INSET,
+                        "y": point.y() - theme.TITLEBAR_HEIGHT,
+                        "dx": event.angleDelta().x(), "dy": event.angleDelta().y(),
+                        "modifiers": event.modifiers().value})
 
     def resizeEvent(self, _event):
         if self.syncing:

@@ -15,4 +15,13 @@ Rectangle {
         GradientStop { position: 0; color: "#263d59" }
         GradientStop { position: 1; color: "#0d1929" }
     }
+    Image {
+        anchors.fill: parent
+        source: "../assets/picsum-1018.jpg"
+        sourceSize: Qt.size(2560, 1440)
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+        visible: status === Image.Ready
+    }
 }

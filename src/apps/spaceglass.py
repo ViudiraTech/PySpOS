@@ -553,10 +553,10 @@ def main():
     options = parse_args(app_args())
     interactive = options["window"] or (options["render"] is None and display_available())
     if interactive and options["theme_dir"] is None:
-        from vortexglass.demos import run_demo
+        from apps.guicanvas import main as run_canvas
         arguments = ["--title", options["title"], "--size",
                      f"{options['width']}x{options['height']}"]
-        run_demo("canvas", arguments)
+        run_canvas(arguments)
         return
     try:
         report = theme.load_theme(options["theme_dir"])
@@ -571,9 +571,9 @@ def main():
         raise SystemExit(1)
     print(f"VortexGlass theme: {report['directory']}")
     if interactive:
-        from vortexglass.demos import run_demo
-        run_demo("canvas", ["--title", options["title"], "--size",
-                            f"{options['width']}x{options['height']}"])
+        from apps.guicanvas import main as run_canvas
+        run_canvas(["--title", options["title"], "--size",
+                    f"{options['width']}x{options['height']}"])
         return
     pixels = ThemePixels(report)
     render_to_file(pixels, options)

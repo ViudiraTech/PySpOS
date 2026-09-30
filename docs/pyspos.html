@@ -120,6 +120,10 @@
             <div class="row-body"><p>应用不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell 三级引导，孤儿被 init 收养，退出后回收为僵尸再清理。</p></div>
           </li>
           <li class="row row-info">
+            <div class="row-title">应用可自绘的窗口 API</div>
+            <div class="row-body"><p>VortexGlass 负责窗口与输入，应用可用 Python SDK 管理多窗口、处理键盘鼠标事件，绘制控件或提交自己的 RGBA 像素画面。记事本、文件浏览器与绘图程序各自持有界面和逻辑，<a href="vortexglass.md">API 与独立应用示例</a>可供继续开发。</p></div>
+          </li>
+          <li class="row row-info">
             <div class="row-title">EEVDF 调度</div>
             <div class="row-body"><p>Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：nice 权重表、vruntime 推进、虚拟截止期与信号状态机。</p></div>
           </li>

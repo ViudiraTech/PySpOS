@@ -27,6 +27,15 @@ ANSI = {"black": "#111a26", "red": "#ef6b78", "green": "#86cd9a",
 CELL_WIDTH, CELL_HEIGHT = 9, 18
 
 
+def python_executable():
+    python = sys.executable
+    if not python or not os.path.isfile(python) or not os.access(python, os.X_OK):
+        python = shutil.which("python3" if os.name != "nt" else "python")
+    if not python:
+        raise RuntimeError("无法找到可执行的 Python 解释器以启动桌面程序")
+    return python
+
+
 # Read a real terminal on one worker and deliver output to the GUI thread.
 class Terminal(QObject):
     output = pyqtSignal(str)
@@ -43,12 +52,7 @@ class Terminal(QObject):
         environment.setdefault("PYSPOS_BOOT_SYSTEM", source)
         environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
             source, environment.get("PYTHONPATH"))))
-        python = sys.executable
-        if not python or not os.path.isfile(python) or not os.access(python, os.X_OK):
-            python = shutil.which("python3" if os.name != "nt" else "python")
-        if not python:
-            raise RuntimeError("无法找到可执行的 Python 解释器以启动桌面 PTY shell")
-        command = argv or [python, "-m", "vortexglass.terminal_shell"]
+        command = argv or [python_executable(), "-m", "vortexglass.terminal_shell"]
         if os.name == "nt":
             from winpty import PtyProcess
             self.process = PtyProcess.spawn(command, env=environment, dimensions=(rows, columns))
@@ -69,7 +73,7 @@ class Terminal(QObject):
             while True:
                 data = self.process.read(4096)
                 if not data:
-                    continue
+                    break
                 self.output.emit(data)
         except (EOFError, OSError, ValueError):
             pass

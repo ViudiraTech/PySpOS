@@ -1,4 +1,4 @@
-/* 站点交互：主题切换 + 移动端导航。无其他 JS 依赖。 */
+/* 站点交互：主题、导航和渐进增强的滚动动效。无 JS 依赖。 */
 (function () {
   "use strict";
 
@@ -115,15 +115,84 @@
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      initTheme();
-      initNav();
-      initCopy();
+  function initMotion() {
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+    var header = document.querySelector(".site-header");
+    var progress = document.createElement("div");
+    progress.className = "reading-progress";
+    progress.setAttribute("aria-hidden", "true");
+    document.body.appendChild(progress);
+    var pending = false;
+
+    function updateProgress() {
+      pending = false;
+      var root = document.documentElement;
+      var distance = root.scrollHeight - root.clientHeight;
+      var position = Math.max(0, window.scrollY || root.scrollTop);
+      progress.style.setProperty("--pg-scroll-progress", distance > 0 ? Math.min(1, position / distance) : 0);
+      if (header) header.classList.toggle("is-scrolled", position > 16);
+    }
+    function queueProgress() {
+      if (!pending) {
+        pending = true;
+        window.requestAnimationFrame(updateProgress);
+      }
+    }
+    window.addEventListener("scroll", queueProgress, { passive: true });
+    window.addEventListener("resize", queueProgress);
+    window.addEventListener("load", queueProgress);
+    if (window.ResizeObserver) new ResizeObserver(queueProgress).observe(document.body);
+    updateProgress();
+
+    if (!window.IntersectionObserver || (reduced && reduced.matches)) return;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-revealed");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0, rootMargin: "0px 0px -32px 0px" });
+    var targets = document.querySelectorAll(
+      ".page-head-grid > div, .section-head, .story-heading, .story-copy, .system-layer, " +
+      ".desktop-evidence, .rows > .row, .timeline > li, .archive-index > div, .fact"
+    );
+    targets.forEach(function (el) {
+      // 首屏和锚点目标即时可读；不通过透明度隐藏正文。
+      var rect = el.getBoundingClientRect();
+      el.classList.add("scroll-reveal");
+      var siblings = Array.prototype.filter.call(el.parentElement.children, function (child) {
+        return child.tagName === el.tagName;
+      });
+      el.style.setProperty("--pg-reveal-delay", (siblings.indexOf(el) % 4) * 60 + "ms");
+      if (rect.top < window.innerHeight && rect.bottom > 0) el.classList.add("is-revealed");
+      else observer.observe(el);
     });
-  } else {
+    function revealFocus(event) {
+      var el = event.target.closest(".scroll-reveal");
+      if (el) { el.classList.add("is-revealed"); observer.unobserve(el); }
+    }
+    document.addEventListener("focusin", revealFocus);
+    function revealHash() {
+      var target = document.getElementById(window.location.hash.slice(1));
+      if (!target) return;
+      var el = target.closest(".scroll-reveal");
+      if (el) { el.classList.add("is-revealed"); observer.unobserve(el); }
+    }
+    window.addEventListener("hashchange", revealHash);
+    revealHash();
+    if (reduced) reduced.addEventListener("change", function () {
+      if (!reduced.matches) return;
+      observer.disconnect();
+      targets.forEach(function (el) { el.classList.add("is-revealed"); });
+    });
+  }
+
+  function init() {
     initTheme();
     initNav();
     initCopy();
+    initMotion();
   }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();

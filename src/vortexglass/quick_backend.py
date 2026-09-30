@@ -11,9 +11,10 @@
 
 from pathlib import Path
 import os
+import subprocess
 import threading
 
-from PyQt6.QtCore import (QAbstractListModel, QModelIndex, QObject, QSize, Qt, QUrl,
+from PyQt6.QtCore import (QAbstractListModel, QModelIndex, QObject, Qt, QTimer, QUrl,
                           pyqtProperty, pyqtSignal, pyqtSlot)
 from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtQuick import QQuickImageProvider, QQuickView
@@ -23,7 +24,19 @@ import spaceglass_theme as theme
 
 from .protocol import ENDPOINT_ENV, ProtocolError
 from .qt_backend import Renderer
-from .terminal import Terminal
+from .terminal import Terminal, python_executable
+from .input import key_event
+
+
+APP_CATALOG = (
+    {"id": "calc", "title": "计算器", "description": "基本运算", "glyph": "＋"},
+    {"id": "clock", "title": "时钟", "description": "当前日期与时间", "glyph": "◷"},
+    {"id": "canvas", "title": "画布", "description": "透明画布", "glyph": "▧"},
+    {"id": "notes", "title": "记事本", "description": "编辑与保存文字", "glyph": "✎"},
+    {"id": "files", "title": "文件", "description": "浏览本机目录", "glyph": "▣"},
+    {"id": "monitor", "title": "系统监视器", "description": "CPU、负载与磁盘", "glyph": "▥"},
+    {"id": "terminal", "title": "终端", "description": "PySpOS PTY shell", "glyph": ">_"},
+)
 
 
 # Preserve delegate identity while geometry, content and stacking roles change.
@@ -34,6 +47,8 @@ class WindowModel(QAbstractListModel):
     def __init__(self):
         super().__init__()
         self.rows = []
+        self.by_id = {}
+        self.positions = {}
 
     def roleNames(self):
         return {Qt.ItemDataRole.UserRole + i: name.encode() for i, name in enumerate(self.names)}
@@ -48,20 +63,24 @@ class WindowModel(QAbstractListModel):
         return None
 
     def find(self, wid):
-        return next((row for row in self.rows if row["wid"] == wid), None)
+        return self.by_id.get(wid)
 
     def append(self, row):
         index = len(self.rows)
         self.beginInsertRows(QModelIndex(), index, index)
         self.rows.append(row)
+        self.by_id[row["wid"]] = row
+        self.positions[row["wid"]] = index
         self.endInsertRows()
 
     def remove(self, wid):
-        row = self.find(wid)
-        if row:
-            index = self.rows.index(row)
+        if wid in self.by_id:
+            index = self.positions.pop(wid)
             self.beginRemoveRows(QModelIndex(), index, index)
             self.rows.pop(index)
+            self.by_id.pop(wid)
+            for position in range(index, len(self.rows)):
+                self.positions[self.rows[position]["wid"]] = position
             self.endRemoveRows()
 
     def change(self, row, **fields):
@@ -72,7 +91,7 @@ class WindowModel(QAbstractListModel):
                 if name in self.names:
                     roles.append(Qt.ItemDataRole.UserRole + self.names.index(name))
         if roles:
-            index = self.index(self.rows.index(row))
+            index = self.index(self.positions[row["wid"]])
             self.dataChanged.emit(index, index, roles)
 
 
@@ -111,16 +130,24 @@ class Backend(QObject):
         self.pending = set()
         self.pending_lock = threading.Lock()
         self.serial = 0
-        self.desktop_size = (1280, 758)
+        screen = QApplication.primaryScreen()
+        self.desktop_size = (screen.size().width(), max(0, screen.size().height() - 42))
         self.terminals = {}
+        self.launched = []
         self.start_terminal = terminal
-        self.changed.connect(self._sync, Qt.ConnectionType.QueuedConnection)
+        self.sync_timer = QTimer(self)
+        self.sync_timer.setSingleShot(True)
+        self.sync_timer.setInterval(16)
+        self.sync_timer.timeout.connect(self._sync)
+        self.changed.connect(self._schedule_sync, Qt.ConnectionType.QueuedConnection)
         self.invoke.connect(self._capture, Qt.ConnectionType.QueuedConnection)
         self.ended.connect(QApplication.instance().quit, Qt.ConnectionType.QueuedConnection)
         server.model.changed = self.notify
         server.capture = self.capture
         self.view = QQuickView()
+        self.view.setScreen(screen)
         self.view.setTitle("PySpOS Desktop")
+        self.view.setFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.view.setColor(QColor("#142237"))
         self.view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         self.view.engine().addImageProvider("vortexglass", self.provider)
@@ -128,11 +155,15 @@ class Backend(QObject):
         self.view.setSource(QUrl.fromLocalFile(str(Path(__file__).with_name("qml") / "Desktop.qml")))
         if self.view.status() == QQuickView.Status.Error:
             raise RuntimeError("Desktop QML: " + "; ".join(error.toString() for error in self.view.errors()))
-        self.view.resize(QSize(1280, 800))
+        self.view.resize(screen.size())
 
     @pyqtProperty(QObject, constant=True)
     def windowModel(self):
         return self.model
+
+    @pyqtProperty("QVariantList", constant=True)
+    def appCatalog(self):
+        return list(APP_CATALOG)
 
     # Coalesce socket changes before rendering sharp appearances on the GUI thread.
     def notify(self, wid):
@@ -142,10 +173,14 @@ class Backend(QObject):
         if first:
             self.changed.emit()
 
+    def _schedule_sync(self):
+        if not self.sync_timer.isActive():
+            self.sync_timer.start()
+
     def _sync(self):
         with self.pending_lock:
             pending, self.pending = self.pending, set()
-        for wid in pending:
+        for wid in sorted(pending):
             window = self.server.model.snapshot(wid)
             row = self.model.find(wid)
             if window is None:
@@ -161,17 +196,23 @@ class Backend(QObject):
                        "rank": len(self.model.rows), "minimized": False, "focused": False,
                        "foreground": "", "backdrop": [], "hover": None, "restore": None}
                 self.model.append(row)
-                self.activate(wid)
+                self._activate(wid, skip_render=wid, update_backdrops=False)
             self.model.change(row, caption=window.title, ww=window.width + 24, wh=window.height + 48)
             self._render(row, window)
         self._backdrops()
+        if self.model.rows and not any(row["focused"] and not row["minimized"]
+                                       for row in self.model.rows):
+            visible = [row for row in self.model.rows if not row["minimized"]]
+            if visible:
+                self.activate(max(visible, key=lambda row: row["rank"])["wid"])
 
     def _render(self, row, window=None):
         window = window or self.server.model.snapshot(row["wid"])
         if window is None:
             return
         image = self.renderer.render(window, row["hover"], row["focused"],
-                                     origin=(int(row["wx"]), int(row["wy"])))
+                                     origin=(int(row["wx"]), int(row["wy"])),
+                                     scale=min(2.0, max(1.0, self.view.devicePixelRatio())))
         terminal = self.terminals.get(row["wid"])
         if terminal:
             terminal.paint(image, (theme.SIDE_INSET, theme.TITLEBAR_HEIGHT))
@@ -195,6 +236,9 @@ class Backend(QObject):
 
     @pyqtSlot(int)
     def activate(self, wid):
+        self._activate(wid)
+
+    def _activate(self, wid, *, skip_render=None, update_backdrops=True):
         selected = self.model.find(wid)
         if selected is None:
             return
@@ -205,9 +249,14 @@ class Backend(QObject):
             changed = row["focused"] != (row is selected)
             self.model.change(row, focused=row is selected, rank=rank,
                               minimized=False if row is selected else row["minimized"])
-            if changed:
+            if changed and row["wid"] != skip_render:
                 self._render(row)
-        self._backdrops()
+            if changed:
+                window = self.server.model.snapshot(row["wid"])
+                if window and "focus" in window.input_events:
+                    self._emit(window, {"type": "focus", "focused": row is selected})
+        if update_backdrops:
+            self._backdrops()
 
     @pyqtSlot(int, float, float)
     def moveWindow(self, wid, x, y):
@@ -226,7 +275,8 @@ class Backend(QObject):
         window = self.server.model.snapshot(wid)
         if not window:
             return
-        width, height = max(160, min(1600, int(width) - 24)), max(80, min(1200, int(height) - 48))
+        width = max(window.min_width, min(1600, int(width) - 24))
+        height = max(window.min_height, min(1200, int(height) - 48))
         try:
             self.server.model.resize(window.owner, {"window": wid, "width": width, "height": height})
         except ProtocolError:
@@ -281,21 +331,34 @@ class Backend(QObject):
             self.model.change(row, minimized=True, focused=False)
             self._emit(window, {"type": "state", "state": "minimized"})
             self._backdrops()
+            visible = [item for item in self.model.rows if not item["minimized"]]
+            if visible:
+                self.activate(max(visible, key=lambda item: item["rank"])["wid"])
         elif mode == "max":
-            if row["restore"]:
-                ox, oy, width, height = row.pop("restore")
-                row["restore"] = None
-                self.model.change(row, wx=ox, wy=oy)
-            else:
-                row["restore"] = (row["wx"], row["wy"], row["ww"], row["wh"])
-                self.model.change(row, wx=0, wy=0)
-                width, height = self.desktop_size
-            self.resizeWindow(wid, width, height)
-            self._emit(window, {"type": "state", "state": "maximized" if row["restore"] else "normal"})
+            self._toggle_maximize(row, window)
         elif mode == "client" and wid not in self.terminals:
             x, y = int(x) - 12, int(y) - 28
             self._emit(window, {"type": "click", "target": self.server.model.button_at(wid, x, y),
                                 "x": x, "y": y})
+
+    def _toggle_maximize(self, row, window):
+        if row["restore"]:
+            ox, oy, width, height = row["restore"]
+            row["restore"] = None
+            self.model.change(row, wx=ox, wy=oy)
+        else:
+            row["restore"] = (row["wx"], row["wy"], row["ww"], row["wh"])
+            self.model.change(row, wx=0, wy=0)
+            width, height = self.desktop_size
+        self.resizeWindow(row["wid"], width, height)
+        self._emit(window, {"type": "state", "state": "maximized" if row["restore"] else "normal"})
+
+    @pyqtSlot(int)
+    def toggleMaximize(self, wid):
+        row = self.model.find(wid)
+        window = self.server.model.snapshot(wid)
+        if row and window:
+            self._toggle_maximize(row, window)
 
     @pyqtSlot(int, int, str, int)
     def key(self, wid, key, text, modifiers):
@@ -304,14 +367,30 @@ class Backend(QObject):
         else:
             window = self.server.model.snapshot(wid)
             if window:
-                self._emit(window, {"type": "key", "key": key, "text": text, "modifiers": modifiers})
+                self._emit(window, key_event(key, text, modifiers))
+
+    @pyqtSlot(int, str, float, float, int, int, int)
+    def pointer(self, wid, phase, x, y, button, buttons, modifiers):
+        window = self.server.model.snapshot(wid)
+        if window and "pointer" in window.input_events:
+            x, y = int(x) - 12, int(y) - 28
+            if 0 <= x < window.width and 0 <= y < window.height:
+                self._emit(window, {"type": "pointer", "phase": phase, "x": x, "y": y,
+                                    "button": {1: "left", 2: "right", 4: "middle"}.get(button),
+                                    "buttons": buttons, "modifiers": modifiers})
 
     @pyqtSlot(int, int)
-    def scroll(self, wid, delta):
+    @pyqtSlot(int, int, float, float, int)
+    def scroll(self, wid, delta, x=12, y=28, dx=0):
         terminal = self.terminals.get(wid)
         if terminal:
             terminal.screen.prev_page() if delta > 0 else terminal.screen.next_page()
             self.notify(wid)
+        else:
+            window = self.server.model.snapshot(wid)
+            if window and "scroll" in window.input_events:
+                self._emit(window, {"type": "scroll", "x": int(x) - 12, "y": int(y) - 28,
+                                    "dx": dx, "dy": delta})
 
     def _emit(self, window, event):
         if window.id not in self.terminals:
@@ -330,6 +409,27 @@ class Backend(QObject):
         terminal.output.connect(lambda data, wid=wid: self._terminal_output(wid, data))
         terminal.exited.connect(lambda wid=wid: self._terminal_exited(wid))
         terminal.start()
+
+    @pyqtSlot(str)
+    def launchApp(self, app_id):
+        if app_id == "terminal":
+            self.openTerminal()
+            return
+        if app_id not in {entry["id"] for entry in APP_CATALOG}:
+            return
+        environment = dict(os.environ)
+        environment["PYSPOS_GUI_SESSION"] = "1"
+        environment[ENDPOINT_ENV] = str(self.server.endpoint)
+        source = str(Path(__file__).resolve().parents[1])
+        environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
+            source, environment.get("PYTHONPATH"))))
+        self.launched = [child for child in self.launched if child.poll() is None]
+        module = {"calc": "guicalc", "clock": "guiclock", "canvas": "guicanvas",
+                  "notes": "guinotes", "files": "guifiles", "monitor": "guimonitor"}[app_id]
+        child = subprocess.Popen([python_executable(), "-m", f"apps.{module}"],
+                                 env=environment, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL)
+        self.launched.append(child)
 
     def _terminal_output(self, wid, data):
         terminal = self.terminals.get(wid)
@@ -368,7 +468,9 @@ class Backend(QObject):
     def run(self):
         app = QApplication.instance()
         app.setQuitOnLastWindowClosed(True)
-        self.view.show()
+        self.view.showFullScreen()
+        self.view.requestActivate()
+        QTimer.singleShot(250, self._confirm_fullscreen)
         self.server.open()
         if self.start_terminal:
             self.openTerminal()
@@ -384,10 +486,23 @@ class Backend(QObject):
         try:
             return app.exec()
         finally:
+            self.sync_timer.stop()
             for terminal in list(self.terminals.values()):
                 terminal.close()
             self.terminals.clear()
             self.server.stop()
             thread.join(6)
+            for child in self.launched:
+                if child.poll() is None:
+                    child.terminate()
+                try:
+                    child.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
             self.view.close()
             self.view.setSource(QUrl())
+
+    def _confirm_fullscreen(self):
+        if self.view.isVisible() and not self.view.windowStates() & Qt.WindowState.WindowFullScreen:
+            self.view.showFullScreen()

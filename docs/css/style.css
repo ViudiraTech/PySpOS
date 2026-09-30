@@ -2,7 +2,7 @@
    GoutouStdio 站点样式（与 tokens.css 配合使用）
    分层：基础 → 排印 → 版式 → 页眉 → 页头 → 通用组件 →
    内容组件 → 终端窗 → 反白带 → 页脚 → 响应式。
-   组件引用 --pg-* token；装饰限于静态背景，正文保持清晰。
+   组件引用 --pg-* token；动效保持正文可读。
    ============================================================ */
 
 /* ---------- 1. 基础 ---------- */
@@ -829,6 +829,55 @@ figure.shot-frame { margin: var(--pg-space-5) 0 0; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; }
   .t-cursor { animation: none; }
+}
+
+/* 正文始终可见，进入视口时错峰归位；无 JS 时维持原版式。 */
+.scroll-reveal {
+  transform: translateY(var(--pg-reveal-distance));
+  transition: transform var(--pg-reveal-duration) var(--pg-ease) var(--pg-reveal-delay);
+}
+.scroll-reveal.is-revealed { transform: none; }
+.reading-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 2px;
+  z-index: 1100;
+  background: var(--pg-accent);
+  transform: scaleX(var(--pg-scroll-progress));
+  transform-origin: left;
+  pointer-events: none;
+}
+.site-header { transition: box-shadow var(--pg-duration) var(--pg-ease); }
+.site-header.is-scrolled { box-shadow: 0 2px var(--pg-space-4) var(--pg-line-1); }
+
+/* View Timeline：图片随滚动收拢，架构图轻微纵向视差。仅在支持时启用。 */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .desktop-evidence { overflow: clip; }
+    .desktop-evidence img {
+      animation: evidence-focus linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 50%;
+    }
+    .system-figure {
+      animation: figure-drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+  }
+}
+@keyframes evidence-focus {
+  from { transform: scale(1.04); }
+  to { transform: scale(1); }
+}
+@keyframes figure-drift {
+  from { transform: translateY(var(--pg-space-3)); }
+  to { transform: translateY(calc(-1 * var(--pg-space-3))); }
+}
+@media (prefers-reduced-motion: reduce), print {
+  .scroll-reveal { transform: none; transition: none; }
+  .system-figure, .desktop-evidence img { animation: none; transform: none; }
+  .reading-progress { display: none; }
 }
 
 /* 首页：短标题、产品入口与会话演示组成同一首屏。 */
