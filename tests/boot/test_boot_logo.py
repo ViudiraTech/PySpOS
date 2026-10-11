@@ -33,18 +33,16 @@ def test_shipped_logo_is_splash_shaped():
     assert any("#" in line or "@" in line or "%" in line for line in lines)
 
 
-# The splash prints breathing room around centered art, never wider than shown.
-def test_splash_has_breathing_room_and_centers(monkeypatch, capsys):
-    import os
-    import shutil
-    monkeypatch.setattr(shutil, "get_terminal_size",
-                        lambda fallback: os.terminal_size((80, 24)))
+# The splash keeps the mark left-aligned with the wordmark below it.
+def test_splash_left_aligned_with_wordmark_below(capsys):
     kernel.print_splash()
     out = capsys.readouterr().out.splitlines()
-    assert out[0] == "" and out[-1] == ""
-    body = [line for line in out[1:-1] if line.strip()]
-    assert len(body) >= 10
-    assert body[0].startswith(" ") and body[0].strip() in kernel.ascii_logo
+    art = kernel.ascii_logo.splitlines()
+    assert out[0] == ""
+    assert out[1:1 + len(art)] == art
+    assert out[1 + len(art)] == ""
+    assert "PySpOS" in out[2 + len(art)]
+    assert out[-1] == ""
 
 
 # Density buckets: spaces stay bare, body blue, glow core cyan.

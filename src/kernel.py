@@ -92,15 +92,16 @@ def _colorize_splash_line(line):
     return "".join(parts)
 
 
-# Print the boot splash with breathing room: a blank line above and below,
-# lines centered when the terminal is wider than the art.
+# Print the boot splash: the mark left-aligned with the wordmark below it,
+# a blank line above and below for breathing room.
 def print_splash():
-    width = shutil.get_terminal_size(fallback=(80, 24)).columns
     color = _splash_color_enabled()
     print()
     for line in ascii_logo.splitlines():
-        shown = line.center(width) if len(line) < width else line
-        print(_colorize_splash_line(shown) if color else shown)
+        print(_colorize_splash_line(line) if color else line)
+    print()
+    print("PySpOS 模拟操作系统 版本 3")
+    print("@ 2022~2026 GoutouStdio（或狗头工作室）保留所有权利。")
     print()
 
 # Logical CPU count reported at boot.
