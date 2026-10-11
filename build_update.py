@@ -276,7 +276,13 @@ def _ask(prompt, default=""):
     except Exception:
         return default
     try:
-        v = input(prompt).strip()
+        sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+        import ttyutil
+        ttyutil.ensure_sane_tty()
+    except Exception:
+        pass
+    try:
+        v = input(prompt).replace("\r", "").strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return default

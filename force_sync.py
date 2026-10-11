@@ -21,6 +21,23 @@ EXCLUDED_NAMES = {"__pycache__", ".git", ".hotreset", "current_slot",
                   "boot_manifest.json", "boot_manifest.sig"}
 EXCLUDED_SUFFIXES = (".pyc", ".pyo")
 
+# Hardened terminal prompts live in src/ttyutil.py; without src/ the raw
+# input fallback applies.
+try:
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+    import ttyutil as _ttyutil
+except ImportError:
+    _ttyutil = None
+
+
+# Ask to continue, healing a raw terminal left by a crashed session first.
+def _ask_continue(prompt):
+    if _ttyutil is None:
+        return input(prompt).strip().lower()
+    _ttyutil.ensure_sane_tty()
+    return _ttyutil.read_choice(prompt, valid=("y", "n"), default="n",
+                                max_retries=5)
+
 
 # Read the active slot marker and fall back to slot_a for missing or invalid values.
 def _current_slot(root_dir):
@@ -64,8 +81,7 @@ def sync_slot(root_dir, slot=None, assume_yes=False):
     if os.path.islink(target):
         raise RuntimeError("目标槽位是符号链接")
     if not assume_yes:
-        answer = input(f"将用 src 覆盖 {slot}，继续？(y/n): ").strip().lower()
-        if answer not in ("y", "yes"):
+        if _ask_continue(f"将用 src 覆盖 {slot}，继续？(y/n): ") not in ("y", "yes"):
             print("已取消")
             return False
     staging = os.path.join(root_dir, f".{slot}.sync-{uuid.uuid4().hex[:12]}")

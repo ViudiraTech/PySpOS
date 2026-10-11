@@ -17,6 +17,24 @@ import sys
 import secure_boot
 
 
+# Hardened terminal prompts live in src/ttyutil.py; without src/ the raw
+# input fallback applies.
+try:
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+    import ttyutil as _ttyutil
+except ImportError:
+    _ttyutil = None
+
+
+# Ask to continue, healing a raw terminal left by a crashed session first.
+def _ask_continue(prompt):
+    if _ttyutil is None:
+        return input(prompt).strip().lower()
+    _ttyutil.ensure_sane_tty()
+    return _ttyutil.read_choice(prompt, valid=("y", "n"), default="n",
+                                max_retries=5)
+
+
 # Resolve a slot name to its directory, rejecting anything else.
 def _safe_slot_path(root_dir, slot):
     if slot not in secure_boot.SLOTS:
@@ -34,8 +52,7 @@ def wipe_slots(root_dir, slots, assume_yes=False):
     if secure_boot.read_locked(root_dir):
         raise RuntimeError("当前是 LOCKED 信任域，拒绝删除槽位")
     if not assume_yes:
-        answer = input(f"将删除槽位 {', '.join(slots)}，继续？(y/n): ").strip().lower()
-        if answer not in ("y", "yes"):
+        if _ask_continue(f"将删除槽位 {', '.join(slots)}，继续？(y/n): ") not in ("y", "yes"):
             print("已取消")
             return False
     for slot in slots:
