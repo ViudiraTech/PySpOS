@@ -140,3 +140,59 @@ def test_background_host_only(tmp_path, monkeypatch):
     code = "import time;time.sleep(0.2)"
     run(f"{sys.executable} -c '{code}' &")
     assert len(process.list_jobs()) == 1
+
+
+# A redirect on any pipeline stage is honoured, not just the first one.
+def test_pipeline_late_stage_redirects(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("hello\nbye\n", encoding="utf-8")
+    run("cat a.txt | grep hello > out.txt")
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8").strip() == "hello"
+    run("echo hi | cat > two.txt")
+    assert (tmp_path / "two.txt").read_text(encoding="utf-8").strip() == "hi"
+    # A redirect on the first stage still breaks the pipe exactly like bash.
+    out = run("echo middle > mid.txt | cat")
+    assert (tmp_path / "mid.txt").read_text(encoding="utf-8").strip() == "middle"
+    assert "middle" not in out
+
+
+# 2> takes stderr only: stdout keeps flowing, and 2>&1 merges into the sink.
+def test_stderr_redirect_keeps_stdout(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out = run("echo hi 2> err.txt")
+    assert "hi" in out
+    assert (tmp_path / "err.txt").read_text(encoding="utf-8") == ""
+    run("echo both > same.txt 2>&1")
+    assert (tmp_path / "same.txt").read_text(encoding="utf-8").strip() == "both"
+    status, captured = shexec.run_line("echo h2 2>&1", capture=True)
+    assert status == 0
+    assert captured == "h2\n".encode("utf-8")
+
+
+# Builtins that fail report a nonzero status, so && chains stop like bash.
+def test_failing_builtins_set_status(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert "BAD" not in run("cat no-such-file-xyz && echo BAD")
+    assert "1" in run("cat no-such-file-xyz; echo $?")
+    assert "BAD" not in run("rm -f no-such-file-xyz && echo BAD")
+    assert "BAD" not in run("finfo no-such-file-xyz && echo BAD")
+    assert "BAD" not in run("touch /nope-xyz/f && echo BAD")
+    assert "BAD" not in run("cp no-such-file-xyz dest-xyz && echo BAD")
+
+
+# rm parses -r/-f itself, refuses directories without -r, and never climbs out.
+def test_rm_flags(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "gone.txt").write_text("x", encoding="utf-8")
+    run("rm -f gone.txt")
+    assert not (tmp_path / "gone.txt").exists()
+    tree = tmp_path / "tree"
+    (tree / "sub").mkdir(parents=True)
+    (tree / "sub" / "x").write_text("x", encoding="utf-8")
+    out = run("rm -f tree && echo deleted")
+    assert "是一个目录" in out
+    assert "deleted" not in out
+    assert tree.exists()
+    run("rm -rf tree")
+    assert not tree.exists()
+    assert "survived" not in run("rm -rf .. && echo survived")

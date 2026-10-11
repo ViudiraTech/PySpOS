@@ -30,5 +30,9 @@ def is_safe_filename(filename: str) -> bool:
     # for '../' let it through and the write landed outside the directory.
     if "\\" in filename:
         return False
-    return not (re.search(r'\.\./', filename) or os.path.isabs(filename))
+    # Any '..' path segment climbs out, including a bare '..' as the whole name:
+    # 'rm -r ..' must never reach rmtree on the parent directory.
+    if re.search(r'(?:^|/)\.\.(?:/|$)', filename):
+        return False
+    return not os.path.isabs(filename)
 

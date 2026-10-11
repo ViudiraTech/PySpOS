@@ -232,32 +232,79 @@ def cmd_cd(path: str = None):
 # Finfo prints the size, mtime and directory flag of a path.
 def cmd_finfo(filename: str):
     info = fs.get_file_info(filename) # fetch file information
-    if info:    
+    if info:
         print(f"{filename} 的文件信息\n大小: {info['size']} 字节, 修改时间: {info['modified']}, 是否为目录: {info['is_dir']}\n")
-    else:
-        print(f"未找到文件或目录: {filename}\n")
+        return 0
+    print(f"未找到文件或目录: {filename}\n")
+    return 1
 
-# rm deletes a file, or a directory only with -r; -f skips the confirmation.
-def cmd_rm(target: str, recursive: bool = False, force: bool = False):
-    if not target or target.strip() == "":
+# rm deletes files or directories, -r allows directories, -f skips confirmation.
+# Flags and operands are parsed here because the dispatcher hands the whole raw
+# argument string to a command with one required parameter.
+def cmd_rm(args: str):
+    import shlex
+    try:
+        tokens = shlex.split(args or "")
+    except ValueError:
+        printk.error("rm: 引号不匹配\n")
+        return 1
+    recursive = force = False
+    operands = []
+    only_operands = False
+    for token in tokens:
+        if only_operands or token == "-" or not token.startswith("-"):
+            operands.append(token)
+            continue
+        if token == "--":
+            only_operands = True
+            continue
+        if token.startswith("--"):
+            long = token[2:]
+            if long == "recursive":
+                recursive = True
+            elif long == "force":
+                force = True
+            else:
+                printk.error(f"rm: 无效选项 --{long}\n")
+                return 1
+            continue
+        for flag in token[1:]:
+            if flag in "rR":
+                recursive = True
+            elif flag == "f":
+                force = True
+            else:
+                printk.error(f"rm: 无效选项 -{flag}\n")
+                return 1
+    if not operands:
         printk.error("rm: 缺少操作数\n")
-        return
-    
+        return 1
+    status = 0
+    for target in operands:
+        if _rm_one(target, recursive, force) != 0:
+            status = 1
+    return status
+
+
+# Delete one operand, returning a bash-style status code.
+def _rm_one(target: str, recursive: bool, force: bool):
     target = target.strip()
-    
+    if not target:
+        return 1
+
     # safety check
     if not main.is_safe_filename(target):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
-        return
-    
+        return 1
+
     # resolve the absolute path
     full_path = os.path.abspath(target)
-    
+
     # check whether the file or directory exists
     if not os.path.exists(full_path):
         printk.error(f"rm: 无法删除 '{target}': 没有那个文件或目录\n")
-        return
-    
+        return 1
+
     try:
         # decide whether it is a file or a directory
         if os.path.isfile(full_path):
@@ -265,30 +312,36 @@ def cmd_rm(target: str, recursive: bool = False, force: bool = False):
             if not force:
                 if not printk.confirm(f"确认删除文件 '{target}'?"):
                     print("操作已取消\n")
-                    return
+                    return 1
             os.remove(full_path)
             printk.ok(f"已删除文件: {target}\n")
-            
+
         elif os.path.isdir(full_path):
             # delete the directory
             if not recursive:
                 printk.error(f"rm: 无法删除 '{target}': 是一个目录\n")
                 print("提示: 使用 'rm -r <目录>' 递归删除目录及其内容\n")
-                return
-            
+                return 1
+
             if not force:
                 if not printk.confirm(f"确认递归删除目录 '{target}' 及其所有内容?"):
                     print("操作已取消\n")
-                    return
-            
+                    return 1
+
             import shutil
             shutil.rmtree(full_path)
             printk.ok(f"已删除目录: {target}\n")
-            
+        else:
+            # a symlink or special file still goes away with os.remove
+            os.remove(full_path)
+            printk.ok(f"已删除: {target}\n")
+        return 0
+
     except PermissionError:
         printk.error(f"rm: 无法删除 '{target}': 权限拒绝\n")
     except Exception as e:
         printk.error(f"rm: 无法删除 '{target}': {str(e)}\n")
+    return 1
 
 # Report whether ROOT privileges are currently active.
 def cmd_testroot():
@@ -404,19 +457,23 @@ def cmd_cat(args: str = ""):
         import stdinctx
         if not stdinctx.is_tty():
             print(stdinctx.read_text(), end="")
-            return
+            return 0
         printk.error("用法: cat <文件>\n")
-        return
+        return 1
+    failed = False
     for name in tokens:
         if not main.is_safe_filename(name):
             printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
+            failed = True
             continue
         text = fs.cat_file(name)
         if text is None:
             printk.error(f"cat: 未找到文件: {name}\n")
+            failed = True
         else:
             print(text, end='' if text.endswith('\n') else '\n')
     print()
+    return 1 if failed else 0
 
 
 # Grep [-ivncq] filters lines by substring; without a file it reads piped input.
@@ -496,16 +553,20 @@ def cmd_mkdir(args: str):
     names = [t for t in tokens if t != "-p"]
     if not names:
         printk.error("用法: mkdir [-p] <目录>\n")
-        return
+        return 1
+    failed = False
     for name in names:
         if not main.is_safe_filename(name):
             printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
+            failed = True
             continue
         try:
             fs.mkdir_p(name)
             printk.ok(f"已创建目录: {name}")
         except Exception as e:
             printk.error(f"mkdir: {e}\n")
+            failed = True
+    return 1 if failed else 0
 
 
 # Create an empty file, making the parent directory if needed.
@@ -513,15 +574,17 @@ def cmd_touch(args: str):
     name = (args or "").strip()
     if not name:
         printk.error("用法: touch <文件>\n")
-        return
+        return 1
     if not main.is_safe_filename(name):
         printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
-        return
+        return 1
     try:
         fs.touch(name)
         printk.ok(f"已创建文件: {name}")
+        return 0
     except Exception as e:
         printk.error(f"touch: {e}\n")
+        return 1
 
 
 # Shared body of cp and mv: exactly two arguments, and cp copies a tree when the source is a directory.
@@ -534,12 +597,12 @@ def _copy_move(args: str, op: str):
         tokens = args.split() if args else []
     if len(tokens) != 2:
         printk.error(f"用法: {op} <源> <目标>\n")
-        return
+        return 1
     src, dst = tokens
     for p in (src, dst):
         if not main.is_safe_filename(p):
             printk.error("错误：文件名不允许包含 ../ 或绝对路径\n")
-            return
+            return 1
     try:
         if op == "cp":
             if os.path.isdir(src):
@@ -549,18 +612,20 @@ def _copy_move(args: str, op: str):
         else:
             shutil.move(src, dst)
         printk.ok(f"{op}: {src} -> {dst}")
+        return 0
     except Exception as e:
         printk.error(f"{op}: {e}\n")
+        return 1
 
 
 # Copy the source to the destination, copying a tree when the source is a directory.
 def cmd_cp(args: str):
-    _copy_move(args, "cp")
+    return _copy_move(args, "cp")
 
 
 # Move the source to the destination.
 def cmd_mv(args: str):
-    _copy_move(args, "mv")
+    return _copy_move(args, "mv")
 
 
 # List the recorded command history, most recent last.

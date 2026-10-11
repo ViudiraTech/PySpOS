@@ -272,14 +272,19 @@ def _builtin_args(argv):
 
 # Apply N>&M so descriptor N follows descriptor M.
 # It works whatever the target is, terminal, file or another descriptor, but a memory
-# buffer is not a descriptor and cannot be duped.
+# buffer is not a descriptor and cannot be duped: 2>&1 into a buffer becomes the
+# "merge" marker, meaning stderr folds into wherever stdout goes.
 def _apply_dup(out, err, src, marker):
     target = marker[1]
     current = err if target == 2 else out
     if not isinstance(current, tuple):
         return out, err, f"重定向 {src}>&{target}：目标不可用"
     if current[0] == "buf":
+        if src == 2 and target == 1:
+            return out, ("merge",), None
         return out, err, f"重定向 {src}>&{target}：内存缓冲不是 fd"
+    if current[0] == "merge":
+        return out, err, f"重定向 {src}>&{target}：合并流不可再复制"
     if src == 1:
         return current, err, None
     if src == 2:
@@ -289,9 +294,9 @@ def _apply_dup(out, err, src, marker):
 
 # Fold the redirects of one command into (stdin, out, err).
 # stdin is None (inherit or empty), ("bytes", b"...") or ("file", path);
-# out and err are ("term",), ("buf",), ("file", path, append) or ("fd", n).
-def _resolve_redirects(cmd, depth, fds, base_stdin, base_out):
-    stdin, out, err = base_stdin, base_out, ("term",)
+# out and err are ("term",), ("merge",), ("buf",), ("file", path, append) or ("fd", n).
+def _resolve_redirects(cmd, depth, fds, base_stdin, base_out, base_err=("term",)):
+    stdin, out, err = base_stdin, base_out, base_err
     err_msg = None
     for fd, mode, target in cmd["redirects"]:
         if mode == "dup":
@@ -340,6 +345,11 @@ def _invoke_builtin(argv, real, stdin_stream, out, err):
     meta = cmd_registry.get_meta(real)
     args = _builtin_args(argv)
     old_in, old_out, old_err = sys.stdin, sys.stdout, sys.stderr
+    # A "merge" stderr follows stdout wherever it goes: same file or
+    # descriptor, or a second buffer that folds into the capture below.
+    fold_err = err[0] == "merge"
+    if fold_err:
+        err = out if out[0] in ("fd", "file", "term") else ("buf",)
     swap_out = out[0] in ("fd", "buf", "file")
     swap_err = err[0] in ("fd", "buf", "file")
     buf_out, buf_err = None, None
@@ -384,13 +394,21 @@ def _invoke_builtin(argv, real, stdin_stream, out, err):
     captured = None
     if out[0] in ("buf", "file"):
         captured = buf_out.getvalue().encode(_ENCODING, errors="replace")
-        if err[0] == "merge" and buf_err is not None:
+        if fold_err and buf_err is not None:
             captured += buf_err.getvalue().encode(_ENCODING, errors="replace")
-    if out[0] == "file":
-        _write_file(out[1], captured or b"", out[2])
     err_data = None
     if err[0] == "file":
         err_data = buf_err.getvalue().encode(_ENCODING, errors="replace")
+    # stdout and stderr landing in one file share it: the stderr payload joins
+    # the stdout write instead of truncating it back to empty afterwards.
+    same_sink = (out[0] == "file" and err[0] == "file"
+                 and out[1] == err[1] and out[2] == err[2])
+    if out[0] == "file":
+        payload = captured or b""
+        if same_sink and err_data:
+            payload += err_data
+        _write_file(out[1], payload, out[2])
+    if err[0] == "file" and not same_sink:
         _write_file(err[1], err_data, err[2])
     return status, captured
 
@@ -575,6 +593,7 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
     statuses = [0] * total
     buffered = [None] * total
     captures = {}
+    final_out = out
 
     for index, stage in enumerate(stages):
         if stage["kind"] not in _REAL_KINDS:
@@ -586,8 +605,21 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
             seg_stdin = ("fd", pipes[index - 1].read)
         if is_last:
             seg_out = out
+            final_out = out
         else:
             seg_out = ("fd", pipes[index].write)
+        seg_stdin, seg_out, seg_err, err_msg = _resolve_redirects(
+            stage["cmd"], depth, fds, seg_stdin, seg_out)
+        if err_msg:
+            printk.error(err_msg + "\n")
+            status = 1
+            statuses[index] = 1
+            buffered[index] = b""
+            if not is_last:
+                pipes[index].close_write()
+            continue
+        if is_last:
+            final_out = seg_out
         _dbg(f"spawn stage[{index}] {stage['kind']} "
              f"{' '.join(stage['argv'])[:60]!r} in={_fmt_spec(seg_stdin)} "
              f"out={_fmt_spec(seg_out)}")
@@ -601,7 +633,7 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
                 pipes[index].close_write()
             continue
         result = _spawn_host(stage["argv"], seg_stdin, seg_out,
-                             ("term",), background, fds, _VARS or None)
+                             seg_err, background, fds, _VARS or None)
         if result is None:
             status = 1
             buffered[index] = b""
@@ -637,15 +669,31 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
             seg_out = ("fd", pipes[index].write)
         else:
             seg_out = ("buf",)
+        seg_stdin, seg_out, seg_err, err_msg = _resolve_redirects(
+            stage["cmd"], depth, fds, seg_stdin, seg_out)
+        if err_msg:
+            printk.error(err_msg + "\n")
+            status = 1
+            statuses[index] = 1
+            buffered[index] = b""
+            if not is_last:
+                pipes[index].close_write()
+            if index > 0:
+                pipes[index - 1].close_read()
+            continue
+        if is_last:
+            final_out = seg_out
         _dbg(f"run   stage[{index}] {kind} "
              f"{' '.join(stage['argv'])[:60]!r} in={_fmt_spec(seg_stdin)} "
              f"out={_fmt_spec(seg_out)}")
         if kind == "builtin":
             stream = _stdin_stream(seg_stdin, fds)
             status, captured = _invoke_builtin(
-                stage["argv"], stage["real"], stream, seg_out, ("term",))
+                stage["argv"], stage["real"], stream, seg_out, seg_err)
             statuses[index] = status
-            buffered[index] = captured
+            # A stage redirected into a file feeds nothing downstream: its
+            # bytes already landed in the file, so the pipe sees EOF like bash.
+            buffered[index] = None if seg_out[0] == "file" else captured
         elif kind == "missing":
             print(f"{stage['argv'][0]}: 未找到命令"
                   "（help 查看内置命令；外部程序按 PATH 查找）\n")
@@ -682,7 +730,7 @@ def _run_stages(stages, stdin_spec, out, background, depth, fds):
             status = stage_status
         statuses[index] = stage_status
     return statuses[total - 1], (buffered[total - 1]
-                               if out[0] == "buf" else None)
+                               if final_out[0] == "buf" else None)
 
 
 # Run a parenthesised group as one stage, applying its assignments first.
@@ -761,6 +809,8 @@ def _touch_redirect(cmd, depth):
 
 
 # Run one pipeline, owning every descriptor it opens for its whole lifetime.
+# Every stage folds its own redirects over the pipe wiring inside _run_stages,
+# so a redirect on a later stage is honoured exactly like one on the first.
 def _run_pipeline(cmds, stdin_spec, out, background, depth):
     fds = _Fds()
     try:
@@ -769,17 +819,6 @@ def _run_pipeline(cmds, stdin_spec, out, background, depth):
             return status, None
         if not stages:
             return 0, None
-        first_out, err, err_msg = out, ("term",), None
-        stdin_spec, first_out, err, err_msg = _resolve_redirects(
-            stages[0]["cmd"], depth, fds, stdin_spec, out)
-        if err_msg:
-            printk.error(err_msg + "\n")
-            return 1, None
-        if first_out[0] == "term":
-            if err[0] == "merge":
-                first_out = ("fd", 1)
-            elif err[0] in ("file", "fd"):
-                first_out = err
         guard = background and _needs_stdin_guard(stages)
         if guard:
             import stdinctx
@@ -787,8 +826,8 @@ def _run_pipeline(cmds, stdin_spec, out, background, depth):
             stdinctx.suppress()
         try:
             status, captured = _run_stages(
-                stages, stdin_spec, first_out, background, depth, fds)
-            if first_out[0] == "buf":
+                stages, stdin_spec, out, background, depth, fds)
+            if out[0] == "buf":
                 return status, captured or b""
             return status, None
         finally:
