@@ -31,3 +31,17 @@ def test_shipped_logo_is_splash_shaped():
     assert len(lines) >= 10
     assert all(len(line) <= 80 for line in lines)
     assert any("#" in line or "@" in line or "%" in line for line in lines)
+
+
+# The splash prints breathing room around centered art, never wider than shown.
+def test_splash_has_breathing_room_and_centers(monkeypatch, capsys):
+    import os
+    import shutil
+    monkeypatch.setattr(shutil, "get_terminal_size",
+                        lambda fallback: os.terminal_size((80, 24)))
+    kernel.print_splash()
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "" and out[-1] == ""
+    body = [line for line in out[1:-1] if line.strip()]
+    assert len(body) >= 10
+    assert body[0].startswith(" ") and body[0].strip() in kernel.ascii_logo

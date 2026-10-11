@@ -53,6 +53,16 @@ def _load_ascii_logo(path=None):
 # The PySpOS ASCII logo, printed once at boot.
 ascii_logo = _load_ascii_logo()
 
+
+# Print the boot splash with breathing room: a blank line above and below,
+# lines centered when the terminal is wider than the art.
+def print_splash():
+    width = shutil.get_terminal_size(fallback=(80, 24)).columns
+    print()
+    for line in ascii_logo.splitlines():
+        print(line.center(width) if len(line) < width else line)
+    print()
+
 # Logical CPU count reported at boot.
 cores = os.cpu_count()
 
@@ -196,7 +206,7 @@ def loop():
         _fastboot_boot()
 
     screen_clear()
-    print(ascii_logo)
+    print_splash()
     from boot_services import create_manager
     manager = create_manager()
     try:
