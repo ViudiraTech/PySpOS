@@ -17,8 +17,13 @@
     theme = "dark";
   }
   document.documentElement.dataset.theme = theme;
+  var savedMotion = null;
+  try { savedMotion = localStorage.getItem("pg-motion"); } catch (e) { /* optional storage */ }
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.documentElement.dataset.motion = reduced || savedMotion === "off" ? "off" : "on";
   var apply = function () {
     document.body.classList.toggle("theme-dark", theme === "dark");
+    document.body.classList.toggle("motion-paused", document.documentElement.dataset.motion === "off");
   };
   if (document.body) {
     apply();

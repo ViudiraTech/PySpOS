@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="PySpOS：用 Python 写的模拟操作系统。真子进程、EEVDF 调度器、Unicorn ELF 引擎、curses 首次开机向导。当前版本 3.2.0，MIT 开源。">
   <title>PySpOS — Python 模拟操作系统 | GoutouStdio</title>
-<link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="js/theme-init.js"></script>
+  <script src="js/theme-init.js?v=20261011"></script>
 </head>
-<body>
+<body class="page-pyspos">
   <a class="skip-link" href="#main">跳到正文</a>
 
   <header class="site-header">
@@ -39,7 +39,7 @@
   </header>
 
   <main id="main" class="site-main">
-    <div class="wrap page-head">
+    <div class="wrap page-head hero-pyspos">
       <div class="page-head-grid">
         <div>
           <span class="eyebrow">PySpOS · Python 模拟操作系统</span>
@@ -57,6 +57,7 @@
           </div>
         </div>
         <div class="hero-demo">
+        <div class="demo-caption"><span><span class="status-dot" aria-hidden="true"></span> SHELL SESSION</span><span>实际输出节选</span></div>
         <div class="term">
           <div class="winbar">
             <span class="winbar-title">pyspos — help 与 ps</span>
@@ -85,135 +86,134 @@
       <nav class="section-jump" aria-label="本页目录"><a href="#intro-title">从 2022 年的折腾到 v3.2.0</a><a href="#features-title">核心特性</a><a href="#tech-title">模块速览</a><a href="#compat-title">能跑 Python 就能跑</a></nav>
     </div>
 
-    <section class="section" aria-labelledby="intro-title">
+    <section class="section content-section section-intro" aria-labelledby="intro-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">介绍</span>
           <h2 class="section-title" id="intro-title">从 2022 年的折腾到 v3.2.0</h2>
         </div>
-        <div class="prose">
+        <div class="overview-layout"><div class="overview-copy"><div class="prose">
           <p>PySpOS 从 2022 年的“MP4 架构狗头 OS”一路迭代到现在：能跑命令、管文件、执行 ELF 程序，应用是独立进程，调度器对标 Linux。3.2.0 是一次内核级重构——1217 行的 <code>main.py</code> 拆成 <code>src/shell/*</code> 包（sys / elf / ota / proc / dispatch），原文件保留兼容 facade；调度在 <code>process.py</code>，进程引擎在 <code>forkexec.py</code>。</p>
           <p>A/B 双槽位升级：更新装到非活动槽位，校验通过后切换，失败可回滚到上一个版本。命令走元数据注册表，提供分组 help、<code>help &lt;cmd&gt;</code>、Tab 补全，支持管道与重定向；<code>PATH=apps/</code> 下的外部程序可直接执行，<code>cmd &amp;</code> 后台作业配 <code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>。</p>
           <p>ELF 执行默认由 Unicorn Engine 跑真实 x86_64 指令，syscall 转发到内置模拟层；缺 unicorn 时降级到自研 <code>SpaceCPU 1 Pro</code> 模拟器，Windows 也能跑。动态链接（INTERP）与 TLS 还在路线图上。</p>
-        </div>
-        <dl class="facts" aria-label="关键数据">
+        </div></div><aside class="overview-summary" aria-label="项目概况"><dl class="facts summary-grid" aria-label="关键数据">
           <div class="fact"><dt>当前版本</dt><dd class="mono">v3.2.0 RC1</dd></div>
           <div class="fact"><dt>项目启动</dt><dd class="mono">2022</dd></div>
           <div class="fact"><dt>核心语言</dt><dd>Python（另有部分 C 测试程序）</dd></div>
           <div class="fact"><dt>升级</dt><dd>A/B 槽位 + 本地回滚</dd></div>
           <div class="fact"><dt>程序格式</dt><dd>ELF（x86_64）/ SPF 脚本</dd></div>
           <div class="fact"><dt>测试</dt><dd class="mono">按子系统分组 · GitHub Actions</dd></div>
-        </dl>
+        </dl></aside></div>
       </div>
     </section>
 
-    <section class="section" id="features" aria-labelledby="features-title">
+    <section class="section content-section section-features" id="features" aria-labelledby="features-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">v3.2.0</span>
           <h2 class="section-title" id="features-title">核心特性</h2>
           <p class="section-lede">应用从协作式模拟变成真子进程，调度器对标 Linux 6.6+，并第一次带上完整的首次开机向导。</p>
         </div>
-        <ul class="rows rows-2col">
-          <li class="row row-info">
-            <div class="row-title">真子进程</div>
-            <div class="row-body"><p>应用不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell 三级引导，孤儿被 init 收养，退出后回收为僵尸再清理。</p></div>
+        <ul class="feature-grid feature-mosaic">
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">真子进程</div>
+            <div class="feature-body"><p>应用不再是模拟，而是独立 OS 进程。PID 0 swapper、1 init、2 shell 三级引导，孤儿被 init 收养，退出后回收为僵尸再清理。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">应用可自绘的窗口 API</div>
-            <div class="row-body"><p>VortexGlass 负责窗口与输入，应用可用 Python SDK 管理多窗口、处理键盘鼠标事件，绘制控件或提交自己的 RGBA 像素画面。记事本、文件浏览器与绘图程序各自持有界面和逻辑，<a href="vortexglass.md">API 与独立应用示例</a>可供继续开发。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">应用可自绘的窗口 API</div>
+            <div class="feature-body"><p>VortexGlass 负责窗口与输入，应用可用 Python SDK 管理多窗口、处理键盘鼠标事件，绘制控件或提交自己的 RGBA 像素画面。记事本、文件浏览器与绘图程序各自持有界面和逻辑，<a href="vortexglass.md">API 与独立应用示例</a>可供继续开发。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">EEVDF 调度</div>
-            <div class="row-body"><p>Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：nice 权重表、vruntime 推进、虚拟截止期与信号状态机。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">EEVDF 调度</div>
+            <div class="feature-body"><p>Earliest Eligible Virtual Deadline First，对标 Linux 6.6+：nice 权重表、vruntime 推进、虚拟截止期与信号状态机。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">Unicorn ELF 引擎</div>
-            <div class="row-body"><p>默认执行真实 x86_64 指令，syscall 转发到模拟层；没装 unicorn 就降级到自研 <code>SpaceCPU 1 Pro</code>。支持 <code>--stats</code> / <code>--map</code> / <code>--disasm</code> / <code>--strace</code> 观测。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">Unicorn ELF 引擎</div>
+            <div class="feature-body"><p>默认执行真实 x86_64 指令，syscall 转发到模拟层；没装 unicorn 就降级到自研 <code>SpaceCPU 1 Pro</code>。支持 <code>--stats</code> / <code>--map</code> / <code>--disasm</code> / <code>--strace</code> 观测。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">OOBE 首次开机向导</div>
-            <div class="row-body"><p>11 步 curses 向导，语言与时区真实生效（<code>zoneinfo</code> + <code>TZ</code>），完成标记写入 <code>etc/.oobe_done</code>，可随时用 <code>oobe</code> 重跑。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">OOBE 首次开机向导</div>
+            <div class="feature-body"><p>11 步 curses 向导，语言与时区真实生效（<code>zoneinfo</code> + <code>TZ</code>），完成标记写入 <code>etc/.oobe_done</code>，可随时用 <code>oobe</code> 重跑。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">终端可靠性</div>
-            <div class="row-body"><p>TUI 按显示宽度排版（CJK 双宽），剥离完整 ANSI 转义序列。<code>stty sane</code> 自愈 + 输入归一化 + 重试上限，按 Enter 刷 <code>^M</code> 的问题不再出现。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">终端可靠性</div>
+            <div class="feature-body"><p>TUI 按显示宽度排版（CJK 双宽），剥离完整 ANSI 转义序列。<code>stty sane</code> 自愈 + 输入归一化 + 重试上限，按 Enter 刷 <code>^M</code> 的问题不再出现。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">后台作业</div>
-            <div class="row-body"><p><code>cmd &amp;</code>、<code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>、<code>$!</code>、进程组与会话。前台交互经管道中继，后台作业 stdin 接 <code>/dev/null</code>。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">后台作业</div>
+            <div class="feature-body"><p><code>cmd &amp;</code>、<code>jobs</code> / <code>fg</code> / <code>bg</code> / <code>wait</code>、<code>$!</code>、进程组与会话。前台交互经管道中继，后台作业 stdin 接 <code>/dev/null</code>。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">SpaceConfig v2</div>
-            <div class="row-body"><p><code>.spc</code> 格式：转义、行尾注释、<code>null</code>、列表类型，外加 Schema 校验与 <code>spc_get / set / migrate</code> 工具链。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">SpaceConfig v2</div>
+            <div class="feature-body"><p><code>.spc</code> 格式：转义、行尾注释、<code>null</code>、列表类型，外加 Schema 校验与 <code>spc_get / set / migrate</code> 工具链。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">命令注册表</div>
-            <div class="row-body"><p>元数据驱动的分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，以及 <code>PATH=apps/</code> 外部命令解析。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">命令注册表</div>
+            <div class="feature-body"><p>元数据驱动的分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，以及 <code>PATH=apps/</code> 外部命令解析。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">A/B 槽位与回滚</div>
-            <div class="row-body">              <p>更新装到非活动槽位，校验通过后切换，失败可回滚。OTA 云端已恢复（<code>goutoustdio.rainyland.top</code>），也可在 Recovery 里从云端选版本装到指定槽位。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">A/B 槽位与回滚</div>
+            <div class="feature-body">              <p>更新装到非活动槽位，校验通过后切换，失败可回滚。OTA 云端已恢复（<code>goutoustdio.rainyland.top</code>），也可在 Recovery 里从云端选版本装到指定槽位。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">真出厂重置</div>
-            <div class="row-body"><p><code>recovery.erase</code> 清理 8 类数据，含题库历史、shell 历史与全树 <code>__pycache__</code>。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">真出厂重置</div>
+            <div class="feature-body"><p><code>recovery.erase</code> 清理 8 类数据，含题库历史、shell 历史与全树 <code>__pycache__</code>。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">SPF 脚本</div>
-            <div class="row-body"><p>SPF（Space Portable Format）自研脚本格式，支持变量、算术、输入与引入。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">SPF 脚本</div>
+            <div class="feature-body"><p>SPF（Space Portable Format）自研脚本格式，支持变量、算术、输入与引入。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">MIT 开源</div>
-            <div class="row-body"><p>3.2.0 起采用 MIT 协议。代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>，自动化回归测试由 GitHub Actions 把关。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">MIT 开源</div>
+            <div class="feature-body"><p>3.2.0 起采用 MIT 协议。代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>，自动化回归测试由 GitHub Actions 把关。</p></div>
           </li>
         </ul>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="tech-title">
+    <section class="section content-section section-tech" aria-labelledby="tech-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">技术细节</span>
           <h2 class="section-title" id="tech-title">模块速览</h2>
           <p class="section-lede">每个模块一句话加一个入口，完整说明在仓库 README 与源码注释里。</p>
         </div>
-        <ul class="rows rows-2col">
-          <li class="row">
-            <div class="row-title">主循环 <span class="row-note">src/kernel.py</span></div>
-            <div class="row-body"><p>处理用户输入、执行命令、管理应用运行，启动时初始化各子系统。</p><pre class="code">kernel.loop()  <span class="c"># 主循环</span></pre></div>
+        <ul class="feature-grid feature-mosaic">
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">主循环 <span class="feature-meta">src/kernel.py</span></div>
+            <div class="feature-body"><p>处理用户输入、执行命令、管理应用运行，启动时初始化各子系统。</p><pre class="code">kernel.loop()  <span class="c"># 主循环</span></pre></div>
           </li>
-          <li class="row">
-            <div class="row-title">SPF 解析 <span class="row-note">src/parse_spf.py</span></div>
-            <div class="row-body"><p>SPF 文件格式的解析与执行，支持 <code>putchar()</code> 与 <code>exit()</code> 系统调用。</p><pre class="code">putchar("Hello");  exit(0);</pre></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">SPF 解析 <span class="feature-meta">src/parse_spf.py</span></div>
+            <div class="feature-body"><p>SPF 文件格式的解析与执行，支持 <code>putchar()</code> 与 <code>exit()</code> 系统调用。</p><pre class="code">putchar("Hello");  exit(0);</pre></div>
           </li>
-          <li class="row">
-            <div class="row-title">OTA 更新 <span class="row-note">src/ota.py</span></div>
-            <div class="row-body"><p>版本检查、下载、验证、安装，云端地址 <code>goutoustdio.rainyland.top</code>。</p><pre class="code">compare_versions(v1, v2)  <span class="c"># 版本比较</span></pre></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">OTA 更新 <span class="feature-meta">src/ota.py</span></div>
+            <div class="feature-body"><p>版本检查、下载、验证、安装，云端地址 <code>goutoustdio.rainyland.top</code>。</p><pre class="code">compare_versions(v1, v2)  <span class="c"># 版本比较</span></pre></div>
           </li>
-          <li class="row">
-            <div class="row-title">文件系统 <span class="row-note">src/fs.py</span></div>
-            <div class="row-body"><p>list / create / read / delete 等文件操作 API，基于 os 与 shutil 实现。</p><pre class="code">fs.create_file("test.txt", "content")</pre></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">文件系统 <span class="feature-meta">src/fs.py</span></div>
+            <div class="feature-body"><p>list / create / read / delete 等文件操作 API，基于 os 与 shutil 实现。</p><pre class="code">fs.create_file("test.txt", "content")</pre></div>
           </li>
-          <li class="row">
-            <div class="row-title">配置管理 <span class="row-note">src/btcfg.py</span></div>
-            <div class="row-body"><p>管理启动配置（ROOT 权限、启动器锁定状态），存放在 etc/bootcfg.json。</p><pre class="code">btcfg.load_bootcfg()  <span class="c"># 加载配置</span></pre></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">配置管理 <span class="feature-meta">src/btcfg.py</span></div>
+            <div class="feature-body"><p>管理启动配置（ROOT 权限、启动器锁定状态），存放在 etc/bootcfg.json。</p><pre class="code">btcfg.load_bootcfg()  <span class="c"># 加载配置</span></pre></div>
           </li>
-          <li class="row">
-            <div class="row-title">ELF 运行 <span class="row-note">src/elf_loader/</span></div>
-            <div class="row-body"><p>整合 ELF 加载、CPU 模拟与系统调用模拟。支持 x86 / x86_64，模拟 Linux 系统调用。</p><pre class="code">run program.elf  <span class="c"># 附 --stats / --map / --strace</span></pre></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">ELF 运行 <span class="feature-meta">src/elf_loader/</span></div>
+            <div class="feature-body"><p>整合 ELF 加载、CPU 模拟与系统调用模拟。支持 x86 / x86_64，模拟 Linux 系统调用。</p><pre class="code">run program.elf  <span class="c"># 附 --stats / --map / --strace</span></pre></div>
           </li>
         </ul>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="compat-title">
+    <section class="section content-section section-compat" aria-labelledby="compat-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">兼容性</span>
           <h2 class="section-title" id="compat-title">能跑 Python 就能跑</h2>
         </div>
-        <dl class="facts" aria-label="兼容性">
+        <dl class="facts summary-grid" aria-label="兼容性">
           <div class="fact"><dt>Windows</dt><dd>Windows 7 及以上，兼容性最好</dd></div>
           <div class="fact"><dt>Linux</dt><dd>主流发行版（Ubuntu / Debian / Fedora 等）</dd></div>
           <div class="fact"><dt>macOS</dt><dd>macOS 10.14 及以上</dd></div>
@@ -273,6 +273,6 @@
     </div>
   </footer>
 
-  <script src="js/main.js"></script>
+  <script src="js/main.js?v=20261011"></script>
 </body>
 </html>

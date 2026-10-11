@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 8（自研内核系统）；SpaceOS 6 / 7 已停止开发，仅作存档。">
   <title>GoutouStdio — PySpOS 与 SpaceOS</title>
-<link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="js/theme-init.js"></script>
+  <script src="js/theme-init.js?v=20261011"></script>
 </head>
-<body>
+<body class="page-home">
   <a class="skip-link" href="#main">跳到正文</a>
 
   <header class="site-header">
@@ -43,7 +43,7 @@
       <div class="page-head-grid">
         <div>
           <span class="eyebrow">独立学生技术工作室 · 始于 2022</span>
-          <h1>从第一行代码，<br>到<span class="hero-accent">一个操作系统。</span></h1>
+          <h1>把好奇，<br>写成<span class="hero-accent">操作系统。</span></h1>
           <p class="lede">从 Python 中的进程调度，到 UEFI 上的自研内核。我们是一群学生，把对操作系统的好奇，写成能运行、能阅读、能继续探索的开源项目。</p>
           <div class="actions">
             <a class="btn btn-primary" href="pyspos.html">探索 PySpOS <span aria-hidden="true">↗</span></a>
@@ -56,14 +56,24 @@
             <span><strong>Python / C</strong> 从模拟到内核</span>
           </div>
         </div>
-        <figure class="system-figure" aria-labelledby="system-caption">
-          <figcaption id="system-caption"><span class="eyebrow">Inside PySpOS / 从用户态到内核</span></figcaption>
-          <div class="system-layer"><span class="layer-index">03</span><div><strong>你的第一条命令</strong><span>Shell · 应用程序 · ELF</span></div><span class="layer-code">$ open hello</span></div>
-          <div class="layer-path" aria-hidden="true">↓ syscall / 系统调用</div>
-          <div class="system-layer"><span class="layer-index">02</span><div><strong>系统如何作出决定</strong><span>EEVDF 调度 · 进程 · 权限</span></div><span class="layer-code">kernel.py</span></div>
-          <div class="layer-path" aria-hidden="true">↓ runtime / 运行环境</div>
-          <div class="system-layer"><span class="layer-index">01</span><div><strong>Python，真实的执行</strong><span>子进程 · 文件系统 · 宿主平台</span></div><span class="layer-code">Python 3.10+</span></div>
-          <p class="system-note">每一层都能打开源码，看到它如何工作。</p>
+        <figure class="architecture-lab" aria-labelledby="system-caption">
+          <figcaption class="lab-bar" id="system-caption"><span><span class="status-dot" aria-hidden="true"></span> INSIDE PYSPOS</span><span>架构示意 / 001</span></figcaption>
+          <div class="stack-view" aria-hidden="true">
+            <div class="stack-orbit orbit-one"></div><div class="stack-orbit orbit-two"></div>
+            <div class="stack-assembly">
+              <div class="stack-plane plane-runtime" data-plane="runtime"><span class="plane-id">01 / HOST</span><strong>Python Runtime</strong><span class="plane-nodes">● ── ● ── ●</span></div>
+              <div class="stack-plane plane-kernel" data-plane="kernel"><span class="plane-id">02 / CORE</span><strong>Kernel &amp; Scheduler</strong><span class="plane-nodes">● ── ● ── ●</span></div>
+              <div class="stack-plane plane-app" data-plane="app" data-selected="true"><span class="plane-id">03 / USER SPACE</span><strong>Shell &amp; Applications</strong><span class="plane-nodes">● ── ● ── ●</span></div>
+            </div>
+            <span class="stack-coordinate coord-left">X / USER SPACE</span><span class="stack-coordinate coord-right">Y / RUNTIME</span>
+          </div>
+          <div class="layer-controls" aria-label="探索 PySpOS 架构" hidden>
+            <button type="button" class="layer-choice" data-layer="app" aria-pressed="true" aria-controls="layer-description">03 <span>应用层</span></button>
+            <button type="button" class="layer-choice" data-layer="kernel" aria-pressed="false" aria-controls="layer-description">02 <span>内核层</span></button>
+            <button type="button" class="layer-choice" data-layer="runtime" aria-pressed="false" aria-controls="layer-description">01 <span>运行时</span></button>
+          </div>
+          <div class="lab-description" id="layer-description" aria-live="polite"><code>shell / applications</code><p>从一条命令开始。Shell 解析输入，独立应用拥有自己的界面与逻辑。</p></div>
+          <a class="lab-source" href="pyspos.html#tech-title">每一层，都有源码可循 <span aria-hidden="true">↗</span></a>
         </figure>
       </div>
     </div>
@@ -74,6 +84,30 @@
       <a href="#spaceos-title">SpaceOS 8 <span aria-hidden="true">↓</span></a>
       <a href="#archive-title" class="archive-link">历史项目与存档 <span aria-hidden="true">↓</span></a>
     </nav>
+
+    <section class="section command-story" aria-labelledby="command-title">
+      <div class="wrap command-layout">
+        <div class="command-sticky">
+          <span class="eyebrow">把原理拆开看</span>
+          <h2 class="section-title" id="command-title">一次 Enter，<br>系统里发生了什么？</h2>
+          <p class="section-lede">以外部程序的执行路径为例，<br>沿着源码，走进系统内部。</p>
+          <div class="execution-map" aria-hidden="true">
+            <div class="execution-top"><span>EXECUTION PATH</span><span class="execution-count">01 / 03</span></div>
+            <div class="execution-node is-active" data-node="0"><span>01</span><strong>Shell</strong><code>parse → dispatch</code></div>
+            <div class="execution-wire"></div>
+            <div class="execution-node" data-node="1"><span>02</span><strong>Process</strong><code>fork → exec</code></div>
+            <div class="execution-wire"></div>
+            <div class="execution-node" data-node="2"><span>03</span><strong>Runtime</strong><code>execute → syscall</code></div>
+            <div class="execution-track"><span></span></div>
+          </div>
+        </div>
+        <div class="command-steps">
+          <article class="command-step is-active" data-step="0"><span class="step-number">01 / INPUT</span><h3>先理解，你想做什么。</h3><p>Shell 将输入解析成命令与参数，再交给对应的处理模块。管道、重定向和后台作业，从这里开始。</p><code>src/shell/dispatch.py</code><a href="pyspos.html#tech-title">查看 Shell 模块 <span aria-hidden="true">↗</span></a></article>
+          <article class="command-step" data-step="1"><span class="step-number">02 / PROCESS</span><h3>给程序，一个独立的进程。</h3><p>外部应用通过 fork / exec 运行。进程有自己的身份与生命周期，调度器用虚拟运行时间和截止期安排执行。</p><code>src/forkexec.py · src/process.py</code><a href="pyspos.html#features-title">了解进程与调度 <span aria-hidden="true">↗</span></a></article>
+          <article class="command-step" data-step="2"><span class="step-number">03 / EXECUTION</span><h3>指令运行，系统开始回应。</h3><p>ELF 程序由 Unicorn 执行 x86_64 指令；系统调用转发到模拟层。你可以观察执行、修改实现，再运行一次。</p><code>Unicorn Engine → syscall</code><a href="pyspos.html#features-title">探索 ELF 执行引擎 <span aria-hidden="true">↗</span></a></article>
+        </div>
+      </div>
+    </section>
 
     <section class="section project-story" data-product="PySpOS" data-status="active" aria-labelledby="pyspos-title">
       <div class="wrap editorial-grid">
@@ -120,12 +154,13 @@
         </div>
       </div>
       <figure class="wrap desktop-evidence">
+        <div class="proof-label"><span>RUNTIME EVIDENCE / 真实运行</span><span>UINXED × MINECRAFT</span></div>
         <img src="spaceos8-minecraft.png" alt="Uinxed 内核下运行 Minecraft，世界渲染与游戏界面正常" loading="lazy" width="1356" height="924">
         <figcaption><span>一次真实的运行记录</span> Uinxed + Alpine Linux + Weston · QEMU/KVM Q35。窗口、输入与渲染正常。</figcaption>
       </figure>
     </section>
 
-    <section class="section" aria-labelledby="archive-title">
+    <section class="section content-section section-archive" aria-labelledby="archive-title">
       <div class="wrap editorial-grid">
         <header class="story-heading"><span class="eyebrow">历史项目</span><h2 class="section-title" id="archive-title">走过的路线，<br>也留在这里。</h2></header>
         <div class="archive-index">
@@ -136,7 +171,7 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="history-title">
+    <section class="section content-section section-history" aria-labelledby="history-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">发展历程</span>
@@ -167,7 +202,7 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="contact-title">
+    <section class="section content-section section-contact" aria-labelledby="contact-title">
       <div class="wrap">
         <div class="band">
           <span class="eyebrow">联系</span>
@@ -230,6 +265,6 @@
     </div>
   </footer>
 
-  <script src="js/main.js"></script>
+  <script src="js/main.js?v=20261011"></script>
 </body>
 </html>

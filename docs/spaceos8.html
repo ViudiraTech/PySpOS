@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="SpaceOS 8：第二束光。基于 Uinxed 自研内核与全套自研用户态的抢先体验系统。OpenJDK、DOOM 已能跑，第二版 slim 镜像修复 xHCI USB HID，USB 键鼠可用。">
   <title>第二束光，来了。 | SpaceOS 8 抢先体验 | GoutouStdio</title>
-<link rel="stylesheet" href="css/tokens.css">
-  <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="js/theme-init.js"></script>
+  <script src="js/theme-init.js?v=20261011"></script>
 </head>
-<body>
+<body class="page-spaceos8">
   <a class="skip-link" href="#main">跳到正文</a>
 
   <header class="site-header">
@@ -39,7 +39,8 @@
   </header>
 
   <main id="main" class="site-main">
-    <div class="wrap page-head">
+    <div class="wrap page-head hero-space">
+      <div class="page-head-grid"><div>
       <span class="eyebrow">SpaceOS 8 · 公开测试 · 第二版 slim 镜像</span>
       <h1>第二束光，来了。</h1>
       <p class="lede">第一束光是第一版尝鲜镜像：能启动，但 USB 键鼠是坏的，插上去没反应。方向一个字没改，我们又点了一次——第二版 slim 镜像修好了 xHCI USB HID，键鼠真的能用了。已开放下载。</p>
@@ -53,10 +54,18 @@
         <span>x86_64</span>
         <span>Apache-2.0</span>
       </div>
+      </div>
+      <figure class="space-preview">
+        <div class="frame">
+          <div class="winbar"><span class="winbar-title">Uinxed × Minecraft</span><span class="status-dot" aria-hidden="true"></span></div>
+          <img src="spaceos8-minecraft.png" alt="Uinxed 内核与 Alpine Linux 用户态下，Minecraft 在 Weston 桌面中运行的真实记录" width="1356" height="924" fetchpriority="high">
+        </div>
+        <figcaption><span>真实运行记录 / QEMU + KVM</span><a href="#proof-title">查看运行环境 ↗</a></figcaption>
+      </figure></div>
       <nav class="section-jump" aria-label="本页目录"><a href="#overview-title">先说用户态——它比内核更大，也更少见</a><a href="#proof-title">能不能用，看它扛不扛得住现成的软件</a><a href="#compat-title">DOOM 是怎么跑起来的</a><a href="#desktop-title">一整套自研桌面</a><a href="#apps-title">桌面上跑的程序</a></nav>
     </div>
 
-    <section class="section" aria-labelledby="overview-title">
+    <section class="section content-section section-overview" aria-labelledby="overview-title">
       <div class="wrap">
         <div class="notice notice-info" role="status">
           <span class="notice-icon" aria-hidden="true">i</span>
@@ -73,47 +82,33 @@
           <h2 class="section-title" id="overview-title">先说用户态——它比内核更大，也更少见</h2>
           <p class="section-lede">从窗口合成器到浏览器，没有一层是套现成的。下面是这一版的实际规模。</p>
         </div>
-        <div class="table-scroll">
-          <table class="data">
-            <thead>
-              <tr><th scope="col">项目</th><th scope="col">说明</th><th scope="col"><span class="cell-note">数据</span></th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">用户态</th><td>SPUI 桌面、合成器、浏览器、系统程序，全部自研</td><td class="num">约 29.2 万行</td></tr>
-              <tr><th scope="row">内核</th><td>C 从零写的 UNIX-like 单体内核，449 个 C/H 文件</td><td class="num">约 18.1 万行</td></tr>
-              <tr><th scope="row">图形界面</th><td>合成器 + 自研图形库 libgfx</td><td class="num">约 3.4 万行</td></tr>
-              <tr><th scope="row">浏览器</th><td>纯 C 的 UxHtml 引擎，含完整 JavaScript 引擎</td><td class="num">约 2.4 万行</td></tr>
-              <tr><th scope="row">协议兼容</th><td>Linux 6.12 x86-64 系统调用编号</td><td class="num">0–462</td></tr>
-              <tr><th scope="row">版本 / 许可</th><td>内核仓库许可 Apache-2.0</td><td class="num">1.0.0-alpha.1</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <dl class="metric-exhibits" aria-label="SpaceOS 8 项目规模"><div class="metric-exhibit"><dt>用户态</dt><dd>约 29.2 万行</dd><p>SPUI 桌面、合成器、浏览器、系统程序，全部自研</p></div><div class="metric-exhibit"><dt>内核</dt><dd>约 18.1 万行</dd><p>C 从零写的 UNIX-like 单体内核，449 个 C/H 文件</p></div><div class="metric-exhibit"><dt>图形界面</dt><dd>约 3.4 万行</dd><p>合成器 + 自研图形库 libgfx</p></div><div class="metric-exhibit"><dt>浏览器</dt><dd>约 2.4 万行</dd><p>纯 C 的 UxHtml 引擎，含完整 JavaScript 引擎</p></div><div class="metric-exhibit"><dt>协议兼容</dt><dd>0–462</dd><p>Linux 6.12 x86-64 系统调用编号</p></div><div class="metric-exhibit"><dt>版本 / 许可</dt><dd>1.0.0-alpha.1</dd><p>内核仓库许可 Apache-2.0</p></div></dl>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="proof-title">
+    <section class="section content-section section-proof" aria-labelledby="proof-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">验证</span>
           <h2 class="section-title" id="proof-title">能不能用，看它扛不扛得住现成的软件</h2>
           <p class="section-lede">一个系统是否真的能用，不看它自己有多少功能，看它能不能扛住别人写好的软件。下面四个程序，没有一个是为我们的内核写的。</p>
         </div>
-        <ul class="rows">
-          <li class="row row-ok">
-            <div class="row-title">OpenJDK <span class="row-note">已经真的能跑</span></div>
-            <div class="row-body"><p>为了它重写了信号处理、TSS / SMP / APIC 与中断路径，并修了 VFS 与页管理——真实 JVM 的 GC 线程、线程挂起与内存映射都依赖这些地方不出错。</p></div>
+        <ul class="feature-grid">
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">OpenJDK <span class="feature-meta">已经真的能跑</span></div>
+            <div class="feature-body"><p>为了它重写了信号处理、TSS / SMP / APIC 与中断路径，并修了 VFS 与页管理——真实 JVM 的 GC 线程、线程挂起与内存映射都依赖这些地方不出错。</p></div>
           </li>
-          <li class="row row-ok">
-            <div class="row-title">DOOM <span class="row-note">经自研 X11 兼容层运行</span></div>
-            <div class="row-body"><p>需要键盘、鼠标、连续动画帧、音频与稳定显示通路，任何一环不行都跑不动。跑得起来说明这套兼容层不是摆设。</p></div>
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">DOOM <span class="feature-meta">经自研 X11 兼容层运行</span></div>
+            <div class="feature-body"><p>需要键盘、鼠标、连续动画帧、音频与稳定显示通路，任何一环不行都跑不动。跑得起来说明这套兼容层不是摆设。</p></div>
           </li>
-          <li class="row row-warn">
-            <div class="row-title">systemd <span class="row-note">初步跑通</span></div>
-            <div class="row-body"><p>systemd 对内核 ABI 的要求非常苛刻：一启动就探测大量可选 sysctl、挂载点与命名空间接口，任何一处行为不符就起不来。为此补了 Cgroup v2 与完整的 Linux 命名空间支持。</p></div>
+          <li class="feature-card card-warn"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">systemd <span class="feature-meta">初步跑通</span></div>
+            <div class="feature-body"><p>systemd 对内核 ABI 的要求非常苛刻：一启动就探测大量可选 sysctl、挂载点与命名空间接口，任何一处行为不符就起不来。为此补了 Cgroup v2 与完整的 Linux 命名空间支持。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">Minecraft <span class="row-note">团队实测</span></div>
-            <div class="row-body"><p>要跑起来就得扛住真实 JVM 的内存管理、GC 线程调度、mmap 与 futex 行为。运行环境见下方截图。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">Minecraft <span class="feature-meta">团队实测</span></div>
+            <div class="feature-body"><p>要跑起来就得扛住真实 JVM 的内存管理、GC 线程调度、mmap 与 futex 行为。运行环境见下方截图。</p></div>
           </li>
         </ul>
         <figure class="shot-frame">
@@ -135,48 +130,48 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="compat-title">
+    <section class="section content-section section-compat" aria-labelledby="compat-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">兼容与外观</span>
           <h2 class="section-title" id="compat-title">DOOM 是怎么跑起来的</h2>
         </div>
-        <ul class="rows">
-          <li class="row row-ok">
-            <div class="row-title">X11 兼容层 <span class="row-note">120 个核心协议请求 · 约 4500 行</span></div>
-            <div class="row-body"><p>从零写的 X11 服务器。目的不是造玩具 X，而是让原生 SPUI 桌面能直接跑 Linux 上的图形软件：窗口映射、绘制、输入与事件、字体、光标、属性与选区，缺一个就有程序起不来。</p></div>
+        <ul class="feature-grid">
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">X11 兼容层 <span class="feature-meta">120 个核心协议请求 · 约 4500 行</span></div>
+            <div class="feature-body"><p>从零写的 X11 服务器。目的不是造玩具 X，而是让原生 SPUI 桌面能直接跑 Linux 上的图形软件：窗口映射、绘制、输入与事件、字体、光标、属性与选区，缺一个就有程序起不来。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">VortexGlass <span class="row-note">34 个素材 · 3 种主题风格</span></div>
-            <div class="row-body"><p>Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素画出：34 个素材覆盖四边边框、标题栏按钮的四种状态，以及标志性的 Aero orb。主题可在 <code>tech</code> / <code>win98</code> / <code>vortexglass</code> 之间切换，由配置服务统一管理，所有应用共享同一套外观。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">VortexGlass <span class="feature-meta">34 个素材 · 3 种主题风格</span></div>
+            <div class="feature-body"><p>Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素画出：34 个素材覆盖四边边框、标题栏按钮的四种状态，以及标志性的 Aero orb。主题可在 <code>tech</code> / <code>win98</code> / <code>vortexglass</code> 之间切换，由配置服务统一管理，所有应用共享同一套外观。</p></div>
           </li>
         </ul>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="desktop-title">
+    <section class="section content-section section-desktop" aria-labelledby="desktop-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">用户态</span>
           <h2 class="section-title" id="desktop-title">一整套自研桌面</h2>
           <p class="section-lede">内核是每个 OS 都得有的东西，用户态不是。从窗口合成器到浏览器，中间没有一层是套现成的。</p>
         </div>
-        <ul class="rows">
-          <li class="row row-info">
-            <div class="row-title">SPUI 桌面 <span class="row-note">约 4500 行 · 14 个文件</span></div>
-            <div class="row-body"><p>原生桌面环境：dock、壁纸与窗口管理，dock 上直接启动终端、开始屏幕、文件管理器、活动监视器与文本编辑器。图标缺失时有降级配色兜底，不至于开天窗。</p></div>
+        <ul class="feature-grid">
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">SPUI 桌面 <span class="feature-meta">约 4500 行 · 14 个文件</span></div>
+            <div class="feature-body"><p>原生桌面环境：dock、壁纸与窗口管理，dock 上直接启动终端、开始屏幕、文件管理器、活动监视器与文本编辑器。图标缺失时有降级配色兜底，不至于开天窗。</p></div>
           </li>
-          <li class="row row-info">
-            <div class="row-title">服务与配置系统 <span class="row-note">init / service / uxconfd</span></div>
-            <div class="row-body"><p>自研 PID 1 服务管理器：目标里程碑、进程监管与自动重启、僵尸回收；状态输出对齐 systemd 的 <code>[ OK ] Started …</code> 格式，提供 <code>systemctl</code> 风格命令行，经 <code>/tmp/initctl</code> 与 PID 1 通信。配置由 <code>uxconfd</code> 统一管理，<code>uxconf-query</code> 读写，所有应用共享同一套外观与设置。</p></div>
+          <li class="feature-card card-info"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">服务与配置系统 <span class="feature-meta">init / service / uxconfd</span></div>
+            <div class="feature-body"><p>自研 PID 1 服务管理器：目标里程碑、进程监管与自动重启、僵尸回收；状态输出对齐 systemd 的 <code>[ OK ] Started …</code> 格式，提供 <code>systemctl</code> 风格命令行，经 <code>/tmp/initctl</code> 与 PID 1 通信。配置由 <code>uxconfd</code> 统一管理，<code>uxconf-query</code> 读写，所有应用共享同一套外观与设置。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">OOBE 首次开机向导 <span class="row-note">约 2100 行</span></div>
-            <div class="row-body"><p>首次开机的设置流程，与 PySpOS 里的向导同一套思路——语言、时区等设置真实生效，而不是走过场。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">OOBE 首次开机向导 <span class="feature-meta">约 2100 行</span></div>
+            <div class="feature-body"><p>首次开机的设置流程，与 PySpOS 里的向导同一套思路——语言、时区等设置真实生效，而不是走过场。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">自研 libc 与工具链 <span class="row-note">libc / libgfx / imgui</span></div>
-            <div class="row-body"><p>自己的 C 库、图形库与 GUI 工具包，加上自研 <code>sh</code>。系统不依赖现成的用户态发行版。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">自研 libc 与工具链 <span class="feature-meta">libc / libgfx / imgui</span></div>
+            <div class="feature-body"><p>自己的 C 库、图形库与 GUI 工具包，加上自研 <code>sh</code>。系统不依赖现成的用户态发行版。</p></div>
           </li>
         </ul>
 
@@ -212,43 +207,43 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="kernel-title">
+    <section class="section content-section section-kernel" aria-labelledby="kernel-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">底座</span>
           <h2 class="section-title" id="kernel-title">Uinxed-Kernel</h2>
           <p class="section-lede">上面的桌面、应用与浏览器最终都跑在这个内核上：C 从零写的 UNIX-like x86_64 单体内核，经 Limine 引导（UEFI 与 Legacy 双模），实现 Linux 6.12 的系统调用 ABI。</p>
         </div>
-        <ul class="rows rows-2col">
-          <li class="row">
-            <div class="row-title">调度与进程</div>
-            <div class="row-body"><p>EEVDF 调度器，每 CPU 运行队列配红黑树时间线（vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、IPI 抢占；两阶段等待队列避免丢失唤醒；互斥量与 futex 优先级继承；cgroups、ptrace、可加载内核模块。</p></div>
+        <ul class="feature-grid feature-mosaic">
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">调度与进程</div>
+            <div class="feature-body"><p>EEVDF 调度器，每 CPU 运行队列配红黑树时间线（vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、IPI 抢占；两阶段等待队列避免丢失唤醒；互斥量与 futex 优先级继承；cgroups、ptrace、可加载内核模块。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">内存管理</div>
-            <div class="row-body"><p>二元 buddy 物理页分配器，四级页表（4 KiB / 2 MiB / 1 GiB）；高半区直接映射（HHDM）与 slab 分配器；统一页缓存带 LRU 回收、脏页回写与预读；完整 swap 子系统。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">内存管理</div>
+            <div class="feature-body"><p>二元 buddy 物理页分配器，四级页表（4 KiB / 2 MiB / 1 GiB）；高半区直接映射（HHDM）与 slab 分配器；统一页缓存带 LRU 回收、脏页回写与预读；完整 swap 子系统。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">文件系统</div>
-            <div class="row-body"><p>UNIX 风格 VFS，挂载点与 inode 节点；tmpfs 作默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、NTFS（可写）与 ISO 9660。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">文件系统</div>
+            <div class="feature-body"><p>UNIX 风格 VFS，挂载点与 inode 节点；tmpfs 作默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、NTFS（可写）与 ISO 9660。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">网络</div>
-            <div class="row-body"><p>自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；e1000/e1000e 与 RTL8139/8169 网卡驱动；Linux 套接字 ABI、DHCP 客户端，/proc/net 与 /sys/class/net 视图。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
+            <div class="feature-title">网络</div>
+            <div class="feature-body"><p>自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；e1000/e1000e 与 RTL8139/8169 网卡驱动；Linux 套接字 ABI、DHCP 客户端，/proc/net 与 /sys/class/net 视图。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">驱动</div>
-            <div class="row-body"><p>输入：PS/2 键鼠、evdev、USB HID；存储：IDE/ATA、AHCI、NVMe、USB Mass Storage；显示：DRM/KMS、VirtIO-GPU、GOP 帧缓冲；音频：SB16、Intel HD Audio；总线与平台：PCI/PCIe、USB、I2C、ACPI、HPET、TPM 1.2/2.0。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">驱动</div>
+            <div class="feature-body"><p>输入：PS/2 键鼠、evdev、USB HID；存储：IDE/ATA、AHCI、NVMe、USB Mass Storage；显示：DRM/KMS、VirtIO-GPU、GOP 帧缓冲；音频：SB16、Intel HD Audio；总线与平台：PCI/PCIe、USB、I2C、ACPI、HPET、TPM 1.2/2.0。</p></div>
           </li>
-          <li class="row">
-            <div class="row-title">安全与 IPC</div>
-            <div class="row-body"><p>seccomp 过滤与 no_new_privs；AF_UNIX / AF_NETLINK / AF_INET / AF_INET6；pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、POSIX 消息队列与 System V IPC；futex2；inotify；Unix98 PTY 与多虚拟终端。</p></div>
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">安全与 IPC</div>
+            <div class="feature-body"><p>seccomp 过滤与 no_new_privs；AF_UNIX / AF_NETLINK / AF_INET / AF_INET6；pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、POSIX 消息队列与 System V IPC；futex2；inotify；Unix98 PTY 与多虚拟终端。</p></div>
           </li>
         </ul>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="status-title">
+    <section class="section content-section section-status" aria-labelledby="status-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">诚实说明</span>
@@ -269,24 +264,24 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="run-title">
+    <section class="section content-section section-run" aria-labelledby="run-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">上手</span>
           <h2 class="section-title" id="run-title">构建与运行</h2>
           <p class="section-lede">需要 make、gcc（建议 13.3+）、qemu、xorriso；menuconfig 另需 kconfig-frontends 与 libncurses-dev。</p>
         </div>
-        <ul class="rows rows-2col">
-          <li class="row">
-            <div class="row-title">在 QEMU 里跑 <span class="row-note">最快看到桌面，无需额外硬件</span></div>
-            <div class="row-body">
+        <ul class="feature-grid feature-mosaic">
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
+            <div class="feature-title">在 QEMU 里跑 <span class="feature-meta">最快看到桌面，无需额外硬件</span></div>
+            <div class="feature-body">
               <p><code>make run</code> 已自动把串口输出接到终端。想抓内核日志，把 <code>limine.conf</code> 里的 <code>console=tty0</code> 改成 <code>console=ttyS0</code>——屏幕控制台在启动挂死时可能丢日志，串口更可靠。</p>
               <p><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">源码</a> · <a href="requirements.html">配置要求</a> · <a href="spaceos8-download.html">抢先体验版</a></p>
             </div>
           </li>
-          <li class="row">
-            <div class="row-title">在实体机上跑 <span class="row-note">已验证 · Dell PowerEdge R410</span></div>
-            <div class="row-body">
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">在实体机上跑 <span class="feature-meta">已验证 · Dell PowerEdge R410</span></div>
+            <div class="feature-body">
               <p>先看仓库 README 的 <code>Run on physical hardware</code> 一节，按步骤准备引导介质。再次提醒：请用可抛弃的机器与测试盘，文件系统驱动（尤其 NTFS 写入）目前不适合承载重要数据。</p>
             </div>
           </li>
@@ -341,6 +336,6 @@
     </div>
   </footer>
 
-  <script src="js/main.js"></script>
+  <script src="js/main.js?v=20261011"></script>
 </body>
 </html>

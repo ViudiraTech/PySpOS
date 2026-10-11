@@ -59,7 +59,7 @@
   --pg-radius-pill: 999px;
 
   /* 组件固定尺寸（字面值，主题无关） */
-  --pg-header-h: 76px;
+  --pg-header-h: 72px;
   --pg-icon-btn: 40px;
   --pg-brand-mark: 38px;
   --pg-blueprint: 48px;
@@ -67,11 +67,20 @@
   --pg-width: 78rem;
 
   --pg-duration: 160ms;
-  --pg-ease: cubic-bezier(0.2, 0, 0.2, 1);
-  --pg-reveal-duration: 640ms;
+  --pg-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --pg-reveal-duration: 850ms;
   --pg-reveal-delay: 0ms;
-  --pg-reveal-distance: 24px;
+  --pg-reveal-distance: 40px;
   --pg-scroll-progress: 0;
+  --pg-section-progress: 0;
+  --pg-stack-tilt-x: 0deg;
+  --pg-stack-tilt-y: 0deg;
+  --pg-stack-enter: 1.2s;
+  --pg-signal-duration: 3s;
+  --pg-stroke-glow: 0 0 24px rgb(36 84 198 / 0.25);
+  --pg-shadow-float: 0 24px 60px rgb(8 18 45 / 0.16);
+  --pg-motion-slow: 500ms;
+  --pg-backdrop-blur: 18px;
 
   /* ---- 终端窗：双主题下固定同一套深色 ---- */
   --pg-term-bg: #0c1729;

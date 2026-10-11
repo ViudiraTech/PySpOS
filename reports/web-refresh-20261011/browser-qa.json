@@ -1,0 +1,471 @@
+{
+  "desktop": [
+    {
+      "cards": 0,
+      "duplicateIds": [],
+      "h1": "把好奇，写成操作系统。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 1280
+    },
+    {
+      "cards": 19,
+      "duplicateIds": [],
+      "h1": "读得懂的内核，跑得起来的系统。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 1280
+    },
+    {
+      "cards": 18,
+      "duplicateIds": [],
+      "h1": "第二束光，来了。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 1280
+    },
+    {
+      "cards": 14,
+      "duplicateIds": [],
+      "h1": "跑起来需要什么。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 1280
+    },
+    {
+      "cards": 12,
+      "duplicateIds": [],
+      "h1": "SpaceOS 6",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 1280
+    },
+    {
+      "cards": 11,
+      "duplicateIds": [],
+      "h1": "SpaceOS 7",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 1280
+    },
+    {
+      "cards": 7,
+      "duplicateIds": [],
+      "h1": "下载抢先体验版。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 1280
+    },
+    {
+      "cards": 3,
+      "duplicateIds": [],
+      "h1": "下一次启动，从这里开始。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 1280
+    },
+    {
+      "cards": 5,
+      "duplicateIds": [],
+      "h1": "所有历史版本。",
+      "missingImages": 0,
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 1280
+    }
+  ],
+  "mobile": [
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 390
+    },
+    {
+      "cardClipping": 0,
+      "headerOverflow": 0,
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 390
+    }
+  ],
+  "narrow": [
+    {
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 320
+    },
+    {
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 320
+    }
+  ],
+  "tablet": [
+    {
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 768
+    },
+    {
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 768
+    }
+  ],
+  "defaultMotion": [
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 1280
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 768
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 390
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/index.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/pyspos.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/requirements.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos6.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos7.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/spaceos8-download.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/index.html",
+      "width": 320
+    },
+    {
+      "motion": "on",
+      "overflow": 0,
+      "path": "/ota/releases.html",
+      "width": 320
+    }
+  ],
+  "interactions": {
+    "clipboard": "help\nps",
+    "releaseFilterCount": 1,
+    "emptySearch": "没有找到匹配版本，试试其他关键词。",
+    "mobileMenu": "opens and closes with Escape",
+    "architecture": "kernel and runtime descriptions verified",
+    "motion": "toggle and persistence verified",
+    "themes": "dark and light visually inspected"
+  }
+}

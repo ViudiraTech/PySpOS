@@ -15,6 +15,7 @@ import re
 import sys
 from pathlib import Path
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 REPO = str(Path(__file__).resolve().parents[2])
 DOCS = os.path.join(REPO, "docs")
@@ -74,7 +75,7 @@ def check_page(path):
             if href.startswith("#") and len(href) > 1 and href[1:] not in c.ids:
                 c.errs.append(f"页内锚点不存在: {href}")
             continue
-        target = href.split("#")[0]
+        target = urlsplit(href).path
         if target and not os.path.exists(os.path.join(base, target)):
             c.errs.append(f"死链: {href}")
     return c

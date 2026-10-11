@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="PySpOS 版本历史：所有历史版本、更新内容、下载链接与 SHA-256 校验值。">
   <title>版本历史 — PySpOS | GoutouStdio</title>
-<link rel="stylesheet" href="../css/tokens.css">
-  <link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="../css/style.css?v=20261011">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="../js/theme-init.js"></script>
+  <script src="../js/theme-init.js?v=20261011"></script>
 </head>
-<body>
+<body class="page-ota-releases">
   <a class="skip-link" href="#main">跳到正文</a>
 
   <header class="site-header">
@@ -49,15 +49,19 @@
       </div>
     </div>
 
-    <section class="section" aria-labelledby="history-title">
+    <section class="section content-section section-history" aria-labelledby="history-title">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">历史版本</span>
           <h2 class="section-title" id="history-title">按时间倒序</h2>
         </div>
-        <ul class="rows" id="version-history">
-          <li class="row">
-            <div class="row-body"><p>正在读取版本数据…</p></div>
+        <div class="release-toolbar" hidden>
+          <div class="release-filters" role="group" aria-label="版本类型"><button type="button" data-release-filter="all" aria-pressed="true">全部版本</button><button type="button" data-release-filter="release" aria-pressed="false">正式版</button><button type="button" data-release-filter="preview" aria-pressed="false">测试与候选</button></div>
+          <label class="release-search"><span class="sr-only">搜索版本或更新内容</span><input type="search" id="release-search" placeholder="搜索版本或更新内容" autocomplete="off"></label>
+        </div><p class="release-count" role="status"></p>
+        <ul class="release-feed" id="version-history">
+          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-body"><p>正在读取版本数据…</p></div>
           </li>
         </ul>
         <noscript>
@@ -194,20 +198,30 @@
         else out += '<span class="badge badge-warn">测试版</span>';
         return out;
       }
+      var releaseFilter = "all";
+      var releaseQuery = "";
+      var currentData = null;
       function render(data) {
+        currentData = data;
         var host = document.getElementById("version-history");
         if (!host || !data || !Array.isArray(data.changelog)) return;
         host.textContent = "";
-        data.changelog.forEach(function (r, i) {
+        var visible = data.changelog.filter(function (r) {
+          var typeMatch = releaseFilter === "all" || (releaseFilter === "release" ? r.type === "release" : r.type !== "release");
+          return typeMatch && (String(r.version) + " " + (Array.isArray(r.changes) ? r.changes.join(" ") : "")).toLowerCase().includes(releaseQuery);
+        });
+        document.querySelector(".release-count").textContent = "显示 " + visible.length + " 个版本";
+        if (!visible.length) host.innerHTML = '<li class="release-empty">没有找到匹配版本，试试其他关键词。</li>';
+        visible.forEach(function (r) {
           var li = document.createElement("li");
-          li.className = "row";
+          li.className = "release-card";
           var url = r.download_url || "PySpOS.zip";
           var sha = r.sha256 || "此版本的 SHA-256 校验值未知";
           var changes = Array.isArray(r.changes) ? r.changes : [];
           li.innerHTML =
-            '<div class="row-title">v' + esc(r.version) + " " + badgeOf(r, i === 0) +
-            '<span class="row-note">' + esc(r.date || "") + " · " + esc(fmtSize(r.file_size)) + "</span></div>" +
-            '<div class="row-body"><ul class="check-list"><li>' +
+            '<div class="feature-title">v' + esc(r.version) + " " + badgeOf(r, r === data.changelog[0]) +
+            '<span class="feature-meta">' + esc(r.date || "") + " · " + esc(fmtSize(r.file_size)) + "</span></div>" +
+            '<div class="feature-body"><ul class="check-list"><li>' +
             changes.map(esc).join("</li><li>") +
             "</li></ul>" +
             '<p>SHA-256：<code>' + esc(sha) + "</code></p>" +
@@ -215,6 +229,18 @@
           host.appendChild(li);
         });
       }
+      document.querySelector(".release-toolbar").hidden = false;
+      document.querySelector(".release-filters").addEventListener("click", function (event) {
+        var button = event.target.closest("[data-release-filter]");
+        if (!button) return;
+        releaseFilter = button.dataset.releaseFilter;
+        document.querySelectorAll("[data-release-filter]").forEach(function (item) { item.setAttribute("aria-pressed", String(item === button)); });
+        if (currentData) render(currentData);
+      });
+      document.getElementById("release-search").addEventListener("input", function (event) {
+        releaseQuery = event.target.value.trim().toLowerCase();
+        if (currentData) render(currentData);
+      });
       async function load() {
         try {
           var res = await fetch("version.json", { cache: "no-store" });
@@ -231,6 +257,6 @@
       }
     })();
   </script>
-  <script src="../js/main.js"></script>
+  <script src="../js/main.js?v=20261011"></script>
 </body>
 </html>
