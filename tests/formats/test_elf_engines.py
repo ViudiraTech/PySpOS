@@ -86,3 +86,21 @@ def test_shell_run_uses_unicorn_by_default():
     out = buf.getvalue()
     assert "Hello from SpLibC" in out
     assert "unicorn" in out
+
+
+# A finished ELF run leaves measured CPU time behind: either on its retired
+# row or, once reaped, in the recent ring the monitor reads.
+def test_shell_run_books_cpu_time():
+    _need_elfs()
+    import contextlib
+    import io
+    import main
+    import process as P
+    with contextlib.redirect_stdout(io.StringIO()):
+        main.handle_command("run %s" % ELF_SIMPLE)
+    name = os.path.basename(ELF_SIMPLE)
+    retired = [t for t in P._table().tasks.values() if name in t.comm]
+    recent = [r for r in P._table().recent if name in r["comm"]]
+    assert retired or recent
+    assert any(t.sum_exec_runtime > 0 for t in retired) or \
+        any(r["cpu"] > 0 for r in recent)

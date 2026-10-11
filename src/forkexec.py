@@ -263,6 +263,43 @@ def _ensure_pump():
 # app_id is the identity the parent bound to this connection when it launched the
 # child, never a value the caller supplied, so an app cannot claim to be another
 # one. It is empty only on a channel with no bound identity.
+# Build the live system snapshot behind the monitor's process and scheduler
+# tables: identity (version/slot/OTA), run-queue estimators and one row per
+# task. Light calls only (a flag plus two small files), never the full OTA
+# status with its crypto verification: monitors poll this about once a second.
+def _system_snapshot():
+    import process as proc
+    table = proc._table()
+    try:
+        import ota
+        slot = ota.get_current_slot()
+        slot_version = ota.get_current_version()
+        ota_state = "启用" if ota._ota_enabled() else "禁用"
+    except Exception:
+        slot, slot_version, ota_state = "?", "?", "?"
+    try:
+        import pyspos
+        version = pyspos.OS_VERSION
+    except Exception:
+        version = "?"
+    rq = table.rq
+    curr = rq.curr
+    tasks = [{"pid": p.pid, "ppid": p.ppid, "comm": p.comm, "state": p.state,
+              "nice": p.nice, "vruntime": p.vruntime,
+              "cpu": p.sum_exec_runtime, "kind": p.kind,
+              "remote": bool(p.remote)}
+             for p in table.list_procs()]
+    return {"ok": True, "source": "host", "booted": table.is_booted(),
+            "identity": {"version": version, "slot": slot,
+                         "slot_version": slot_version, "ota": ota_state},
+            "rq": {"queued": len(rq._queued), "avg": rq.avg_vruntime(),
+                   "min": rq.min_vruntime, "switches": rq.nr_switches,
+                   "ticks": rq.nr_ticks,
+                   "curr_pid": curr.pid if curr is not None else None,
+                   "curr_comm": curr.comm if curr is not None else "-"},
+            "tasks": tasks, "recent": list(table.recent), "error": ""}
+
+
 def _sysctl_handler(op, args, kwargs, app_id=""):
     import main
     import btcfg
@@ -346,6 +383,28 @@ def _sysctl_handler(op, args, kwargs, app_id=""):
         return manifest
     if op == "get_system_username":
         return kernel.get_system_username()
+    # Service-manager borrowing for children without an in-process manager
+    # (desktop PTY shells): every call runs on the host's live manager, so
+    # lifecycle stays single-owner and the child is only a remote control.
+    if op == "sm_status":
+        from service_manager import get_manager
+        name = args[0] if args else None
+        return get_manager().status(name)
+    if op == "sm_has_unit":
+        from service_manager import get_manager
+        return args[0] in get_manager().units
+    if op == "sm_resolve":
+        from service_manager import get_manager
+        return get_manager().resolve(tuple(args[0]))
+    if op == "sm_journal":
+        from service_manager import get_manager
+        unit = args[0] if args else None
+        return get_manager().journal.lines(unit)
+    if op in ("sm_start", "sm_stop", "sm_restart"):
+        from service_manager import get_manager
+        return getattr(get_manager(), op[3:])(args[0])
+    if op == "sm_snapshot":
+        return _system_snapshot()
     if op == "exit_system":
         threading.Thread(target=_delayed_exit, daemon=True).start()
         return True
@@ -435,6 +494,41 @@ def _close_child_server(pid):
         listener.close()
     except Exception:
         pass
+
+
+# Open a session-scoped RPC endpoint, e.g. so the desktop PTY shells (fresh
+# interpreters without the host's in-process manager) can borrow the host's
+# service manager, and publish it through the environment so spawned children
+# inherit it. Returns an opaque handle for close_session_server, or None when
+# the bind fails; the desktop keeps working without it.
+def open_session_server(app_id):
+    made = _serve_child_server(app_id)
+    if made is None:
+        return None
+    listener, addr = made
+    saved = (os.environ.get(SYSCTL_ENV), os.environ.get(AUTHKEY_ENV))
+    os.environ[SYSCTL_ENV] = f"{addr[0]}:{addr[1]}"
+    os.environ[AUTHKEY_ENV] = base64.b64encode(AUTHKEY).decode("ascii")
+    return (listener, saved)
+
+
+# Close a session endpoint from open_session_server and restore the environment.
+def close_session_server(handle):
+    if handle is None:
+        return
+    listener, (sysctl_prev, auth_prev) = handle
+    try:
+        listener.close()
+    except Exception:
+        pass
+    if sysctl_prev is None:
+        os.environ.pop(SYSCTL_ENV, None)
+    else:
+        os.environ[SYSCTL_ENV] = sysctl_prev
+    if auth_prev is None:
+        os.environ.pop(AUTHKEY_ENV, None)
+    else:
+        os.environ[AUTHKEY_ENV] = auth_prev
 
 
 # Deliver a fatal signal to the real child: SIGKILL

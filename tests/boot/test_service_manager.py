@@ -152,3 +152,53 @@ def test_shell_stop_exits_the_command_loop(monkeypatch):
     kernel._command_loop()
     assert calls == ["input"]
     kernel.start_shell_session()
+
+
+# One start prints one line, systemd-journal style: name, dash, description.
+def test_start_logs_single_line_with_name_and_description():
+    shown = []
+    service = ServiceManager(journal=Journal(emit=shown.append, color=False))
+    service.add(Unit("demo.service", "Demo service", start=lambda: None))
+    service.start("demo.service")
+    assert shown == ["[  OK  ] Started demo.service - Demo service."]
+    service.stop("demo.service")
+    assert shown[-1] == "[  OK  ] Stopped demo.service - Demo service."
+
+
+# Targets use the Reached verb in the same name-dash-description shape.
+def test_target_reached_line_uses_name_and_description():
+    shown = []
+    service = ServiceManager(journal=Journal(emit=shown.append, color=False))
+    service.add(Unit("demo.target", "Demo target", kind="target"))
+    service.start("demo.target")
+    assert shown == ["[  OK  ] Reached target demo.target - Demo target."]
+
+
+# Failures carry the name-dash-description shape and a red badge when coloured.
+def test_failed_start_line_and_badge_colours():
+    shown = []
+    service = ServiceManager(journal=Journal(emit=shown.append, color=True))
+
+    def fail():
+        raise RuntimeError("boom")
+
+    service.add(Unit("bad.service", "Bad service", start=fail))
+    with pytest.raises(UnitError):
+        service.start("bad.service")
+    assert shown == ["[\033[31mFAILED\033[0m] Failed to start bad.service - "
+                     "Bad service: boom"]
+    journal = Journal(emit=shown.append, color=True)
+    journal.write("x.service", "Started x.service - X.", result="success")
+    journal.write("x.service", "Optional unit not found: y.service")
+    assert shown[-2] == "[\033[32m  OK  \033[0m] Started x.service - X."
+    assert shown[-1] == "[ INFO ] Optional unit not found: y.service"
+
+
+# Auto colour stays off on pipes and honours NO_COLOR, so captured logs are plain.
+def test_auto_colour_off_without_tty(monkeypatch):
+    shown = []
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert Journal(emit=shown.append).color is False
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert Journal(emit=shown.append, color=None).color is False
+    assert Journal(emit=shown.append, color=True).color is True

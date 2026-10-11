@@ -17,6 +17,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+import rbtree
+
 # --------------------------------------------------------------------------
 # constants mirroring kernel semantics; values are picked for teaching readability and are float milliseconds
 # --------------------------------------------------------------------------
@@ -143,11 +145,6 @@ class PCB:
         self.static_prio = 100 + self.nice + 20
         self.weight = nice_to_weight(self.nice)
 
-# Return the last scheduling-lag snapshot; the run queue owns the live value.
-    @property
-    def lag(self) -> float:
-        return getattr(self, "_lag_snapshot", 0.0)
-
 
 # --------------------------------------------------------------------------
 # PID allocation, a simplification of the Linux bitmap: sequential inside a range, wrapping to reuse
@@ -202,12 +199,17 @@ class EEVDFRunQueue:
         self.min_slice = min_slice
         self.min_vruntime = 0.0     # cfs_rq->min_vruntime, monotonically increasing
         self.curr: Optional[PCB] = None
-        self._heap: list = []       # (vruntime, pid, generation), lazy minimum index
+        self._heap: list = []       # (vruntime, pid, generation), lazy minimum index for min_vruntime
+        self._deadlines = rbtree.RBTree()  # (deadline, vruntime, pid) to PCB, the pick_eevdf order;
+        #                                a real delete on dequeue, so entries never go stale
         self._seq = itertools.count(1)
         self._queued: Dict[int, PCB] = {}   # pid to PCB, for tasks currently on the run queue
         self._queued_weight = 0
         self._weighted_vruntime = 0.0  # weighted offsets from min_vruntime
         self.nr_switches = 0
+        self.nr_ticks = 0              # scheduler invocations, the proof-of-life
+        #                              counter: it moves on every tick even when
+        #                              the queue is empty and nothing switches
         self.timeline = deque(maxlen=2048)  # bounded recent scheduling history
 
 # -- enqueue / dequeue ------------------------------------------------
@@ -233,10 +235,12 @@ class EEVDFRunQueue:
         self._queued_weight += pcb.weight
         self._weighted_vruntime += pcb.weight * (pcb.vruntime - self.min_vruntime)
         heapq.heappush(self._heap, (pcb.vruntime, pcb.pid, pcb._gen))
+        self._deadlines.insert((pcb.deadline, pcb.vruntime, pcb.pid), pcb)
         self._compact_heap()
 
     def _compact_heap(self) -> None:
         # Lazy invalidation must not retain one entry per context switch forever.
+        # Only the vruntime index needs it; the deadline tree deletes for real.
         if len(self._heap) > 2 * len(self._queued) + 64:
             self._heap = [(p.vruntime, p.pid, p._gen) for p in self._queued.values()]
             heapq.heapify(self._heap)
@@ -249,6 +253,9 @@ class EEVDFRunQueue:
             self._weighted_vruntime -= queued.weight * (queued.vruntime - self.min_vruntime)
             if not self._queued:
                 self._weighted_vruntime = 0.0
+# the tree key is built from the stored fields, which never change while
+# queued, so the delete always lands on the node this task inserted
+            self._deadlines.delete((queued.deadline, queued.vruntime, queued.pid))
         self._compact_heap()
         if self.curr is pcb:
             self.curr = None
@@ -307,23 +314,18 @@ class EEVDFRunQueue:
 
 # -- picking a task: pick_eevdf -----------------------------------------
 
+# Return the queued task with the earliest deadline, or None when empty.
+    def _peek_deadline_top(self) -> Optional[PCB]:
+        found = self._deadlines.minimum()
+        return None if found is None else found[1]
+
 # Choose the eligible task with the earliest virtual deadline.
     def pick_next(self) -> Optional[PCB]:
         avg = self.avg_vruntime()
-        best = None
-        best_key = None
-        fallback = None
-        fallback_key = None
-        for p in self._queued.values():
-            if p.state != TASK_RUNNING:
-                continue
-            key = (p.deadline, p.vruntime, p.pid)
-            if p.vruntime <= avg + 1e-9:      # eligible
-                if best_key is None or key < best_key:
-                    best, best_key = p, key
-            if fallback_key is None or key < fallback_key:
-                fallback, fallback_key = p, key
-        return best if best is not None else fallback
+        found = self._deadlines.first_eligible(avg)
+        if found is not None:
+            return found[1]
+        return self._peek_deadline_top()   # nothing eligible: earliest deadline wins
 
 # -- slice assignment ----------------------------------------------------
 
@@ -338,6 +340,7 @@ class EEVDFRunQueue:
 
 # Advance the running task and reschedule when its slice runs out.
     def tick(self, delta_ms: float) -> Optional[PCB]:
+        self.nr_ticks += 1
         if self.curr is None or self.curr.state != TASK_RUNNING:
             nxt = self.pick_next()
             self._switch_to(nxt)
@@ -364,15 +367,12 @@ class EEVDFRunQueue:
 
 # Return the task that should take over from the current one.
     def _preempt_candidate(self, cur: PCB) -> Optional[PCB]:
-        avg = self.avg_vruntime()
-        best = None
-        for p in self._queued.values():
-            if p.state != TASK_RUNNING or p.pid == cur.pid:
-                continue
-            if p.vruntime <= avg + 1e-9 and p.deadline < cur.deadline - 1e-9:
-                if best is None or (p.deadline, p.vruntime) < (best.deadline, best.vruntime):
-                    best = p
-        return best
+        top = self._peek_deadline_top()
+        if top is None or top.deadline >= cur.deadline - 1e-9:
+            return None        # nothing queued has an earlier deadline: no preemption
+        found = self._deadlines.first_eligible(self.avg_vruntime(),
+                                               cur.deadline - 1e-9)
+        return None if found is None else found[1]
 
 # Put the preempted task back on the queue with its lag recorded.
     def _requeue_current(self, preempted: bool = False) -> None:
@@ -432,6 +432,11 @@ class ProcessTable:
         self.jobs: Dict[int, Job] = {}
         self._job_seq = itertools.count(1)
         self.last_bg_pid: Optional[int] = None   # $!
+        self._children: Dict[int, set] = {}      # ppid to child PIDs, so orphan and zombie
+        #                                      scans cost the family, not the whole table
+        self.recent: deque = deque(maxlen=16)    # last reaped tasks with their final
+        #                                      accounting, so a 1 Hz monitor can still
+        #                                      see CPU time zombies took to the grave
         self._state_changed = threading.Condition()
 # remote signal backend, registered by forkexec; without it remote tasks stay purely simulated
         self._remote_signal_backend = None
@@ -459,6 +464,8 @@ class ProcessTable:
         self.tasks[PID_IDLE] = idle
         self.tasks[PID_INIT] = init
         self.tasks[PID_SHELL] = shell
+        for pcb in (idle, init, shell):
+            self._index_child(pcb)
         return {"idle": idle, "init": init, "shell": shell}
 
 # Report whether the process tree has been created.
@@ -471,6 +478,10 @@ class ProcessTable:
 
 # -- create / exit ------------------------------------------------------
 
+# Record a task under its parent, the worklist that keeps family scans small.
+    def _index_child(self, pcb: PCB) -> None:
+        self._children.setdefault(pcb.ppid, set()).add(pcb.pid)
+
 # Create a PCB, defaulting the parent to the shell.
     def spawn(self, comm: str, kind: str = "app", nice: int = 0,
               ppid: int = 0, note: str = "", remote: bool = False,
@@ -482,6 +493,7 @@ class ProcessTable:
                   note=note, cmd=comm, remote=remote,
                   pgrp=pgrp or pid)
         self.tasks[pid] = pcb
+        self._index_child(pcb)
         if enqueue_rq and not remote:
             self.rq.enqueue(pcb)
         return pcb
@@ -498,9 +510,6 @@ class ProcessTable:
         pcb.state = state
         pcb.end_time = time.time()
         self.rq.dequeue(pcb)
-        if state in (DONE, FAILED, "Killed", EXIT_DEAD):
-# terminal state names kept compatible with the old proc.py
-            pass
 # Linux semantics: when a parent dies its children are re-parented to init, whose newly adopted zombies are reaped at once
         self.adopt_orphans(pid)
         with self._state_changed:
@@ -517,31 +526,54 @@ class ProcessTable:
             self.charge_remote(pid, wall_ms)
         return self.exit_task(pid, exit_code=exit_code, state=EXIT_ZOMBIE)
 
-# Book wall-clock CPU time for a host process the scheduler never saw.
-    def charge_remote(self, pid: int, wall_ms: float) -> None:
+# Book wall-clock CPU time for a task the scheduler never saw running.
+# Remote children settle it at exit; synchronous in-process runs (ELF)
+# settle it when they return. Either way the numbers are measured, not
+# fabricated, which is what keeps the monitor's CPU columns honest.
+    def charge_task(self, pid: int, wall_ms: float) -> None:
         pcb = self.tasks.get(pid)
         if pcb is None or wall_ms <= 0:
             return
+        rq = self.rq
+# the deadline index keys on (deadline, vruntime, pid): a queued task is
+# dequeued first and requeued after, so the key never goes stale midway.
+        requeue = pid in rq._queued and rq.curr is not pcb
+        if requeue:
+            rq.dequeue(pcb)
         pcb.sum_exec_runtime += wall_ms
-        pcb.vruntime += self.rq.calc_delta_fair(wall_ms, pcb.weight)
+        pcb.vruntime += rq.calc_delta_fair(wall_ms, pcb.weight)
+        if requeue:
+            rq.enqueue(pcb)
+
+    charge_remote = charge_task
 
 # Re-parent the children of a dead PID, reaping those already zombies.
     def adopt_orphans(self, dead_pid: int) -> List[PCB]:
         reaped = []
-        for pcb in list(self.tasks.values()):
-            if pcb.ppid == dead_pid and pcb.pid != dead_pid:
-                pcb.ppid = PID_INIT
-                if pcb.state in TERMINAL_STATES:
-                    self.reap(pcb.pid)
-                    reaped.append(pcb)
+        kids = self._children.pop(dead_pid, None)
+        if not kids:
+            return reaped
+        for pid in kids:
+            pcb = self.tasks.get(pid)
+            if pcb is None or pcb.ppid != dead_pid or pcb.pid == dead_pid:
+                continue
+            pcb.ppid = PID_INIT
+            self._index_child(pcb)
+            if pcb.state in TERMINAL_STATES:
+                self.reap(pid)
+                reaped.append(pcb)
         return reaped
 
 # Reap a parent's zombie children, wait semantics, and return their PCBs.
     def reap_children(self, ppid: int) -> List[PCB]:
+        kids = self._children.get(ppid)
+        if not kids:
+            return []
         done = []
-        for pcb in list(self.tasks.values()):
-            if pcb.ppid == ppid and pcb.state in TERMINAL_STATES:
-                self.reap(pcb.pid)
+        for pid in list(kids):              # reap discards from the set as it goes
+            pcb = self.tasks.get(pid)
+            if pcb is not None and pcb.state in TERMINAL_STATES:
+                self.reap(pid)
                 done.append(pcb)
         if done:
             self._refresh_job_states()
@@ -565,10 +597,23 @@ class ProcessTable:
         pcb = self.tasks.get(pid)
         if pcb is None:
             return None
+# keep the final accounting where the monitor can still see it: zombies are
+# usually reaped within the same command that waited for them.
+        self.recent.append({"pid": pid, "comm": pcb.comm, "kind": pcb.kind,
+                            "exit": pcb.exit_code, "sig": pcb.signal,
+                            "cpu": pcb.sum_exec_runtime,
+                            "vruntime": pcb.vruntime, "ended": pcb.end_time})
         pcb.state = EXIT_DEAD
         self.rq.dequeue(pcb)
         self.pids.free(pid)
         result = self.tasks.pop(pid, None)
+        siblings = self._children.get(pcb.ppid)
+        if siblings is not None:
+            siblings.discard(pid)
+            if not siblings:
+                del self._children[pcb.ppid]
+# a direct reap skips exit_task, so fold any leftover family onto init here
+        self.adopt_orphans(pid)
         with self._state_changed:
             self._state_changed.notify_all()
         return result
@@ -680,14 +725,19 @@ class ProcessTable:
 # Recompute each job's state from whether any of its PIDs are still alive.
     def _refresh_job_states(self) -> None:
         for job in self.jobs.values():
-            live = [self.tasks[p] for p in job.pids
-                    if p in self.tasks and self.tasks[p].state == TASK_RUNNING]
-            stopped = [self.tasks[p] for p in job.pids
-                       if p in self.tasks and self.tasks[p].state == TASK_STOPPED]
-            if stopped and not live:
-                job.state = TASK_STOPPED
-            elif live:
+            live = stopped = False
+            for pid in job.pids:
+                pcb = self.tasks.get(pid)
+                if pcb is None:
+                    continue
+                if pcb.state == TASK_STOPPED:
+                    stopped = True
+                elif pcb.state == TASK_RUNNING:
+                    live = True
+            if live:
                 job.state = TASK_RUNNING
+            elif stopped:
+                job.state = TASK_STOPPED
             else:
                 job.state = DONE
 
@@ -750,6 +800,8 @@ class ProcessTable:
         self.tasks.clear()
         self.handles.clear()
         self.jobs.clear()
+        self._children.clear()
+        self.recent.clear()
         self._job_seq = itertools.count(1)
         self.last_bg_pid = None
         self._remote_signal_backend = None
@@ -856,6 +908,11 @@ def exit_task(pid: int, exit_code: int = 0,
 def child_exited(pid: int, exit_code: int = 0,
                  wall_ms: float = 0.0) -> Optional[PCB]:
     return _pt.child_exited(pid, exit_code=exit_code, wall_ms=wall_ms)
+
+
+# Book measured wall-clock CPU time for any task, remote or synchronous.
+def charge_task(pid: int, wall_ms: float) -> None:
+    _pt.charge_task(pid, wall_ms)
 
 
 # Deliver a signal to a simulated or host process.

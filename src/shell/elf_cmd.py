@@ -10,6 +10,7 @@
 '''
 
 import os
+import time
 import printk
 import logk
 import process as proc  # process management lives in process.py (PCB + EEVDF); proc.py is only a compatibility shim
@@ -280,7 +281,9 @@ def cmd_run(args: str):
             logk.printl("run", "开始执行程序...", main.boot_time)
 
         # run the program
+        started = time.monotonic()
         result = runner.run()
+        run_wall_ms = (time.monotonic() - started) * 1000.0
 
         if debug_mode:
             logk.printl("run", "程序执行完成", main.boot_time)
@@ -308,6 +311,7 @@ def cmd_run(args: str):
                 print(f"信号: {result.signal}  fault_addr: 0x{result.fault_addr:x}")
             print("-------------------")
 
+        proc.charge_task(pcb.pid, run_wall_ms)
         proc.finish(pcb.pid, int(result.exit_code or 0))
 
         # restore logging

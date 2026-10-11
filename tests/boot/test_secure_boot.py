@@ -260,3 +260,22 @@ def test_reset_slot_preserves_policy_and_is_locked_safe(tmp_path, monkeypatch):
     secure_boot.write_policy(str(tmp_path), True, 1, private, trusted_keys=keys)
     with pytest.raises(RuntimeError):
         reset_slot.wipe_slots(str(tmp_path), ["slot_a"], assume_yes=True)
+
+
+# Rewriting the device public key only when it changed keeps ownership stable:
+# a repeat run (possibly as another user) must not churn a file that verifies.
+def test_developer_key_refresh_skips_matching_public_key(tmp_path, monkeypatch):
+    monkeypatch.setattr(secure_boot, "_RUNTIME_TRUSTED_KEYS", {})
+    info = secure_boot.ensure_developer_key(str(tmp_path), locked=False)
+    assert info["public_refreshed"] is True
+    public_path = tmp_path / secure_boot.PROTECTED_DIR / secure_boot.DEVICE_PUBLIC_KEY_NAME
+    stamp = public_path.stat().st_mtime_ns
+    again = secure_boot.ensure_developer_key(str(tmp_path), locked=False)
+    assert again["public_refreshed"] is False
+    assert again["key_id"] == info["key_id"]
+    assert public_path.stat().st_mtime_ns == stamp
+    public_path.write_bytes(b"garbage\n")
+    fixed = secure_boot.ensure_developer_key(str(tmp_path), locked=False)
+    assert fixed["public_refreshed"] is True
+    assert fixed["key_id"] == info["key_id"]
+    assert secure_boot.developer_key_id(str(tmp_path)) == info["key_id"]

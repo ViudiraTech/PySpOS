@@ -501,13 +501,5 @@
       "answer": true
     }
   ],
-  "history": [
-    {
-      "timestamp": "2025-12-05 21:39:32",
-      "score": 100,
-      "pass": true,
-      "avg_time": 3.34,
-      "fast_questions": 0
-    }
-  ]
+  "history": []
 }

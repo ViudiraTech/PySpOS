@@ -17,6 +17,7 @@ import bootmode
 import main
 import time
 import shutil
+import process as _process
 from fs import current_dir
 import logk
 import ota
@@ -194,16 +195,36 @@ def loop():
 
 
 def _command_loop():
+    last = None
     while not _shell_stop_requested:
+        now = time.monotonic()
+        if last is not None:
+            _tick_scheduler((now - last) * 1000.0)
+        last = now
         try:
-            prompt = input(print_prompt())
-            main.handle_command(prompt)
+            command = input(print_prompt())
         except EOFError:
             return
         except KeyboardInterrupt:
-            return
+            print()
+            continue
+        if not command.strip():
+            continue
+        try:
+            main.handle_command(command)
+        except KeyboardInterrupt:
+            print()
         except Exception as e:
             print(f"error: {e}")
+
+
+# Advance virtual time with the wall clock while the shell is interactive, so
+# queued simulated tasks accrue vruntime in production too, not just in tests.
+# An empty run queue makes this a no-op; the cap keeps idle think-time in
+# input() from catapulting one task's vruntime past everyone else's.
+def _tick_scheduler(delta_ms: float) -> None:
+    if delta_ms > 0:
+        _process.sched_tick(min(delta_ms, 250.0))
 
 # Drop the __pycache__ directories and shut the system down.
 def exit():

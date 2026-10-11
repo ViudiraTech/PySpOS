@@ -27,6 +27,11 @@ def cmd_gui():
     from service_manager import get_manager
     from vortexglass.service import manager as graphics
     manager = get_manager()
+    import forkexec
+# Borrowable manager endpoint for the desktop PTY shells, which are fresh
+# interpreters: published through the environment so the compositor and its
+# terminals inherit it. The desktop keeps working when the bind fails.
+    session = forkexec.open_session_server("desktop-shell")
     try:
         manager.start("vortexglass.service")
         if graphics.handle:
@@ -38,4 +43,5 @@ def cmd_gui():
         printk.error(f"gui: {exc}\n")
         return 1
     finally:
+        forkexec.close_session_server(session)
         manager.stop("vortexglass.service")

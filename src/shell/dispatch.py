@@ -9,6 +9,7 @@
  */
 '''
 
+from collections import deque
 import os
 
 import commands as cmd_registry
@@ -20,9 +21,10 @@ from . import filter_cmds, hostexec, shexec, fastfetch_cmd
 from .gui_cmd import cmd_gui
 
 # command history, used by the history command and by readline persistence
-_cmd_history = []
+_cmd_history = deque(maxlen=1000)
 try:
     import readline as _readline
+    _readline.set_history_length(1000)
     _hist_file = os.path.join(os.path.expanduser("~"), ".pyspos_history")
     try:
         if os.path.exists(_hist_file):

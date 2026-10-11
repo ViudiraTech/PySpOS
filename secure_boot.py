@@ -229,8 +229,7 @@ def ensure_developer_key(root_dir, locked=False):
         )
         _atomic_bytes(private_path, pem, ".device-key-")
     raw_public = public_key_bytes(private_key)
-    public_value = base64.b64encode(raw_public) + b"\n"
-    _atomic_bytes(public_path, public_value, ".device-key-")
+    refreshed = _write_device_public_key(public_path, raw_public)
     key_id = public_key_id(raw_public)
     _RUNTIME_TRUSTED_KEYS.clear()
     _RUNTIME_TRUSTED_KEYS[key_id] = raw_public
@@ -238,7 +237,25 @@ def ensure_developer_key(root_dir, locked=False):
         "key_id": key_id,
         "private_key": private_path,
         "public_key": public_path,
+        "public_refreshed": refreshed,
     }
+
+
+# Refresh the device public key file only when it is missing or describes a
+# different key. Rewriting it unconditionally churns ownership and permissions
+# whenever another user (for example a sudo fastboot unlock) touches the key,
+# which then locks the regular user out of their own boot: the unreadable pub
+# file fails closed and the next start reports an untrusted-key policy.
+def _write_device_public_key(public_path, raw_public):
+    try:
+        with open(public_path, "r", encoding="ascii") as stream:
+            if decode_public_key(stream.read().strip()) == raw_public:
+                return False
+    except (OSError, BootVerificationError):
+        pass
+    public_value = base64.b64encode(raw_public) + b"\n"
+    _atomic_bytes(public_path, public_value, ".device-key-")
+    return True
 
 
 # Return the device developer key identifier, or None when no valid key exists.

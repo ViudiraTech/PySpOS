@@ -87,6 +87,58 @@ def _read_choice(prompt, valid=("y", "n"), default="n", max_retries=5):
     return default
 
 
+# Explain a policy failure that repair could not fix, with the reissue hint.
+def _diagnose_policy_failure(root_dir):
+    import json
+    import secure_boot
+    try:
+        policy_path = os.path.join(root_dir, secure_boot.PROTECTED_DIR,
+                                   secure_boot.POLICY_NAME)
+        with open(policy_path, "r", encoding="utf-8") as stream:
+            claimed = json.load(stream).get("key_id")
+    except Exception:
+        claimed = None
+    try:
+        device = secure_boot.developer_key_id(root_dir)
+    except Exception:
+        device = None
+    print(f"policy 声明 key_id={claimed}；设备开发密钥 key_id={device}"
+          f"（None 表示公钥文件缺失或不可读）。", flush=True)
+    print("policy 是旧密钥签的：进 fastboot 重新 flashing unlock 可用当前设备"
+          "密钥重签（会清空用户数据，解锁本就如此）。", flush=True)
+
+
+# Offer an unlocked-mode repair and retry the verification once.
+# Returns (True, selection) when a retry was attempted — selection itself may
+# still be None, which is the legitimate "no slot, boot src" fallback — or
+# (False, None) when declined or still failing.
+# Locked mode never reaches here: verified boot must fail closed there.
+def _maybe_repair_and_retry(root_dir, locked, args):
+    print("未锁定模式：启动验证卡在 Bootloader policy，常见原因是设备开发密钥"
+          "文件缺失或不可读（例如被其他用户覆盖导致权限变化）。", flush=True)
+    print("自动修复只重建开发密钥文件，不改变锁定状态与现有 policy；"
+          "修不好则仍然拒绝启动。", flush=True)
+    if _read_choice("是否自动修复并重试启动？[y/N]: ",
+                    valid=("y", "n"), default="n") != "y":
+        return False, None
+    import secure_boot
+    try:
+        info = secure_boot.ensure_developer_key(root_dir, locked=False)
+    except Exception as exc:
+        print(f"自动修复失败: {exc}", flush=True)
+        return False, None
+    print(f"开发密钥已就绪（key_id={info['key_id']}），重试验证...", flush=True)
+    try:
+        secure_boot.configure_runtime_keys(root_dir, locked)
+        return True, secure_boot.prepare_boot(
+            root_dir, locked, legacy_slot=_read_legacy_slot(root_dir),
+            preferred_slot=args.slot)
+    except secure_boot.BootVerificationError as exc:
+        _diagnose_policy_failure(root_dir)
+        _log(f"修复后仍然无法验证: {exc}", failed=True)
+        return False, None
+
+
 # Read and validate a legacy slot marker, or return None when unavailable.
 def _read_legacy_slot(root_dir):
     try:
@@ -127,6 +179,7 @@ def main(argv=None):
         _log(f"无法加载 Bootloader 验证器: {exc}", failed=True)
         return 1
 
+    locked = False
     try:
         locked = secure_boot.read_locked(root_dir)
         secure_boot.configure_runtime_keys(root_dir, locked)
@@ -134,8 +187,13 @@ def main(argv=None):
             root_dir, locked, legacy_slot=_read_legacy_slot(root_dir),
             preferred_slot=args.slot)
     except secure_boot.BootVerificationError as exc:
-        _log(f"启动被拒绝: {exc}", failed=True)
-        return 1
+        if locked:
+            _log(f"启动被拒绝: {exc}", failed=True)
+            return 1
+        _log(f"启动验证失败: {exc}", failed=True)
+        repaired, selection = _maybe_repair_and_retry(root_dir, locked, args)
+        if not repaired:
+            return 1
     except Exception as exc:
         _log(f"启动验证失败: {exc}", failed=True)
         return 1

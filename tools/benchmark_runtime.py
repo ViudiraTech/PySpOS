@@ -13,6 +13,11 @@ from pathlib import Path
 
 
 def load_process(path):
+    # process.py imports its sibling modules (rbtree) as top level, the same
+    # way the launcher runs them, so the source tree has to be importable.
+    src = str(Path(path).resolve().parent)
+    if src not in sys.path:
+        sys.path.insert(0, src)
     spec = importlib.util.spec_from_file_location("benchmark_process", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -37,6 +42,7 @@ def measure(module, counts, ticks, repeats):
             "tasks": count, "ticks": ticks,
             "median_s": statistics.median(samples),
             "heap_entries": len(rq._heap), "timeline_entries": len(rq.timeline),
+            "deadline_tree": len(rq._deadlines),
         })
     rq = module.EEVDFRunQueue()
     rq.enqueue(module.PCB(pid=3, comm="solo"))
@@ -50,6 +56,7 @@ def measure(module, counts, ticks, repeats):
         "environment": {"python": platform.python_version(), "platform": platform.platform()},
         "scheduler": results,
         "retained_heap_entries_20k": len(rq._heap),
+        "retained_deadline_tree_20k": len(rq._deadlines),
         "retained_timeline_entries_20k": len(rq.timeline),
         "trace_peak_bytes_20k": peak,
     }

@@ -44,12 +44,16 @@ def test_cached_accounting_survives_wakeup_stop_exit_and_nice_changes():
             table.send_signal(task.pid, p.SIGSTOP)
         if i % 53 == 0:
             table.send_signal(task.pid, p.SIGCONT)
+        if i % 31 == 0:
+            table.charge_task(task.pid, 2.5)
         if i % 101 == 0:
             table.exit_task(task.pid)
         table.sched_tick(0.5)
         assert table.rq.min_vruntime >= previous_min
         previous_min = table.rq.min_vruntime
         assert_accounting(table.rq)
+        if i % 50 == 0:
+            table.rq._deadlines.check()
 
 
 def test_duplicate_enqueue_and_pid_reuse_do_not_duplicate_weight_or_minimum():
@@ -108,3 +112,63 @@ def test_zero_timeout_returns_live_task_and_missing_pid_returns_none():
     task = table.spawn("running")
     assert table.wait_for(task.pid, 0) is task
     assert table.wait_for(99999, None) is None
+
+
+# Measured wall time lands on CPU and vruntime through the fair scaling.
+def test_charge_task_books_cpu_and_vruntime():
+    table = p.ProcessTable()
+    task = table.spawn("charged", nice=0)
+    table.charge_task(task.pid, 10.0)
+    assert task.sum_exec_runtime == 10.0
+    assert task.vruntime == p.EEVDFRunQueue.calc_delta_fair(10.0, task.weight)
+    table.charge_task(task.pid, 0.0)
+    table.charge_task(99999, 5.0)
+    assert task.sum_exec_runtime == 10.0
+
+
+# Reaping records the final accounting in a bounded recent ring.
+def test_reap_records_recent_ring_bounded():
+    table = p.ProcessTable()
+    for i in range(20):
+        task = table.spawn(f"job-{i}")
+        table.charge_task(task.pid, float(i))
+        table.exit_task(task.pid, exit_code=i)
+        table.reap(task.pid)
+    assert len(table.recent) == table.recent.maxlen == 16
+    kept = list(table.recent)
+    assert kept[0]["comm"] == "job-4" and kept[-1]["comm"] == "job-19"
+    assert kept[-1]["exit"] == 19 and kept[-1]["cpu"] == 19.0
+    assert set(kept[0]) >= {"pid", "comm", "exit", "sig", "cpu", "vruntime",
+                            "kind"}
+    table.reset()
+    assert len(table.recent) == 0
+
+
+# The interactive loop advances virtual time, so queued simulated tasks
+# accrue vruntime in production instead of only under tests.
+def test_command_loop_ticks_scheduler(monkeypatch):
+    import kernel
+    kernel.start_shell_session()
+    table = p.ProcessTable()
+    table.boot_system()
+    task = table.spawn("simmer")
+    monkeypatch.setattr("process._pt", table)
+    calls = []
+    script = iter(["", "", EOFError()])
+
+    def fake_input(_prompt):
+        calls.append("input")
+        value = next(script)
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
+    monkeypatch.setattr(kernel, "print_prompt", lambda: "test> ")
+    monkeypatch.setattr("builtins.input", fake_input)
+    monkeypatch.setattr(kernel.main, "handle_command", lambda _line: None)
+    kernel._command_loop()
+    assert len(calls) == 3
+    assert task.vruntime > 0.0
+    assert task.sum_exec_runtime > 0.0
+    assert table.rq.nr_ticks >= 2
+    kernel.start_shell_session()

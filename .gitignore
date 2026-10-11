@@ -35,8 +35,15 @@ keys/
 *.sig
 /.pyspos_boot/
 
+# 本地 LLM 试验产物（模型权重与 agent 脚本，不入库）
+MiniCPM*/
+Qwen*/
+*.gguf
+*.safetensors
+
 # 构建/测试
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 dist/

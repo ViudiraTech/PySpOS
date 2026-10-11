@@ -13,8 +13,10 @@ from collections import deque
 import configparser
 from dataclasses import dataclass, field
 from datetime import datetime
+import os
 from pathlib import Path
 import shlex
+import sys
 import threading
 import time
 
@@ -46,11 +48,27 @@ class Unit:
     read_logs: object = None
 
 
+# ANSI colours for the live boot badges, systemd-style: only the badge is
+# coloured, never the message. Green for success, red for failure, yellow
+# for dependency blocks, dim for in-progress.
+_BADGE_COLORS = {"success": "\033[32m", "failed": "\033[31m",
+                 "dependency": "\033[33m", "starting": "\033[2m"}
+_COLOR_RESET = "\033[0m"
+
+
+# Colour only on a real terminal: captured test output, pipes and files stay
+# plain, and NO_COLOR or dumb terminals stay plain too.
+def _terminal_colours():
+    return (sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+            and os.environ.get("TERM") != "dumb")
+
+
 # Store bounded structured entries and print systemd-style boot status lines.
 class Journal:
-    def __init__(self, emit=print, limit=2048):
+    def __init__(self, emit=print, limit=2048, color=None):
         self.entries = deque(maxlen=limit)
         self.emit = emit
+        self.color = _terminal_colours() if color is None else bool(color)
 
     # Record one transition and optionally print its boot status badge.
     def write(self, unit, message, *, result="info", pid=1):
@@ -58,9 +76,14 @@ class Journal:
                  "result": result, "message": str(message)}
         self.entries.append(entry)
         if self.emit:
-            badges = {"success": "[  OK  ]", "failed": "[FAILED]",
-                      "dependency": "[DEPEND]", "starting": "[ .... ]"}
-            self.emit(f"{badges.get(result, '[ INFO ]')} {message}")
+            badges = {"success": "  OK  ", "failed": "FAILED",
+                      "dependency": "DEPEND", "starting": " .... "}
+            inner = badges.get(result, " INFO ")
+            if self.color and result in _BADGE_COLORS:
+                badge = f"[{_BADGE_COLORS[result]}{inner}{_COLOR_RESET}]"
+            else:
+                badge = f"[{inner}]"
+            self.emit(f"{badge} {message}")
         return entry
 
     # Format the whole journal or the entries belonging to one unit.
@@ -189,7 +212,6 @@ class ServiceManager:
                 for dep in missing.get(current, ()):
                     self.journal.write(current, f"Optional unit not found: {dep}")
                 unit.state, unit.result, unit.error = "activating", "success", ""
-                self.journal.write(current, f"Starting {unit.description}...", result="starting")
                 started = time.monotonic()
                 unit.cleanup_pending = bool(unit.stop)
                 try:
@@ -197,8 +219,11 @@ class ServiceManager:
                     unit.detail = detail if isinstance(detail, dict) else {}
                     self._collect_logs(unit)
                     unit.state = "active"
+# one line per unit, systemd-journal style: no separate Starting line,
+# the unit name first, then the description after a dash.
                     verb = "Reached target" if unit.kind == "target" else "Started"
-                    self.journal.write(current, f"{verb} {unit.description}.", result="success")
+                    self.journal.write(current, f"{verb} {current} - {unit.description}.",
+                                       result="success")
                 except Exception as exc:
                     unit.state, unit.result, unit.error = "failed", "exit-code", str(exc)
                     # Partial startup still owns resources and must be unwound.
@@ -208,7 +233,8 @@ class ServiceManager:
                             unit.cleanup_pending = False
                         except Exception as cleanup:
                             self.journal.write(current, f"Startup cleanup failed: {cleanup}", result="failed")
-                    self.journal.write(current, f"Failed to start {unit.description}: {exc}", result="failed")
+                    self.journal.write(current, f"Failed to start {current} - "
+                                                 f"{unit.description}: {exc}", result="failed")
                     self._collect_logs(unit)
                 except BaseException:
                     unit.state, unit.result = "failed", "interrupted"
@@ -256,11 +282,12 @@ class ServiceManager:
                     unit.cleanup_pending = False
                 self._collect_logs(unit)
                 unit.state, unit.result, unit.error = "inactive", "success", ""
-                self.journal.write(name, f"Stopped {unit.description}.", result="success")
+                self.journal.write(name, f"Stopped {name} - {unit.description}.", result="success")
             except Exception as exc:
                 unit.state, unit.result, unit.error = "failed", "exit-code", str(exc)
                 errors.append(f"{name}: {exc}")
-                self.journal.write(name, f"Failed to stop {unit.description}: {exc}", result="failed")
+                self.journal.write(name, f"Failed to stop {name} - {unit.description}: {exc}",
+                                       result="failed")
         if errors:
             raise UnitError("; ".join(errors))
 
