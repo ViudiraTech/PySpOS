@@ -330,8 +330,12 @@ class EEVDFRunQueue:
 # -- slice assignment ----------------------------------------------------
 
 # Assign the next time slice, scaled by weight and clamped to bounds.
-    def assign_slice(self, pcb: PCB) -> None:
-        total = self._total_weight()
+# total overrides the live queue weight for the _switch_to path, which
+# snapshots it before dequeueing: the incoming task's own share has to
+# count, or two equal tasks would each take a whole base slice.
+    def assign_slice(self, pcb: PCB, total: Optional[float] = None) -> None:
+        if total is None:
+            total = self._total_weight()
         s = self.base_slice * pcb.weight / total
         pcb.slice = max(self.min_slice, min(MAX_SLICE_MS, s))
         pcb.deadline = pcb.vruntime + self._vslice(pcb)
@@ -395,8 +399,13 @@ class EEVDFRunQueue:
         if nxt is None:
             self.curr = None
             return
+# snapshot the weight while the incoming task is still queued: dequeue drops
+# it from the total, and the slice has to be its fair share of every runnable
+# task, itself included. The deadline is only rewritten after the dequeue, so
+# the tree delete still lands on the key the task was inserted with.
+        total = self._total_weight()
         self.dequeue(nxt)          # take from the runnable set; curr is not on the queue
-        self.assign_slice(nxt)
+        self.assign_slice(nxt, total=total)
         self.curr = nxt
         self.nr_switches += 1
         self.timeline.append((self.min_vruntime, nxt.pid, f"switch-to deadline={nxt.deadline:.3f}"))
@@ -654,7 +663,7 @@ class ProcessTable:
         pcb = self.tasks.get(pid)
         if pcb is None:
             return False, f"没有 PID 为 {pid} 的进程"
-        if pcb.state in (DONE, FAILED, EXIT_ZOMBIE, EXIT_DEAD):
+        if pcb.state in TERMINAL_STATES:
             return False, f"进程 {pid} 已结束（{pcb.state}），无法发信号"
 # a real child: deliver at the OS level first (terminate/kill/POSIX signal), then fold into the shared state machine
         via = ""

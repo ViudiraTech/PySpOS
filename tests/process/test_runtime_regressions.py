@@ -172,3 +172,31 @@ def test_command_loop_ticks_scheduler(monkeypatch):
     assert task.sum_exec_runtime > 0.0
     assert table.rq.nr_ticks >= 2
     kernel.start_shell_session()
+
+
+# Two equal-weight tasks split the base slice: the incoming task's own share
+# counts, so each gets half instead of a whole base slice.
+def test_switch_slice_counts_incoming_task_weight():
+    rq = p.EEVDFRunQueue()
+    first = p.PCB(pid=1, comm="first")
+    second = p.PCB(pid=2, comm="second")
+    rq.enqueue(first)
+    rq.enqueue(second)
+    rq._switch_to(rq.pick_next())
+    assert rq.curr.slice == pytest.approx(rq.base_slice / 2)
+    rq.tick(rq.curr.slice + 1)
+    assert rq.curr.slice == pytest.approx(rq.base_slice / 2)
+    assert_accounting(rq)
+
+
+# A signal to an already-terminated task is refused, including the Killed
+# state that exit_task leaves behind.
+def test_signal_to_terminated_task_is_refused():
+    table = p.ProcessTable()
+    task = table.spawn("victim")
+    ok, _ = table.send_signal(task.pid, p.SIGKILL)
+    assert ok is True
+    assert task.state == "Killed"
+    ok, message = table.send_signal(task.pid, p.SIGKILL)
+    assert ok is False
+    assert "已结束" in message
