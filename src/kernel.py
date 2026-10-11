@@ -22,18 +22,36 @@ from fs import current_dir
 import logk
 import ota
 
-# The PySpOS ASCII logo, printed once at boot.
-ascii_logo = r'''
+# Classic text banner, kept as the fallback when the logo file is missing
+# (old slots predate it).
+_CLASSIC_ASCII_LOGO = r'''
  ____            ____             ___    ____      _____
-|  _ \   _   _  / ___|   _ __    / _ \  / ___|    |___ / 
-| |_) | | | | | \___ \  | '_ \  | | | | \___ \      |_ \ 
+|  _ \   _   _  / ___|   _ __    / _ \  / ___|    |___ /
+| |_) | | | | | \___ \  | '_ \  | | | | \___ \      |_ \
 |  __/  | |_| |  ___) | | |_) | | |_| |  ___) |    ___) |
-|_|      \__, | |____/  | .__/   \___/  |____/    |____/ 
-         |___/          |_|           
+|_|      \__, | |____/  | .__/   \___/  |____/    |____/
+         |___/          |_|
 
 PySpOS 模拟操作系统 版本 3
-@ 2022~2026 GoutouStdio（或狗头工作室）保留所有权利。                   
+@ 2022~2026 GoutouStdio（或狗头工作室）保留所有权利。
 '''
+
+
+# Load the boot splash generated from the project logo; old slots without
+# the file keep the classic banner instead of crashing the boot.
+def _load_ascii_logo(path=None):
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "ascii_logo.txt")
+    try:
+        with open(path, "r", encoding="utf-8") as stream:
+            return stream.read().rstrip("\n")
+    except OSError:
+        return _CLASSIC_ASCII_LOGO
+
+
+# The PySpOS ASCII logo, printed once at boot.
+ascii_logo = _load_ascii_logo()
 
 # Logical CPU count reported at boot.
 cores = os.cpu_count()

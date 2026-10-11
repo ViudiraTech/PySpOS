@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.png" alt="PySpOS logo" width="200">
+
 # PySpOS
 
 **用 Python 写的模拟操作系统** — 真子进程、EEVDF 调度器、Unicorn ELF 引擎、curses 首次开机向导。
