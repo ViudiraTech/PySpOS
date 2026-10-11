@@ -123,10 +123,30 @@ _parse_value = parse_value
 
 
 # Report whether a string has to be written quoted to survive a round trip.
+# Besides the structural characters, anything the reader would take for a
+# bool, null or number (true, yes, 123, 1.5, ~, ...) must be quoted, or a
+# plain string comes back as another type. A comma needs quoting too: a
+# scalar "a,b" reads back fine unquoted, but inside a list [a,b] it would
+# split into two elements.
 def _needs_quote(s: str) -> bool:
     if s == '':
         return True
-    return any(c in s for c in ' #;="\'[]\n\t\r')
+    if any(c in s for c in ' #;,="\'[]\n\t\r'):
+        return True
+    low = s.lower()
+    if low in _TRUE or low in _FALSE or low in _NULL:
+        return True
+    try:
+        int(s)
+        return True
+    except ValueError:
+        pass
+    try:
+        float(s)
+        return True
+    except ValueError:
+        pass
+    return False
 
 
 # Serialise one value; the public entry point.

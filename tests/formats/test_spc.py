@@ -51,3 +51,19 @@ def test_dump_load_file(tmp_path):
     p = tmp_path / "boot.spc"
     spc.dump({"boot": {"locked": False}}, str(p))
     assert spc.load(str(p))["boot"]["locked"] is False
+
+
+# Strings that look like another type must come back as strings, not as the
+# type they resemble; typed values keep their own type on the same trip.
+def test_string_round_trip_keeps_type():
+    tricky = ["true", "yes", "on", "false", "no", "off", "null", "none",
+              "nil", "~", "123", "0", "-3.2", "1.5", "1_000", "inf",
+              "a,b", "plain", "/path/x", "12a", ""]
+    data = {"s": {f"k{i}": v for i, v in enumerate(tricky)}}
+    back = spc.loads(spc.dumps(data))["s"]
+    for i, v in enumerate(tricky):
+        assert back[f"k{i}"] == v
+        assert isinstance(back[f"k{i}"], str)
+    typed = {"s": {"b": True, "n": None, "i": 3, "f": 2.5,
+                   "l": [1, "x", "a,b", False]}}
+    assert spc.loads(spc.dumps(typed))["s"] == typed["s"]
