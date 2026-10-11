@@ -45,3 +45,28 @@ def test_splash_has_breathing_room_and_centers(monkeypatch, capsys):
     body = [line for line in out[1:-1] if line.strip()]
     assert len(body) >= 10
     assert body[0].startswith(" ") and body[0].strip() in kernel.ascii_logo
+
+
+# Density buckets: spaces stay bare, body blue, glow core cyan.
+def test_colorize_splash_line_buckets():
+    assert kernel._colorize_splash_line("  ") == "  "
+    assert kernel._colorize_splash_line(".-") == \
+        "\033[94m.\033[0m\033[94m-\033[0m"
+    assert kernel._colorize_splash_line("#") == "\033[96m#\033[0m"
+
+
+# Captured/piped output never carries escapes; the gate honors NO_COLOR.
+def test_splash_plain_without_tty(monkeypatch, capsys):
+    kernel.print_splash()
+    assert "\033[" not in capsys.readouterr().out
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert kernel._splash_color_enabled() is False
+
+
+# On a real terminal the splash carries color (gate forced for the test).
+def test_splash_colors_on_terminal(monkeypatch, capsys):
+    monkeypatch.setattr(kernel, "_splash_color_enabled", lambda: True)
+    kernel.print_splash()
+    out = capsys.readouterr().out
+    assert "\033[94m.\033[0m" in out
+    assert "\033[96m#\033[0m" in out

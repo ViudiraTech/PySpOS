@@ -54,13 +54,53 @@ def _load_ascii_logo(path=None):
 ascii_logo = _load_ascii_logo()
 
 
+_SPLASH_BLUE = "\033[94m"
+_SPLASH_CYAN = "\033[96m"
+_SPLASH_RESET = "\033[0m"
+_SPLASH_BRIGHT = set("+*#%@")
+
+
+# Color only where it survives: real terminals, no NO_COLOR/dumb, and no
+# legacy Windows console (Win7 prints the raw escapes as garbage there).
+def _splash_color_enabled():
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    if os.environ.get("TERM") == "dumb":
+        return False
+    try:
+        if not sys.stdout.isatty():
+            return False
+    except Exception:
+        return False
+    if os.name == "nt" and not (os.environ.get("WT_SESSION")
+                                or os.environ.get("ANSICON")):
+        return False
+    return True
+
+
+# Paint one splash line by density: bright blue body, cyan glow core, plain
+# spaces untouched so piped output stays clean even if this ever misfires.
+def _colorize_splash_line(line):
+    parts = []
+    for char in line:
+        if char == " ":
+            parts.append(char)
+        elif char in _SPLASH_BRIGHT:
+            parts.append(f"{_SPLASH_CYAN}{char}{_SPLASH_RESET}")
+        else:
+            parts.append(f"{_SPLASH_BLUE}{char}{_SPLASH_RESET}")
+    return "".join(parts)
+
+
 # Print the boot splash with breathing room: a blank line above and below,
 # lines centered when the terminal is wider than the art.
 def print_splash():
     width = shutil.get_terminal_size(fallback=(80, 24)).columns
+    color = _splash_color_enabled()
     print()
     for line in ascii_logo.splitlines():
-        print(line.center(width) if len(line) < width else line)
+        shown = line.center(width) if len(line) < width else line
+        print(_colorize_splash_line(shown) if color else shown)
     print()
 
 # Logical CPU count reported at boot.
