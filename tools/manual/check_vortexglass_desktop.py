@@ -90,7 +90,11 @@ def review(output, theme_dir=None):
         print("Graphics API:", backend.view.rendererInterface().graphicsApi(), flush=True)
         item = next(i for i in items(backend.view.rootObject()) if i.objectName() == "window-" + str(upper_id))
         glass = next(i for i in items(item) if i.objectName() == "glass-band")
-        blur_source = glass.property("source")
+        # 折射是 glass-band 内的一个 ShaderEffect：band 本身是 Item，好让噪声
+        # 叠在折射之上，所以源要从里面那一层取。
+        refraction = next(i for i in items(glass)
+                          if i.objectName() == "glass-refraction")
+        blur_source = refraction.property("source")
         effect = blur_source.property("sourceItem")
         sharp = effect.property("source")
         print("Glass:", glass.property("width"), glass.property("height"),

@@ -9,6 +9,7 @@
  */
 '''
 
+from datetime import datetime
 from pathlib import Path
 import os
 import subprocess
@@ -28,14 +29,34 @@ from .terminal import Terminal, python_executable
 from .input import key_event
 
 
+# The start menu's contents. module is the apps/ module launchApp runs, with
+# None for entries that are started some other way (the terminal owns a PTY).
+# icon names an SVG in assets/icons/, which the QML delegate resolves itself.
 APP_CATALOG = (
-    {"id": "calc", "title": "计算器", "description": "基本运算", "glyph": "＋"},
-    {"id": "clock", "title": "时钟", "description": "当前日期与时间", "glyph": "◷"},
-    {"id": "canvas", "title": "画布", "description": "透明画布", "glyph": "▧"},
-    {"id": "notes", "title": "记事本", "description": "编辑与保存文字", "glyph": "✎"},
-    {"id": "files", "title": "文件", "description": "浏览本机目录", "glyph": "▣"},
-    {"id": "monitor", "title": "系统监视器", "description": "CPU、负载与磁盘", "glyph": "▥"},
-    {"id": "terminal", "title": "终端", "description": "PySpOS PTY shell", "glyph": ">_"},
+    {"id": "calc", "title": "计算器", "description": "基本运算", "icon": "calc",
+     "module": "guicalc"},
+    {"id": "clock", "title": "时钟", "description": "当前日期与时间", "icon": "clock",
+     "module": "guiclock"},
+    {"id": "canvas", "title": "画布", "description": "透明画布", "icon": "canvas",
+     "module": "guicanvas"},
+    {"id": "notes", "title": "记事本", "description": "编辑与保存文字", "icon": "notes",
+     "module": "guinotes"},
+    {"id": "files", "title": "文件", "description": "浏览本机目录", "icon": "files",
+     "module": "guifiles"},
+    {"id": "monitor", "title": "系统监视器", "description": "进程与调度器",
+     "icon": "monitor", "module": "guimonitor"},
+    {"id": "services", "title": "服务", "description": "unit 状态与启动日志",
+     "icon": "services", "module": "guiservices"},
+    {"id": "settings", "title": "设置", "description": "语言、时区与更新通道",
+     "icon": "settings", "module": "guisettings"},
+    {"id": "packages", "title": "包管理", "description": "已安装的包与卸载",
+     "icon": "packages", "module": "guipackages"},
+    {"id": "update", "title": "系统更新", "description": "A/B 槽位与回滚",
+     "icon": "update", "module": "guiota"},
+    {"id": "trust", "title": "启动信任", "description": "验签状态与运行权限",
+     "icon": "trust", "module": "guitrust"},
+    {"id": "terminal", "title": "终端", "description": "PySpOS PTY shell",
+     "icon": "terminal", "module": None},
 )
 
 
@@ -116,10 +137,63 @@ class ImageProvider(QQuickImageProvider):
             self.images.pop(wid, None)
 
 
+# The taskbar clock reads the system's configured timezone rather than the
+# host's, because the two differ once `locale tz` has been used and the desktop
+# should show the OS's own clock. syslocale is imported defensively so the
+# offline review harness still renders a clock.
+def clock_text():
+    try:
+        import syslocale
+        return syslocale.now_str("%H:%M"), syslocale.now_str("%Y/%m/%d")
+    except Exception:
+        now = datetime.now()
+        return now.strftime("%H:%M"), now.strftime("%Y/%m/%d")
+
+
+# The tray reports real system state instead of decorative icons: the boot trust
+# state, ROOT and the active A/B slot are the three things this OS makes a fuss
+# about. Each is optional, since the desktop also runs with no booted system
+# behind it (the review harness), where main refuses to import.
+#
+# Split in two because they change at different rates: the slot and the boot
+# trust state are fixed for the life of a boot (changing either takes a reboot),
+# while ROOT can be granted at any moment. Only the latter is re-read per tick.
+def boot_chips():
+    chips = []
+    try:
+        import ota
+        chips.append({"text": ota.get_current_slot().replace("slot_", "").upper(),
+                      "tone": "slot"})
+    except Exception:
+        pass
+    try:
+        import main
+        locked = bool(getattr(main, "boot_locked", False))
+        chips.append({"text": "LOCKED" if locked else "UNLOCKED",
+                      "tone": "locked" if locked else "unlocked"})
+    except Exception:
+        pass
+    return chips
+
+
+# The ROOT marker. It follows the `#` prompt convention the shell already uses,
+# so it reads as the same signal in both places.
+def root_chips():
+    try:
+        import main
+        if main.is_root():
+            return [{"text": "#", "tone": "root"}]
+    except Exception:
+        pass
+    return []
+
+
 class Backend(QObject):
     changed = pyqtSignal()
     invoke = pyqtSignal(object)
     ended = pyqtSignal()
+    # Emitted once a second so the taskbar clock and tray re-evaluate.
+    trayChanged = pyqtSignal()
 
     def __init__(self, server, report=None, *, terminal=True):
         super().__init__()
@@ -142,6 +216,13 @@ class Backend(QObject):
         self.changed.connect(self._schedule_sync, Qt.ConnectionType.QueuedConnection)
         self.invoke.connect(self._capture, Qt.ConnectionType.QueuedConnection)
         self.ended.connect(QApplication.instance().quit, Qt.ConnectionType.QueuedConnection)
+        # The tray is the only part of the desktop whose content changes with the
+        # wall clock, so it gets its own 1 Hz tick rather than a repaint driver.
+        self.boot_chips = boot_chips()
+        self.clock_timer = QTimer(self)
+        self.clock_timer.setInterval(1000)
+        self.clock_timer.timeout.connect(self.trayChanged)
+        self.clock_timer.start()
         server.model.changed = self.notify
         server.capture = self.capture
         self.view = QQuickView()
@@ -164,6 +245,24 @@ class Backend(QObject):
     @pyqtProperty("QVariantList", constant=True)
     def appCatalog(self):
         return list(APP_CATALOG)
+
+    @pyqtProperty("QVariantList", notify=trayChanged)
+    def trayChips(self):
+        return self.boot_chips + root_chips()
+
+    @pyqtProperty(str, notify=trayChanged)
+    def clockTime(self):
+        return clock_text()[0]
+
+    @pyqtProperty(str, notify=trayChanged)
+    def clockDate(self):
+        return clock_text()[1]
+
+    # The clock doubles as a button, the way it does on every desktop that has
+    # one: clicking it opens the clock application.
+    @pyqtSlot()
+    def openClock(self):
+        self.launchApp("clock")
 
     # Coalesce socket changes before rendering sharp appearances on the GUI thread.
     def notify(self, wid):
@@ -415,7 +514,8 @@ class Backend(QObject):
         if app_id == "terminal":
             self.openTerminal()
             return
-        if app_id not in {entry["id"] for entry in APP_CATALOG}:
+        entry = next((item for item in APP_CATALOG if item["id"] == app_id), None)
+        if entry is None or entry["module"] is None:
             return
         environment = dict(os.environ)
         environment["PYSPOS_GUI_SESSION"] = "1"
@@ -424,9 +524,7 @@ class Backend(QObject):
         environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
             source, environment.get("PYTHONPATH"))))
         self.launched = [child for child in self.launched if child.poll() is None]
-        module = {"calc": "guicalc", "clock": "guiclock", "canvas": "guicanvas",
-                  "notes": "guinotes", "files": "guifiles", "monitor": "guimonitor"}[app_id]
-        child = subprocess.Popen([python_executable(), "-m", f"apps.{module}"],
+        child = subprocess.Popen([python_executable(), "-m", f"apps.{entry['module']}"],
                                  env=environment, stdin=subprocess.DEVNULL,
                                  stdout=subprocess.DEVNULL)
         self.launched.append(child)

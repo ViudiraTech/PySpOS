@@ -20,10 +20,18 @@ import pngcodec
 ENV_THEME_DIR = "VORTEXGLASS_THEME_DIR"
 # Where a theme lives once it is installed into the PySpOS tree.
 THEME_SUBDIR = os.path.join("assets", "themes", "vortexglass")
-# Fixed locations tried when nothing is passed and the variable is unset.
+# The copy shipped inside src/, so a fresh checkout and a synced slot both have
+# artwork with no install step. Resolved from this file and not from the working
+# directory, which differs between the shell, a slot and the desktop service.
+BUNDLED_THEME_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "vortexglass", "assets", "themes", "vortexglass")
+# Fixed locations tried when nothing is passed and the variable is unset. The
+# bundled copy goes last so a deliberate system install still wins.
 FALLBACK_THEME_DIRS = (
     os.path.join("/usr/share/themes", "vortexglass"),
     THEME_SUBDIR,
+    BUNDLED_THEME_DIR,
 )
 
 # Title and frame metrics taken from the compositor implementation.
@@ -134,8 +142,9 @@ def system_root():
 
 
 # Where the fallback search looks for a directory named vortexglass. The theme
-# is not vendored, so a checkout of the project that drew the artwork, a
-# desktop copy of it, or a system-wide install are all fair game.
+# is vendored under src/ now, so this walk only matters when someone keeps the
+# artwork elsewhere: a checkout of the project that drew it, a desktop copy, or
+# a system-wide install.
 def search_roots():
     home = os.path.expanduser("~")
     roots = [str(system_root().parent), "/usr/share/themes",

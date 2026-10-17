@@ -12,8 +12,8 @@ import QtQuick
 
 Rectangle {
     gradient: Gradient {
-        GradientStop { position: 0; color: "#263d59" }
-        GradientStop { position: 1; color: "#0d1929" }
+        GradientStop { position: 0; color: Theme.backdropTop }
+        GradientStop { position: 1; color: Theme.backdropBottom }
     }
     Image {
         anchors.fill: parent
