@@ -9,6 +9,8 @@
  */
 '''
 
+import re
+
 import pytest
 
 from service_manager import Journal, ServiceManager, Unit, UnitError, set_manager
@@ -202,3 +204,61 @@ def test_auto_colour_off_without_tty(monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     assert Journal(emit=shown.append, color=None).color is False
     assert Journal(emit=shown.append, color=True).color is True
+
+
+# Drop SGR codes so an assertion reads the way the terminal renders the line.
+def _plain(text):
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+# The status block is read by a person at a terminal: it used to dump the raw
+# status dict, and that dict carried elapsed as 6.199999916134402e-06.
+def test_status_block_is_readable(capsys):
+    from shell.service_cmds import _print_status
+
+    _print_status({
+        "name": "shell.service", "description": "Interactive shell",
+        "type": "simple", "state": "active", "result": "success", "error": "",
+        "elapsed": 6.199999916134402e-06, "requires": ["default.target"],
+        "wants": [], "after": ["default.target"], "before": [], "pid": 2})
+    out = _plain(capsys.readouterr().out)
+    assert "● shell.service - Interactive shell" in out
+    assert "状态: active (success)" in out
+    assert "类型: simple" in out
+    assert "耗时: 6µs" in out
+    assert "Requires: default.target" in out
+    assert "After: default.target" in out
+    # A field the unit never set is omitted, and probe detail is appended as
+    # plain lines rather than left inside a dict dump.
+    assert "Wants" not in out and "{" not in out
+    assert "pid: 2" in out
+
+
+# Durations are formatted per magnitude, so a sub-millisecond startup never reads
+# as scientific notation.
+def test_duration_formatting():
+    from shell.service_cmds import _duration
+
+    assert _duration(6.2e-06) == "6µs"
+    assert _duration(0.25) == "250.0ms"
+    assert _duration(2.5) == "2.50s"
+    assert _duration(90) == "1.5分"
+    assert _duration(None) == "—"
+
+
+# Lifecycle actions confirm in one line instead of printing the whole state.
+def test_lifecycle_actions_confirm_instead_of_dumping_state(tmp_path, capsys):
+    service = manager()
+    (tmp_path / "test.service").write_text(
+        "[Unit]\nDescription=Test service\n[Service]\nType=oneshot\nExecStart=test\n")
+    service.load(tmp_path, {"test": lambda: None})
+    set_manager(service)
+    from shell.service_cmds import cmd_service
+
+    assert cmd_service("start test") == 0
+    out = capsys.readouterr().out
+    assert "已启动 test.service" in out
+    assert "{" not in out
+
+    assert cmd_service("stop test") == 0
+    assert "已停止 test.service" in capsys.readouterr().out

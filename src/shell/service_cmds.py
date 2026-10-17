@@ -9,7 +9,6 @@
  */
 '''
 
-import json
 import shlex
 
 import printk
@@ -102,6 +101,65 @@ def _syscall_api():
         return None
 
 
+# Bullet colour per lifecycle state: the one glanceable signal in systemctl's
+# most-used output. Idle states stay uncoloured so failures stand out.
+_STATE_COLOR = {"active": printk.GREEN_COLOR,
+                "failed": printk.RED_COLOR,
+                "activating": printk.YELLOW_COLOR,
+                "deactivating": printk.YELLOW_COLOR}
+
+# Fields the status block prints itself. Anything else a unit's probe adds is
+# appended after them rather than dropped.
+_STATUS_FIELDS = {"name", "description", "type", "state", "result", "error",
+                  "elapsed", "requires", "wants", "after", "before"}
+
+_ACTION_VERB = {"start": "已启动", "stop": "已停止", "restart": "已重启"}
+
+
+# Human-readable duration. Most units finish in microseconds and printing the
+# raw float gives scientific notation like 6.199999916134402e-06.
+def _duration(seconds):
+    if seconds is None:
+        return "—"
+    if seconds < 1e-3:
+        return f"{seconds * 1e6:.0f}µs"
+    if seconds < 1:
+        return f"{seconds * 1e3:.1f}ms"
+    if seconds < 60:
+        return f"{seconds:.2f}s"
+    return f"{seconds / 60:.1f}分"
+
+
+# One status value: dependency lists join, floats keep two decimals, the rest is
+# whatever str() gives.
+def _value(value):
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
+
+
+# Print a unit the way systemctl status does: a coloured bullet, then the fields
+# the unit actually sets. Absent dependency lists are omitted rather than shown
+# blank, and probe-specific detail is appended as plain lines instead of the raw
+# dict, which is what this used to dump.
+def _print_status(state):
+    color = _STATE_COLOR.get(state["state"], "")
+    print(f"{color}●{printk.RESET_COLOR} {state['name']} - {state['description']}")
+    headline = f"{state['state']} ({state['result']})"
+    if state.get("error"):
+        headline += f" — {state['error']}"
+    print(f"状态: {color}{headline}{printk.RESET_COLOR}")
+    print(f"类型: {state['type']}")
+    print(f"耗时: {_duration(state.get('elapsed'))}")
+    for key in ("requires", "wants", "after", "before"):
+        if state.get(key):
+            print(f"{key.capitalize()}: {_value(state[key])}")
+    for key in sorted(set(state) - _STATUS_FIELDS):
+        print(f"{key}: {_value(state[key])}")
+
+
 # Accept the legacy service <unit> <action> form and systemctl action <unit>.
 def cmd_service(args=""):
     from service_manager import UnitError
@@ -134,13 +192,14 @@ def cmd_service(args=""):
             print("\n".join(order))
             for owner, dependencies in missing.items():
                 print(f"{owner}: missing {', '.join(dependencies)}")
-        else:
-            if action in ("start", "stop", "restart"):
-                getattr(manager, action)(name)
+        elif action == "status":
             state = manager.status(name)
-            print(json.dumps(state, ensure_ascii=False, indent=2))
-            if action == "status" and state["state"] != "active":
+            _print_status(state)
+            if state["state"] != "active":
                 return 3
+        else:
+            getattr(manager, action)(name)
+            printk.ok(f"{_ACTION_VERB[action]} {name}")
         return 0
     except ValueError as exc:
         printk.error(f"service: {exc}\n")
