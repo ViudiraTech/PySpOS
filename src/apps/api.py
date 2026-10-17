@@ -11,6 +11,7 @@
 
 import base64
 import os
+import socket
 import sys
 import threading
 from pathlib import Path
@@ -54,6 +55,32 @@ def _split_addr(addr):
     return host, int(port)
 
 
+# Turn the published address into the target Client() takes: a unix socket path
+# on POSIX, or the (host, port) pair the Windows fallback uses.
+def _client_target(addr):
+    if addr.startswith("/"):
+        return addr
+    host, port = _split_addr(addr)
+    return (host, port)
+
+
+# Open the TCP channel with Nagle disabled. Client() cannot be used as-is: it
+# never sets TCP_NODELAY, and on a request-response protocol a fresh connection
+# stalls its first small message against the peer's delayed ACK. The unix socket
+# used on POSIX has no Nagle, so this is only the Windows path; Hadoop, Spark and
+# CPython all hit the same stall, and Go, curl and Node enable this by default.
+def _open_tcp_connection(host, port, authkey):
+    from multiprocessing.connection import (Connection, answer_challenge,
+                                            deliver_challenge)
+    with socket.create_connection((host, port)) as sock:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        conn = Connection(sock.detach())
+    # Same order Client() uses, before the app can send anything.
+    answer_challenge(conn, authkey)
+    deliver_challenge(conn, authkey)
+    return conn
+
+
 def _get_conn():
     global _conn
     if _conn is not None:
@@ -67,27 +94,16 @@ def _get_conn():
         if not encoded:
             return None
         authkey = base64.b64decode(encoded, validate=True)
-        host, port = _split_addr(addr)
+        target = _client_target(addr)
         with _conn_lock:
             if _conn is None:
-                _conn = Client((host, port), authkey=authkey)
+                if isinstance(target, str):
+                    _conn = Client(target, authkey=authkey)
+                else:
+                    _conn = _open_tcp_connection(target[0], target[1], authkey)
     except Exception:
         with _conn_lock:
             _conn = None
-    return _conn
-    addr = os.environ.get(SYSCTL_ENV)
-    if not addr:
-        return None
-    try:
-        from multiprocessing.connection import Client
-        encoded = os.environ.get(AUTHKEY_ENV)
-        if not encoded:
-            return None
-        authkey = base64.b64decode(encoded, validate=True)
-        host, port = addr.rsplit(":", 1)
-        _conn = Client((host, int(port)), authkey=authkey)
-    except Exception:
-        _conn = None
     return _conn
 
 

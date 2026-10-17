@@ -11,10 +11,14 @@
 
 import multiprocessing as mp
 from multiprocessing.connection import wait as wait_connections
+import atexit
 import base64
+import itertools
 import os
 import secrets
+import shutil
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -41,9 +45,20 @@ _input_relays = {}
 # One RPC endpoint per child, keyed by its pid, holding the Listener to close
 # once the child is gone.
 _child_servers = {}
+# The directory holding this parent's AF_UNIX RPC sockets, made on first use.
+# mkdtemp gives it mode 0700, so only this user can reach the endpoints inside.
+_endpoint_dir_path = None
+_endpoint_dir_lock = threading.Lock()
+# Names the sockets of concurrent children apart inside that directory.
+_endpoint_seq = itertools.count()
 
 # The only apps allowed to ask the parent for ROOT authorisation.
 ROOT_APPS = {"getroot.py", "bm.py"}
+
+# bootcfg keys a child may change on its own. `locked` and `rootstate` are
+# deliberately absent: those stay behind authorize_root and the signed policy,
+# so a settings screen cannot widen its own privileges by asking nicely.
+_SETTABLE_BOOTCFG = {"lang", "timezone", "display_name", "ota_channel"}
 
 
 # --------------------------------------------------------------------------
@@ -134,7 +149,7 @@ def _child_main(payload, addr, src_dir, apps_dir, env, out_fd, in_fd,
         if p and p not in sys.path:
             sys.path.insert(0, p)
     if addr:
-        os.environ[SYSCTL_ENV] = f"{addr[0]}:{addr[1]}"
+        os.environ[SYSCTL_ENV] = _format_addr(addr)
     if env:
         os.environ.update({k: str(v) for k, v in env.items()})
 
@@ -282,22 +297,13 @@ def _system_snapshot():
         version = pyspos.OS_VERSION
     except Exception:
         version = "?"
-    rq = table.rq
-    curr = rq.curr
-    tasks = [{"pid": p.pid, "ppid": p.ppid, "comm": p.comm, "state": p.state,
-              "nice": p.nice, "vruntime": p.vruntime,
-              "cpu": p.sum_exec_runtime, "kind": p.kind,
-              "remote": bool(p.remote)}
-             for p in table.list_procs()]
-    return {"ok": True, "source": "host", "booted": table.is_booted(),
-            "identity": {"version": version, "slot": slot,
-                         "slot_version": slot_version, "ota": ota_state},
-            "rq": {"queued": len(rq._queued), "avg": rq.avg_vruntime(),
-                   "min": rq.min_vruntime, "switches": rq.nr_switches,
-                   "ticks": rq.nr_ticks,
-                   "curr_pid": curr.pid if curr is not None else None,
-                   "curr_comm": curr.comm if curr is not None else "-"},
-            "tasks": tasks, "recent": list(table.recent), "error": ""}
+    # The table and run queue shape comes from process.py, so the in-process view
+    # and this one cannot drift; the host only adds the boot identity.
+    snapshot = {"ok": True, "source": "host", "error": "",
+                "identity": {"version": version, "slot": slot,
+                             "slot_version": slot_version, "ota": ota_state}}
+    snapshot.update(table.snapshot())
+    return snapshot
 
 
 def _sysctl_handler(op, args, kwargs, app_id=""):
@@ -339,11 +345,40 @@ def _sysctl_handler(op, args, kwargs, app_id=""):
         raise PermissionError("Bootloader 信任域只能由外部签名 policy 改变")
     if op == "get_bootcfg":
         return dict(main.bootcfg)
+    # Preferences a child may set, validated the same way `locale` and the
+    # first-boot wizard validate them, then persisted. Anything outside the
+    # whitelist is refused rather than silently ignored.
+    if op == "set_bootcfg":
+        import syslocale
+        from oobe import OTA_CHANNELS
+        key, value = str(args[0]), str(args[1])
+        if key not in _SETTABLE_BOOTCFG:
+            raise PermissionError(f"不允许通过 RPC 修改配置项: {key}")
+        if key == "lang" and not syslocale.set_language(value):
+            raise ValueError(f"不支持的语言: {value}")
+        if key == "timezone" and not syslocale.set_timezone(value):
+            raise ValueError(f"未知时区: {value}")
+        if key == "ota_channel" and value not in OTA_CHANNELS:
+            raise ValueError(f"未知更新通道: {value}")
+        if key == "display_name" and not value.strip():
+            raise ValueError("显示名不能为空")
+        btcfg.set_bootcfg_value(key, value)
+        _audit("set_bootcfg", f"{key}={value}")
+        return True
     if op == "get_rootstate":
         return bool(main.is_root())
     if op == "get_lockstate":
         import secure_boot
         return secure_boot.read_locked(main.root_dir)
+    # OTA 状态是只读的，面板可以按秒轮询；get_ota_status 内部只做轻量检查。
+    if op == "ota_status":
+        import ota
+        return ota.get_ota_status()
+    # 回滚要换启动槽位，和 shell 里的 ota_rollback 一样需要 ROOT。
+    if op == "ota_rollback":
+        import ota
+        main.require_root("OTA 回滚")
+        return bool(ota.rollback_update())
     if op == "pkg_list":
         import package_core
         return package_core.list_packages(main.root_dir)
@@ -383,6 +418,20 @@ def _sysctl_handler(op, args, kwargs, app_id=""):
         return manifest
     if op == "get_system_username":
         return kernel.get_system_username()
+    # 调整 nice。真实内核里降低 nice（提高优先级）要 CAP_SYS_NICE，这里同样要
+    # ROOT：把别人压下去随时可以，把别人抬起来得先有权限。
+    if op == "set_nice":
+        import process as proc
+        pid, nice = int(args[0]), int(args[1])
+        target = proc.get(pid)
+        if target is None:
+            raise ValueError(f"没有 pid {pid}")
+        if nice < target.nice and not main.is_root():
+            raise PermissionError("提高进程优先级需要 ROOT")
+        if not proc.set_nice(pid, nice):
+            raise ValueError(f"pid {pid} 当前不可调整（仅在运行时）")
+        _audit("set_nice", f"pid={pid} nice={nice}")
+        return True
     # Service-manager borrowing for children without an in-process manager
     # (desktop PTY shells): every call runs on the host's live manager, so
     # lifecycle stays single-owner and the child is only a remote control.
@@ -459,13 +508,50 @@ def _serve_client(conn, app_id=""):
         pass
 
 
+# Drop the socket directory when this process exits. Only the parent ever runs
+# this: children leave through os._exit, which skips atexit handlers.
+def _remove_endpoint_dir():
+    if _endpoint_dir_path:
+        shutil.rmtree(_endpoint_dir_path, ignore_errors=True)
+
+
+# Create the private socket directory once per parent process, and hand out its
+# path. 0700 is what closes the transport to other local users: the old
+# 127.0.0.1 listener let any local process reach the port and try the handshake.
+def _ensure_endpoint_dir():
+    global _endpoint_dir_path
+    if _endpoint_dir_path is None:
+        with _endpoint_dir_lock:
+            if _endpoint_dir_path is None:
+                _endpoint_dir_path = tempfile.mkdtemp(prefix="pyspos-sysctl-")
+                atexit.register(_remove_endpoint_dir)
+    return _endpoint_dir_path
+
+
+# AF_UNIX listeners report a bare path and AF_INET a (host, port) tuple; the
+# environment carries either form as one string for the child to connect to.
+def _format_addr(addr):
+    if isinstance(addr, str):
+        return addr
+    return f"{addr[0]}:{addr[1]}"
+
+
 # Open an RPC endpoint for one child and answer its calls with app_id as the
 # caller's identity. The endpoint is bound before the child is started, so the
 # child never races the accept thread, and a failed bind is not retried.
 def _serve_child_server(app_id):
     from multiprocessing.connection import Listener
     try:
-        listener = Listener(("127.0.0.1", 0), authkey=AUTHKEY)
+        if os.name == "posix":
+            # A unix socket, not 127.0.0.1: multiprocessing.connection never sets
+            # TCP_NODELAY, and every child opens a fresh connection, so the first
+            # syscall of every command used to stall ~40ms on Nagle/delayed-ACK.
+            path = os.path.join(_ensure_endpoint_dir(),
+                                f"{os.getpid()}-{next(_endpoint_seq)}.sock")
+            listener = Listener(path, authkey=AUTHKEY, family="AF_UNIX")
+        else:
+            # Windows keeps TCP: AF_UNIX needs a newer OS than spawn does.
+            listener = Listener(("127.0.0.1", 0), authkey=AUTHKEY)
     except Exception:
         return None
     addr = listener.address
@@ -490,6 +576,8 @@ def _close_child_server(pid):
     listener = _child_servers.pop(pid, None)
     if listener is None:
         return
+    # close() unlinks the AF_UNIX path itself (multiprocessing's SocketListener
+    # finaliser), so the socket file does not outlive the endpoint.
     try:
         listener.close()
     except Exception:
@@ -507,7 +595,7 @@ def open_session_server(app_id):
         return None
     listener, addr = made
     saved = (os.environ.get(SYSCTL_ENV), os.environ.get(AUTHKEY_ENV))
-    os.environ[SYSCTL_ENV] = f"{addr[0]}:{addr[1]}"
+    os.environ[SYSCTL_ENV] = _format_addr(addr)
     os.environ[AUTHKEY_ENV] = base64.b64encode(AUTHKEY).decode("ascii")
     return (listener, saved)
 

@@ -11,6 +11,7 @@
 '''
 
 import base64
+import re
 
 import pytest
 
@@ -78,8 +79,7 @@ def test_session_server_round_trip(host_manager):
         import os
         addr = os.environ[forkexec.SYSCTL_ENV]
         authkey = base64.b64decode(os.environ[forkexec.AUTHKEY_ENV])
-        host, _, port = addr.rpartition(":")
-        conn = Client((host, int(port)), authkey=authkey)
+        conn = Client(api._client_target(addr), authkey=authkey)
         conn.send((7, "sm_has_unit", ["demo.service"], {}))
         rid, payload = conn.recv()
         assert (rid, payload) == (7, {"ok": True, "ret": True})
@@ -145,7 +145,12 @@ def test_systemctl_through_proxy(host_manager, monkeypatch, capsys):
         assert svc_cmds.cmd_service("start demo") == 0
         assert host_manager.status("demo.service")["state"] == "active"
         assert svc_cmds.cmd_service("status demo") == 0
-        assert '"state": "active"' in capsys.readouterr().out
+        status_out = re.sub(r"\x1b\[[0-9;]*m", "", capsys.readouterr().out)
+        assert "demo.service" in status_out
+        assert "状态: active (success)" in status_out
+        # The status block is for a person reading a terminal, not for a parser:
+        # it used to dump the raw status dict as JSON.
+        assert "{" not in status_out and '"state"' not in status_out
         assert svc_cmds.cmd_service("status other") == 3
         assert svc_cmds.cmd_service("status ghost") == 1
         assert "Unit not found" in capsys.readouterr().out
