@@ -8,10 +8,12 @@
       "name": "wordcount",
       "runtime": "python",
       "path": "payload/wordcount.py",
-      "aliases": ["wc-pkg"]
+      "aliases": [
+        "wc-pkg"
+      ]
     }
   ],
   "files": {
-    "payload/wordcount.py": "41032a8634f0c2125d7d0b5db0ee5d205e8ebfd437dd11d808a6749dd30d375b"
+    "payload/wordcount.py": "49563577f565a97646e92d216b1f628d43225920d5bb299aaed7ef4af5e31fc1"
   }
 }

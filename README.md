@@ -146,7 +146,9 @@ python3 fastboot_gui.py
 | `systemctl list-units` | 列出初始化、目标与持续服务；支持依赖检查和生命周期管理 |
 | `journalctl -u vortexglass` | 查看当前启动的服务日志，包含子进程输出 |
 | `open guicalc &` / `open guifiles &` / `open guinotes &` | 独立计算器、文件浏览器与可编辑记事本 |
-| `open guiclock &` / `open guicanvas &` / `open guimonitor &` | 时钟、可绘制透明画布与系统监视器 |
+| `open guiclock &` / `open guicanvas &` / `open guimonitor &` | 时钟、可绘制透明画布与 EEVDF 调度器可视化 |
+| `open guiservices &` / `open guisettings &` | unit 状态与依赖 / 语言、时区与更新通道 |
+| `open guipackages &` / `open guiota &` / `open guitrust &` | 包管理 / A/B 槽位与回滚 / 启动信任链 |
 | `open spaceglass` | 使用系统合成器；无显示设备时保留离线主题 PNG 预览 |
 | `run <file.elf>` | 运行 ELF，`--stats` / `--map` / `--disasm N` / `--strace` 可观测 |
 | `run --engine native <f>` | 强制用自研模拟器兜底 |
@@ -345,10 +347,13 @@ VortexGlass 桌面功能需 `python3 -m pip install -r requirements-gui.txt`。
 [服务启动、GUI 示例与 socket API](docs/vortexglass.md) 有完整说明。
 [服务依赖、引导图与日志](docs/services.md) 说明 unit 文件、systemctl 和终端输入中继。
 
-VortexGlass 使用的主题素材来自
-[Uinxed-Kernel](https://github.com/ViudiraTech/Uinxed-Kernel)（Apache-2.0），
-PySpOS 不内置这份素材：app 会按系统树 → 系统主题目录 → 桌面/家目录的顺序
-自动搜索名为 `vortexglass` 且 34 个文件齐全的目录，也可以用
-`VORTEXGLASS_THEME_DIR` 或 `--theme-dir=` 直接指定。把素材装进系统树时放在
-`assets/themes/vortexglass/`，并按 Apache-2.0 第 4 条保留原项目的 `LICENSE`
-与 `NOTICE` 归属声明。
+VortexGlass 使用的主题素材来自 **开放版 XJ380**，经
+[Uinxed-Kernel](https://github.com/ViudiraTech/Uinxed-Kernel)（Apache-2.0）整理。
+素材已随源码内置在 `src/vortexglass/assets/themes/vortexglass/`，同目录下的
+`LICENSE` 与 `NOTICE` 是上游的原始文件，按 Apache-2.0 第 4 条原样保留。
+
+内置副本就是默认外观，开箱即用。查找顺序是：`--theme-dir=` 显式指定 →
+环境变量 `VORTEXGLASS_THEME_DIR` → 系统树 `assets/themes/vortexglass/` →
+`/usr/share/themes/vortexglass` → 内置副本，所以系统级安装仍可覆盖它。
+
+归属同时常驻在桌面右下角（`Theme.themeCredit`）。

@@ -69,9 +69,11 @@ python3 tools/manual/check_vortexglass_frost.py --output /tmp/vortexglass-frost 
 
 ## 主题与无显示环境
 
-主题优先使用 `VORTEXGLASS_THEME_DIR` 或系统树的 `assets/themes/vortexglass/`，
-也保留原来的主题搜索规则。素材未安装时服务使用内置的半透明边框，socket 协议仍可用。
-修改主题环境变量后执行 `service vortexglass restart`。
+主题素材内置在 `src/vortexglass/assets/themes/vortexglass/`，开箱即用。查找顺序是
+`--theme-dir=` → 环境变量 `VORTEXGLASS_THEME_DIR` → 系统树
+`assets/themes/vortexglass/` → `/usr/share/themes/vortexglass` → 内置副本，所以
+系统级安装仍可覆盖内置的那份。主题不全或完全缺失时，服务退回内置的半透明边框，
+socket 协议仍可用。修改主题环境变量后执行 `service vortexglass restart`。
 
 独立运行服务与客户端时，把同一个端点路径传给两者：
 
