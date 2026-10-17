@@ -312,6 +312,21 @@ class EEVDFRunQueue:
     def eligible(self, pcb: PCB) -> bool:
         return pcb.vruntime <= self.avg_vruntime() + 1e-9
 
+# Whether a task is actually competing for the CPU: on the run queue, or the one
+# holding it. state == TASK_RUNNING is not the same test — the shell is created
+# Running and is now switched to like any other task, but a caller that used the
+# bare state would also count tasks sitting outside the queue entirely. This is
+# the same population avg_vruntime averages over.
+    def contending(self, pcb: PCB) -> bool:
+        return pcb.pid in self._queued or pcb is self.curr
+
+# Runnable task count, counting the one holding the CPU — the accounting Linux's
+# nr_running does. The queued dict alone excludes curr, so reporting its size as
+# "runnable" reads as an idle system even while a task is running.
+    def nr_running(self) -> int:
+        running = (self.curr is not None and self.curr.state == TASK_RUNNING)
+        return len(self._queued) + (1 if running else 0)
+
 # -- picking a task: pick_eevdf -----------------------------------------
 
 # Return the queued task with the earliest deadline, or None when empty.
@@ -475,6 +490,13 @@ class ProcessTable:
         self.tasks[PID_SHELL] = shell
         for pcb in (idle, init, shell):
             self._index_child(pcb)
+        # The shell is the task actually holding this CPU, so it enters the run
+        # queue and gets switched to like any other. Leaving it out left the
+        # queue permanently empty: sysmon reported curr=- forever, and a task
+        # started by `run` contended with nobody. tick(0) is the same
+        # make-a-decision-now call the benchmark uses to prime the queue.
+        self.rq.enqueue(shell)
+        self.rq.tick(0)
         return {"idle": idle, "init": init, "shell": shell}
 
 # Report whether the process tree has been created.
@@ -648,6 +670,11 @@ class ProcessTable:
             return False  # only SIGCONT clears STOP
         pcb.state = TASK_RUNNING
         self.rq.enqueue(pcb)
+        # 真实调度器里，空闲 CPU 上的唤醒直接上 CPU，不排队等下一次 tick。少了
+        # 这一步，shell 在提示符处阻塞、醒来执行命令时 curr 会一直是空，sysmon
+        # 就会一边报 runnable=1 一边报 curr=-。
+        if self.rq.curr is None:
+            self.rq.tick(0)
 # wakeup_preempt simplified: a woken task with an earlier deadline preempts immediately
         cur = self.rq.curr
         if cur is not None and pcb.deadline < cur.deadline - 1e-9 \
@@ -786,6 +813,44 @@ class ProcessTable:
         return [p for p in rows
                 if p.state in (TASK_RUNNING, TASK_STOPPED, TASK_INTERRUPTIBLE)
                 or p.remote and p.state not in TERMINAL_STATES]
+
+# Plain-dict view of the run queue and the task table, for the shell, the GUI
+# apps and the syscall RPC. Living here means one shape: a field added below
+# reaches every consumer, instead of having to be mirrored in each of them (the
+# host snapshot and the in-process one used to be built separately and drifted).
+    def snapshot(self) -> Dict[str, Any]:
+        rq = self.rq
+        curr = rq.curr
+        # avg_vruntime decides eligibility, so it is computed once and every
+        # task's lag is measured against the same value.
+        avg = rq.avg_vruntime()
+        # Lag and eligibility only mean anything for tasks competing for the
+        # CPU: a sleeping task is off the run queue and has no claim to be ahead
+        # of or behind the average.
+        tasks = []
+        for p in self.list_procs():
+            contending = rq.contending(p)
+            tasks.append({
+                "pid": p.pid, "ppid": p.ppid, "comm": p.comm, "state": p.state,
+                "nice": p.nice, "weight": p.weight, "vruntime": p.vruntime,
+                "deadline": p.deadline, "slice": p.slice,
+                "cpu": p.sum_exec_runtime, "nvcsw": p.nvcsw, "nivcsw": p.nivcsw,
+                "kind": p.kind, "remote": bool(p.remote),
+                "lag": (avg - p.vruntime) if contending else None,
+                "eligible": (p.vruntime <= avg + 1e-9) if contending else None,
+            })
+        return {
+            "booted": self.is_booted(),
+            "rq": {"runnable": rq.nr_running(), "avg": avg,
+                   "min": rq.min_vruntime,
+                   "switches": rq.nr_switches, "ticks": rq.nr_ticks,
+                   "base_slice": rq.base_slice,
+                   "curr_pid": curr.pid if curr is not None else None,
+                   "curr_comm": curr.comm if curr is not None else "-"},
+            "timeline": list(rq.timeline)[-24:],
+            "tasks": tasks,
+            "recent": list(self.recent),
+        }
 
 # Return one PCB by PID.
     def get(self, pid: int) -> Optional[PCB]:

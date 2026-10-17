@@ -265,6 +265,13 @@ def loop():
 
 def _command_loop():
     last = None
+    shell = _process.get(_process.PID_SHELL)
+    # The shell is blocked on the terminal between commands, which is what it
+    # really is: sleeping in read(), not burning CPU. Parking it here is what
+    # lets the tick below charge prompt idle-time to whatever is actually
+    # queued, instead of to the shell.
+    if shell is not None:
+        _process.block(shell.pid)
     while not _shell_stop_requested:
         now = time.monotonic()
         if last is not None:
@@ -280,7 +287,15 @@ def _command_loop():
         if not command.strip():
             continue
         try:
-            main.handle_command(command)
+            # Wake the shell for the command itself and park it again after, so
+            # the intervals it is charged are the ones it really spent running.
+            if shell is not None:
+                _process.unblock(shell.pid)
+            try:
+                main.handle_command(command)
+            finally:
+                if shell is not None:
+                    _process.block(shell.pid)
         except KeyboardInterrupt:
             print()
         except Exception as e:

@@ -186,7 +186,7 @@ def cmd_sysmon():
     except Exception as e:
         print(f"槽位状态不可用: {e}")
     rq = _p._table().rq
-    print(f"调度器: EEVDF | runnable={len(rq._queued)} curr="
+    print(f"调度器: EEVDF | runnable={rq.nr_running()} curr="
           f"{rq.curr.comm if rq.curr else '-'} | 切换次数={rq.nr_switches}")
     cmd_ps()
     print()

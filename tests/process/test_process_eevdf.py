@@ -79,3 +79,74 @@ def test_deadline_advances_after_slice():
     d0 = cur.deadline
     rq.tick(cur.slice + 1.0)
     assert cur.deadline > d0
+
+
+# Boot leaves the shell scheduled rather than parked beside the queue: it is the
+# task holding the CPU, so there is a real curr to report and anything started
+# later has something to contend with.
+def test_boot_puts_the_shell_on_the_cpu():
+    P.boot_system()
+    table = P._table()
+    assert table.rq.curr is P.get(P.PID_SHELL)
+    assert table.rq.nr_running() == 1
+
+
+# nr_running counts the task holding the CPU, the way Linux's counter does. The
+# queued dict alone excludes curr, so reporting its size would read as an idle
+# system while a task is running.
+def test_nr_running_counts_the_current_task():
+    P.boot_system()
+    table = P._table()
+    assert table.rq.nr_running() == 1              # the shell, as curr
+    P.spawn("worker")
+    assert table.rq.nr_running() == 2              # worker queued, shell still curr
+    P.block(P.PID_SHELL)
+    assert table.rq.nr_running() == 1
+
+
+# Every task the table calls Running is on the run queue or holding the CPU. The
+# shell is the case that used to break this invariant, and a caller that trusted
+# the bare state reported it as owed every millisecond the queue had advanced.
+def test_running_tasks_are_always_contending():
+    P.boot_system()
+    table = P._table()
+    worker = P.spawn("worker")
+    for pcb in (P.get(P.PID_SHELL), worker):
+        assert pcb.state == P.TASK_RUNNING
+        assert table.rq.contending(pcb) is True
+    P.block(worker.pid)
+    assert worker.state != P.TASK_RUNNING
+    assert table.rq.contending(worker) is False
+
+
+# Parking the shell hands the CPU to whatever is queued, which is what makes
+# prompt idle-time accrue to a simulated task instead of to the shell.
+def test_parking_the_shell_hands_the_cpu_to_a_queued_task():
+    P.boot_system()
+    table = P._table()
+    worker = P.spawn("worker")
+    P.block(P.PID_SHELL)
+    for _ in range(4):
+        P.sched_tick(4.0)
+    assert table.rq.curr is worker
+    assert worker.vruntime > 0.0 and worker.sum_exec_runtime > 0.0
+
+
+# The snapshot reports lag only for tasks actually competing, measured against
+# the same average it reports.
+def test_snapshot_reports_lag_only_for_contending_tasks():
+    P.boot_system()
+    table = P._table()
+    worker = P.spawn("worker")
+    P.block(P.PID_SHELL)
+    for _ in range(4):
+        P.sched_tick(4.0)
+
+    snap = table.snapshot()
+    row = next(t for t in snap["tasks"] if t["pid"] == worker.pid)
+    assert row["lag"] is not None
+    assert abs((snap["rq"]["avg"] - row["vruntime"]) - row["lag"]) < 1e-6
+
+    P.block(worker.pid)
+    row = next(t for t in table.snapshot()["tasks"] if t["pid"] == worker.pid)
+    assert row["lag"] is None and row["eligible"] is None
