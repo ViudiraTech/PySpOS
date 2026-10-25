@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 8（自研内核系统）；SpaceOS 6 / 7 已停止开发，仅作存档。">
+  <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 9（SpaceKernel 3.0 自研内核与 Linux ABI 用户态）；SpaceOS 6 / 7 / 8 保留为历史项目。">
   <title>GoutouStdio — PySpOS 与 SpaceOS</title>
 <link rel="stylesheet" href="css/tokens.css?v=20261011">
   <link rel="stylesheet" href="css/style.css?v=20261011">
@@ -23,6 +23,7 @@
         <ul>
           <li><a href="index.html" aria-current="page">首页</a></li>
           <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html">SpaceOS 9</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
           <li><a href="spaceos6.html">6 · 存档</a></li>
           <li><a href="spaceos7.html">7 · 存档</a></li>
@@ -47,7 +48,7 @@
           <p class="lede">从 Python 中的进程调度，到 UEFI 上的自研内核。我们是一群学生，把对操作系统的好奇，写成能运行、能阅读、能继续探索的开源项目。</p>
           <div class="actions">
             <a class="btn btn-primary" href="pyspos.html">探索 PySpOS <span aria-hidden="true">↗</span></a>
-            <a class="btn btn-secondary" href="spaceos8.html">认识 SpaceOS 8</a>
+            <a class="btn btn-secondary" href="spaceos9.html">认识 SpaceOS 9</a>
 
           </div>
           <div class="hero-foot" aria-label="项目概况">
@@ -81,6 +82,7 @@
     <nav class="wrap project-index" aria-label="项目索引">
       <span class="eyebrow">正在构建</span>
       <a href="#pyspos-title">PySpOS <span aria-hidden="true">↓</span></a>
+      <a href="#spaceos9-title">SpaceOS 9 <span aria-hidden="true">↓</span></a>
       <a href="#spaceos-title">SpaceOS 8 <span aria-hidden="true">↓</span></a>
       <a href="#archive-title" class="archive-link">历史项目与存档 <span aria-hidden="true">↓</span></a>
     </nav>
@@ -134,6 +136,27 @@
       </div>
     </section>
 
+    <section class="section project-story" data-product="SpaceOS 9" data-status="active" aria-labelledby="spaceos9-title">
+      <div class="wrap editorial-grid">
+        <header class="story-heading">
+          <span class="eyebrow">D / SpaceKernel 3.0</span>
+          <h2 class="story-title" id="spaceos9-title">SpaceOS 9<span class="title-period">.</span></h2>
+          <p class="story-tagline">自己写内核，<br>也自己写整条用户态链路。</p>
+          <p class="project-status"><span class="badge badge-warn">公开预览</span> x86_64 · Linux ABI</p>
+          <p class="story-links"><a href="spaceos9.html">阅读项目介绍 ↗</a><a href="spaceos9-download.html">获取镜像 ↗</a></p>
+        </header>
+        <div class="story-copy">
+          <p class="story-lead">从 Rust 内核一直走到能交互的 shell。</p>
+          <p>SpaceKernel 3.0 保留 Linux ABI，加入 FAT32 根盘、PID 1 systemg、splibc 用户态与动态 BusyBox；VFS 使用 Linux 语义的 dentry/inode cache。x86_64 镜像已在 QEMU/UEFI 实跑，aarch64/riscv64 通过编译检查。</p>
+          <dl class="story-details">
+            <div><dt>内核</dt><dd>SpaceKernel 3.0（SPK）· Rust · soft-float</dd></div>
+            <div><dt>用户态</dt><dd>splibc、systemg、sh · 动态 musl/BusyBox</dd></div>
+            <div><dt>验证</dt><dd>三架构 cargo check · x86_64 SELFTEST_OK / QEMU 启动</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
     <section class="section project-story" data-product="SpaceOS 8" data-status="active" aria-labelledby="spaceos-title">
       <div class="wrap editorial-grid">
         <header class="story-heading">
@@ -166,7 +189,7 @@
         <div class="archive-index">
           <div data-product="SpaceOS 6" data-status="retired"><a href="spaceos6.html">SpaceOS 6 <span aria-hidden="true">↗</span></a><span>2024 · UEFI 的第一次正式尝试</span><span class="badge">已停更</span></div>
           <div data-product="SpaceOS 7" data-status="retired"><a href="spaceos7.html">SpaceOS 7 <span aria-hidden="true">↗</span></a><span>2026 · 完全自研内核的探索</span><span class="badge">已停更</span></div>
-          <p>历史源码与说明继续保留。当前维护的项目是 <a href="pyspos.html">PySpOS</a> 与 <a href="spaceos8.html">SpaceOS 8</a>。</p>
+          <p>历史源码与说明继续保留。当前维护的项目是 <a href="pyspos.html">PySpOS</a> 与 <a href="spaceos9.html">SpaceOS 9</a>；SpaceOS 8 保留为上一代自研内核项目。</p>
         </div>
       </div>
     </section>
@@ -235,6 +258,8 @@
           <h2>产品</h2>
           <ul>
             <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos9.html">SpaceOS 9</a></li>
+            <li><a href="spaceos9-download.html">SpaceOS 9 下载</a></li>
             <li><a href="spaceos8.html">SpaceOS 8</a></li>
             <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
             <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>

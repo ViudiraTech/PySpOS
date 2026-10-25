@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SpaceOS 9：SpaceKernel 3.0 自研内核、Linux ABI、FAT32 根盘、systemg PID 1、splibc 与动态 BusyBox。x86_64 公开预览镜像已开放下载。">
+  <title>SpaceOS 9 · SpaceKernel 3.0 | GoutouStdio</title>
+<link rel="stylesheet" href="css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-init.js?v=20261011"></script>
+</head>
+<body class="page-spaceos8 page-spaceos9">
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="index.html">首页</a></li>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html" aria-current="page">SpaceOS 9</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          <li><a href="spaceos6.html">6 · 存档</a></li>
+          <li><a href="spaceos7.html">7 · 存档</a></li>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="ota/index.html">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head hero-space">
+      <div class="page-head-grid"><div>
+      <span class="eyebrow">SpaceOS 9 · SpaceKernel 3.0 · x86_64 公开预览</span>
+      <h1>第九束光，<br>整条链路。</h1>
+      <p class="lede">从 Rust 内核、Linux ABI 系统调用、FAT32 根盘，到 PID 1 服务管理器和能交互的 shell。SpaceOS 9 不再只是引导样例，而是一条可以登录、可以运行真实 Linux 程序的完整链路。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="spaceos9-download.html">下载公开预览镜像</a>
+        <a class="btn btn-secondary" href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">阅读内核源码</a>
+        <a class="btn btn-secondary" href="spaceos8.html">对比 SpaceOS 8</a>
+      </div>
+      <div class="meta-row" aria-label="版本信息">
+        <span>SpaceKernel 3.0（SPK）</span>
+        <span>x86_64</span>
+        <span>Rust</span>
+        <span>Linux ABI</span>
+      </div>
+      </div>
+      <figure class="space-preview">
+        <div class="frame">
+          <div class="winbar"><span class="winbar-title">SpaceOS 9 / SPK 3.0</span><span class="status-dot" aria-hidden="true"></span></div>
+          <img src="spaceos9.png" alt="SpaceOS 9 标志：青色、紫色与白色的环形数字 9" width="420" height="420" fetchpriority="high">
+        </div>
+        <figcaption><span>项目标志 / ViudiraTech</span><a href="spaceos9-download.html">获取预览镜像 ↗</a></figcaption>
+      </figure></div>
+      <nav class="section-jump" aria-label="本页目录"><a href="#overview-title">内核、ABI 与用户态</a><a href="#changes-title">这一版真正做了什么</a><a href="#boundary-title">验证边界</a><a href="#license-title">源码与许可</a></nav>
+    </div>
+
+    <section class="section content-section section-overview" aria-labelledby="overview-title">
+      <div class="wrap">
+        <div class="notice notice-info" role="status">
+          <span class="notice-icon" aria-hidden="true">i</span>
+          <div>
+            <p class="notice-title">公开预览，不是“功能清单”</p>
+            <div class="notice-body">
+              <p>当前镜像是 x86_64 开发预览。内核自测、三架构编译检查与 QEMU 启动已通过；用户态与驱动覆盖仍在推进。下载前请阅读 <a href="spaceos9-download.html#usage">使用声明</a>。</p>
+            </div>
+          </div>
+        </div>
+        <div class="section-head">
+          <span class="eyebrow">概览</span>
+          <h2 class="section-title" id="overview-title">内核、ABI 与用户态</h2>
+          <p class="section-lede">SpaceOS 9 的目标不是另造一套用户接口，而是尽量把 Linux 现有的进程、文件与终端语义实现完整，让现成程序能直接跑起来。</p>
+        </div>
+        <dl class="metric-exhibits" aria-label="SpaceOS 9 概览">
+          <div class="metric-exhibit"><dt>内核</dt><dd>SpaceKernel 3.0</dd><p>Rust、soft-float、多架构；x86_64 优先</p></div>
+          <div class="metric-exhibit"><dt>ABI</dt><dd>Linux 64-bit</dd><p>ELF/PIE/PT_INTERP、syscall、信号、futex、epoll、AF_UNIX</p></div>
+          <div class="metric-exhibit"><dt>根盘</dt><dd>FAT32</dd><p>Limine 模块 rootfs、只读挂载、/dev /proc /sys /tmp /run</p></div>
+          <div class="metric-exhibit"><dt>PID 1</dt><dd>systemg</dd><p>服务单元、依赖排序、SIGCHLD 回收与重启</p></div>
+          <div class="metric-exhibit"><dt>用户态</dt><dd>splibc</dd><p>freestanding C 库、sh、systemg；动态 BusyBox 通过 musl 运行</p></div>
+          <div class="metric-exhibit"><dt>终端</dt><dd>ash + job control</dd><p>raw termios、poll、控制终端、前台进程组、Ctrl-C / Ctrl-Z</p></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section content-section section-overview" aria-labelledby="changes-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">实现</span>
+          <h2 class="section-title" id="changes-title">这一版真正做了什么</h2>
+        </div>
+        <ul class="feature-grid">
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3"></path><path d="M8 12h8m-8 4h5"></path></svg></span>
+            <div class="feature-title">VFS dentry / inode cache <span class="feature-meta">Linux 语义</span></div>
+            <div class="feature-body"><p>正/负 dentry、inode 身份、LRU 回收、路径前缀失效；procfs/sysfs/devtmpfs 强制重新验证，避免设备注销后仍查到旧目录。FAT32 大文件读取同时做了簇链缓存。</p></div>
+          </li>
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
+            <div class="feature-title">动态链接与 BusyBox <span class="feature-meta">PT_INTERP</span></div>
+            <div class="feature-body"><p>内核装载 ELF 解释器与 PIE；镜像内提供 musl 动态加载器和 BusyBox standalone shell。ash 可以真正接收键盘/串口输入，并执行 applet。</p></div>
+          </li>
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7z"></path><path d="M8 12l3 3 5-6"></path></svg></span>
+            <div class="feature-title">进程、信号与终端 <span class="feature-meta">Linux ABI</span></div>
+            <div class="feature-body"><p>clone 线程、进程组/会话、wait4/waitid、POSIX 信号、futex、epoll、signalfd、timerfd、AF_UNIX；终端支持控制终端、前后台组与 raw 模式。</p></div>
+          </li>
+          <li class="feature-card card-ok"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
+            <div class="feature-title">从 PID 1 到 shell <span class="feature-meta">systemg</span></div>
+            <div class="feature-body"><p>systemg 作为 PID 1 解析 <code>/etc/systemg/*.service</code>，按依赖启动服务、回收孤儿进程，并拉起控制台 shell；splibc 提供静态 C 运行环境与自带 sh。</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section content-section section-proof" aria-labelledby="boundary-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">验证边界</span>
+          <h2 class="section-title" id="boundary-title">哪些验证过，哪些还没有</h2>
+          <p class="section-lede">这里只写实际跑过的结果；未验收的部分明确标注，不用占位值冒充。</p>
+        </div>
+        <ul class="feature-grid">
+          <li class="feature-card card-ok"><div class="feature-title">x86_64 实跑 <span class="feature-meta">已验收</span></div><div class="feature-body"><p>UEFI/QEMU 启动、systemg PID 1、BusyBox 动态加载、ash 交互、<code>uname/id/nproc/ls/cat</code>、VFS dcache 自测、<code>SELFTEST_OK</code> 与三架构 <code>cargo check</code>。</p></div></li>
+          <li class="feature-card card-warn"><div class="feature-title">aarch64 / riscv64 <span class="feature-meta">仅编译检查</span></div><div class="feature-body"><p>内核可通过编译检查；用户态、rootfs 与启动链路尚未在该镜像中验收。</p></div></li>
+          <li class="feature-card card-warn"><div class="feature-title">真实硬件与 GPU <span class="feature-meta">未验收</span></div><div class="feature-body"><p>当前验证在 QEMU 的 VirtIO GPU 2D 链路完成；真实 GPU、音频、网络与睡眠唤醒等未纳入本镜像承诺。</p></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section content-section section-contact" aria-labelledby="license-title">
+      <div class="wrap">
+        <div class="band">
+          <span class="eyebrow">源码与许可</span>
+          <h2 id="license-title">源码公开，第三方组件各自遵循其许可证</h2>
+          <p class="band-lede">SpaceOS 9 的源码位于 ViudiraTech/SpaceOS-9。镜像包含 BusyBox、musl、Limine 等第三方组件；下载页提供第三方许可与源码获取说明。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="spaceos9-download.html">下载 SpaceOS 9</a>
+            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">SpaceOS-9 源码</a>
+            <a class="btn btn-secondary" href="spaceos9/THIRD_PARTY_NOTICES.md">第三方许可</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <a href="index.html"><span class="pager-dir">← 上一页</span><span class="pager-name">首页</span></a>
+        <a class="pager-next" href="spaceos9-download.html"><span class="pager-dir">下一页 →</span><span class="pager-name">下载 SpaceOS 9</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos9.html">SpaceOS 9</a></li>
+            <li><a href="spaceos9-download.html">SpaceOS 9 下载</a></li>
+            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="requirements.html">配置要求</a></li>
+            <li><a href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">SpaceOS-9</a></li>
+            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="index.html#history-title">发展历程</a></li>
+            <li><a href="index.html#contact-title">联系我们</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js?v=20261011"></script>
+</body>
+</html>

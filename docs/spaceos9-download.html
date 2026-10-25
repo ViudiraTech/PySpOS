@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SpaceOS 9 x86_64 公开预览镜像下载：SpaceKernel 3.0、Linux ABI、FAT32 根盘与动态 BusyBox。下载前请阅读使用声明并核对 SHA-256。">
+  <title>下载 SpaceOS 9 | SpaceKernel 3.0 | GoutouStdio</title>
+<link rel="stylesheet" href="css/tokens.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
+  <script src="js/theme-init.js?v=20261011"></script>
+</head>
+<body class="page-spaceos8-download page-spaceos9-download">
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+        <ul>
+          <li><a href="index.html">首页</a></li>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html">SpaceOS 9</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          <li><a href="spaceos6.html">6 · 存档</a></li>
+          <li><a href="spaceos7.html">7 · 存档</a></li>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="ota/index.html">下载</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+        </ul>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="site-main">
+    <div class="wrap page-head download-hero"><div class="download-hero-grid"><div>
+      <span class="eyebrow">SpaceOS 9 · SpaceKernel 3.0 · x86_64 公开预览</span>
+      <h1>下载公开预览镜像。</h1>
+      <p class="lede">可启动的 x86_64 ISO。包含我们自己的内核、FAT32 根盘、systemg PID 1、splibc 与可交互的 BusyBox ash。下载前请先读使用声明，下载后请核对 SHA-256。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="SpaceOS-9-x86_64.iso" download="SpaceOS-9-x86_64.iso">下载镜像 · 69.8 MiB</a>
+        <a class="btn btn-secondary" href="#usage">先读使用声明</a>
+        <a class="btn btn-secondary" href="spaceos9.html">返回介绍</a>
+      </div>
+    </div><aside class="image-file-card" aria-label="镜像概况"><span class="eyebrow">BOOTABLE IMAGE / PREVIEW</span><div class="disc-art" aria-hidden="true"><span>S9</span></div><h2>SpaceOS 9 <span>x86_64</span></h2><p>x86_64 / ISO / 69.8 MiB</p><a class="btn btn-primary" href="SpaceOS-9-x86_64.iso" download="SpaceOS-9-x86_64.iso">获取预览镜像 ↗</a><a href="#usage">下载前阅读使用声明</a></aside></div><nav class="section-jump" aria-label="本页目录"><a href="#current-title">公开预览镜像</a><a href="#boot-title">启动方式</a><a href="#usage">下载前必须接受的条款</a><a href="#third-party">第三方组件</a></nav></div>
+
+    <section class="section content-section section-current" aria-labelledby="current-title">
+      <div class="wrap">
+        <div class="notice notice-warn" role="note">
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <p class="notice-title">开发预览，不作任何担保</p>
+            <div class="notice-body">
+              <p>按“现状”提供。下载即表示你接受自行承担全部风险，并只在虚拟机、测试机或可抛弃磁盘上使用。不要在主力设备或唯一数据副本上运行。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <span class="eyebrow">当前版本</span>
+          <h2 class="section-title" id="current-title">公开预览镜像</h2>
+          <p class="section-lede">x86_64 UEFI 可启动 ISO。默认启动 systemg（PID 1），由它拉起控制台 BusyBox ash；镜像内同时保留 splibc 自带的 sh 与测试程序。</p>
+        </div>
+        <div class="download-workspace"><div class="package-metadata"><dl class="facts summary-grid" aria-label="镜像文件信息">
+          <div class="fact"><dt>版本</dt><dd>SpaceOS 9 / SpaceKernel 3.0 #13 · 2026-10-25</dd></div>
+          <div class="fact"><dt>内核 / 架构</dt><dd class="mono">SpaceKernel 3.0（SPK） / x86_64</dd></div>
+          <div class="fact"><dt>文件大小</dt><dd class="mono">73,175,040 bytes（69.8 MiB）</dd></div>
+          <div class="fact"><dt>SHA-256</dt><dd class="mono">2e6164b0ee92a1e4852f108b2b247e82005013fc10072d9f4a0be3f1eb9ccdb1</dd></div>
+        </dl></div><div class="checksum-panel"><span class="eyebrow">VERIFY YOUR DOWNLOAD</span><h3>确认镜像完整，再启动。</h3><div class="prose">
+          <p>校验命令（二选一）：</p>
+          <pre class="code">sha256sum SpaceOS-9-x86_64.iso</pre>
+          <pre class="code">Get-FileHash .\SpaceOS-9-x86_64.iso -Algorithm SHA256</pre>
+          <p>也可以直接下载 <a href="SpaceOS-9-x86_64.iso.sha256">SHA-256 校验文件</a>。</p>
+        </div></div></div>
+        <div class="actions">
+          <a class="btn btn-primary" href="SpaceOS-9-x86_64.iso" download="SpaceOS-9-x86_64.iso">下载镜像</a>
+          <a class="btn btn-secondary" href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">查看源码</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section content-section section-release-history" aria-labelledby="boot-title">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">启动方式</span>
+          <h2 class="section-title" id="boot-title">在 QEMU / UEFI 上启动</h2>
+          <p class="section-lede">需要 x86_64 QEMU、OVMF UEFI 固件和至少 512 MiB 内存。推荐 Q35 机型与 VirtIO GPU 2D。</p>
+        </div>
+        <ul class="feature-grid">
+          <li class="feature-card card-info"><div class="feature-title">QEMU 命令 <span class="feature-meta">Linux 主机示例</span></div><div class="feature-body"><pre class="code">qemu-system-x86_64 -machine q35 -m 512 -smp 4 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
+  -device virtio-gpu-pci -cdrom SpaceOS-9-x86_64.iso</pre><p>建议使用图形窗口；串口控制台也可用 <code>-serial stdio</code>。</p></div></li>
+          <li class="feature-card card-ok"><div class="feature-title">启动后 <span class="feature-meta">交互验证</span></div><div class="feature-body"><p>systemg 会启动 console shell。看到 <code>/ #</code> 后可执行 <code>uname -a</code>、<code>id</code>、<code>nproc</code>、<code>ls</code>、<code>cat /etc/os-release</code>。退出 shell 会由 systemg 重新拉起。</p></div></li>
+          <li class="feature-card card-warn"><div class="feature-title">已知边界 <span class="feature-meta">诚实标注</span></div><div class="feature-body"><p>真实 GPU、音频、网络与部分 Linux ABI 仍在推进；aarch64/riscv64 用户态未包含在此镜像中。</p></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section content-section section-usage" aria-labelledby="usage">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">使用声明</span>
+          <h2 class="section-title" id="usage">下载前必须接受的条款</h2>
+          <p class="section-lede">这里不是功能宣传，而是使用边界。下载即表示你已阅读并接受以下全部条款。</p>
+        </div>
+        <ul class="feature-grid">
+          <li class="feature-card card-warn"><div class="feature-title">按现状提供，不作任何担保 <span class="feature-meta">核心条款</span></div><div class="feature-body"><p>SpaceOS 9 公开预览镜像是实验性构建，按“现状”和“可用状态”提供，不作任何明示或暗示担保，包括但不限于适销性、特定用途适用性、准确性、完整性、安全性、稳定性和不侵权。</p></div></li>
+          <li class="feature-card card-warn"><div class="feature-title">只能用于可抛弃环境 <span class="feature-meta">使用范围</span></div><div class="feature-body"><p>只能在虚拟机、测试机或可抛弃磁盘上使用。不得在主力设备、生产环境、重要数据分区或唯一数据副本上运行、安装或写入本镜像。</p></div></li>
+          <li class="feature-card card-warn"><div class="feature-title">数据丢失与设备损坏风险自担 <span class="feature-meta">责任限制</span></div><div class="feature-body"><p>使用本镜像可能造成数据丢失、系统无法启动、硬件异常或外设不可用。在法律允许的最大范围内，作者和贡献者不对任何直接或间接损失负责。使用前必须自行完整备份。</p></div></li>
+          <li class="feature-card card-info"><div class="feature-title">版本识别与反馈 <span class="feature-meta">校验优先</span></div><div class="feature-body"><p>必须用本页公布的 SHA-256 确认镜像后再使用。反馈请通过 <a href="https://github.com/ViudiraTech/SpaceOS-9/issues" rel="noopener" target="_blank">SpaceOS-9 issue tracker</a>；是否采纳或修复不作承诺。</p></div></li>
+        </ul>
+        <div class="band">
+          <span class="eyebrow">下载</span>
+          <h2>接受条款的话，镜像在这里</h2>
+          <p class="band-lede">下载后先核对 SHA-256，确认无误再挂给虚拟机。镜像内含第三方组件，请同时阅读第三方许可说明。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="SpaceOS-9-x86_64.iso" download="SpaceOS-9-x86_64.iso">下载 SpaceOS 9 · 69.8 MiB</a>
+            <a class="btn btn-secondary" href="spaceos9/THIRD_PARTY_NOTICES.md">第三方许可与源码</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section content-section section-usage" aria-labelledby="third-party">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">第三方组件</span>
+          <h2 class="section-title" id="third-party">BusyBox、musl 与 Limine</h2>
+          <p class="section-lede">镜像包含 GPL/MIT/BSD 第三方组件。完整许可、版本、校验值与源码获取方式见 <a href="spaceos9/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <nav class="pager" aria-label="上下页">
+        <a href="spaceos9.html"><span class="pager-dir">← 上一页</span><span class="pager-name">SpaceOS 9</span></a>
+        <a class="pager-next" href="requirements.html"><span class="pager-dir">下一页 →</span><span class="pager-name">配置要求</span></a>
+      </nav>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
+          <p class="footer-note">学生自发组织的项目，不涉及任何商业活动。</p>
+        </div>
+        <nav class="footer-col" aria-label="产品">
+          <h2>产品</h2>
+          <ul>
+            <li><a href="pyspos.html">PySpOS</a></li>
+            <li><a href="spaceos9.html">SpaceOS 9</a></li>
+            <li><a href="spaceos9-download.html">SpaceOS 9 下载</a></li>
+            <li><a href="spaceos8.html">SpaceOS 8</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="资源">
+          <h2>资源</h2>
+          <ul>
+            <li><a href="requirements.html">配置要求</a></li>
+            <li><a href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">SpaceOS-9</a></li>
+            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="项目">
+          <h2>项目</h2>
+          <ul>
+            <li><a href="index.html#history-title">发展历程</a></li>
+            <li><a href="index.html#contact-title">联系我们</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span>© 2022–2026 GoutouStdio</span>
+        <span>GoutouStdio 不是真实的公司。</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js?v=20261011"></script>
+</body>
+</html>
