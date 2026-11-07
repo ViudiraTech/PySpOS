@@ -148,7 +148,11 @@ def main():
         'page': {'dark': rd('--pg-bg-page'), 'light': rl('--pg-bg-page')},
         'raised': {'dark': rd('--pg-bg-raised'), 'light': rl('--pg-bg-raised')},
         'sunk': {'dark': rd('--pg-bg-sunken'), 'light': rl('--pg-bg-sunken')},
-        'band': {'dark': rd('--pg-band-bg'), 'light': rl('--pg-band-bg')},
+        'ink': {'dark': rd('--pg-ink'), 'light': rl('--pg-ink')},
+        'soft': {'dark': rd('--pg-accent-soft'), 'light': rl('--pg-accent-soft')},
+        'tile-clay': {'dark': rd('--pg-tile-clay'), 'light': rl('--pg-tile-clay')},
+        'tile-sky': {'dark': rd('--pg-tile-sky'), 'light': rl('--pg-tile-sky')},
+        'tile-sage': {'dark': rd('--pg-tile-sage'), 'light': rl('--pg-tile-sage')},
         'term': {'dark': rd('--pg-term-bg'), 'light': rl('--pg-term-bg')},
     }
 
@@ -160,14 +164,22 @@ def main():
         ('正文 / 凸起面', '--pg-fg-1', 'raised', 4.5),
         ('次要 / 凸起面', '--pg-fg-2', 'raised', 4.5),
         ('次要 / 下沉面', '--pg-fg-2', 'sunk', 4.5),
+        ('弱化 / 下沉面', '--pg-fg-3', 'sunk', 4.5),
+        ('链接 accent / 下沉面', '--pg-accent', 'sunk', 4.5),
+        ('链接 accent / 提示底', '--pg-accent', 'soft', 4.5),
+        ('主按钮文字 / 按钮底', '--pg-on-ink', 'ink', 4.5),
+        ('正文 / 黏土色块', '--pg-fg-1', 'tile-clay', 4.5),
+        ('次要 / 黏土色块', '--pg-fg-2', 'tile-clay', 4.5),
+        ('正文 / 天蓝色块', '--pg-fg-1', 'tile-sky', 4.5),
+        ('次要 / 天蓝色块', '--pg-fg-2', 'tile-sky', 4.5),
+        ('正文 / 鼠尾草色块', '--pg-fg-1', 'tile-sage', 4.5),
+        ('次要 / 鼠尾草色块', '--pg-fg-2', 'tile-sage', 4.5),
         # line-1/line-2 are purely decorative separators (WCAG 1.4.11 exempts decoration);
         # control borders use --pg-line-strong instead, which is what is measured here.
         ('控件边界 strong / 页面底', '--pg-line-strong', 'page', 3.0),
-        ('反白带文字 / 带底', '--pg-band-fg', 'band', 4.5),
-        ('反白带次要 / 带底', '--pg-band-mute', 'band', 4.5),
         ('终端正文 / 终端底', '--pg-term-fg', 'term', 4.5),
         ('终端弱化 / 终端底', '--pg-term-dim', 'term', 4.5),
-        ('终端提示绿 / 终端底', '--pg-term-green', 'term', 3.0),
+        ('终端提示符 / 终端底', '--pg-term-accent', 'term', 4.5),
     ]
     print(f"{'检查项':28} {'暗色':>10} {'亮色':>10}  判定")
     print('-' * 70)

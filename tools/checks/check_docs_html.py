@@ -20,6 +20,9 @@ from urllib.parse import urlsplit
 REPO = str(Path(__file__).resolve().parents[2])
 DOCS = os.path.join(REPO, "docs")
 
+sys.path.insert(0, os.path.join(REPO, "tools"))
+import sync_docs_chrome  # noqa: E402
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
         "meta", "param", "source", "track", "wbr"}
 
@@ -114,6 +117,39 @@ class ProductCheck(HTMLParser):
         self.depth -= 1
 
 
+class NoticeCheck(HTMLParser):
+    """Collect the text and links of the first warning notice on a page."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.start = None
+        self.seen = False
+        self.text = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag not in VOID:
+            self.depth += 1
+        if not self.seen and "notice-warn" in (attrs.get("class") or "").split():
+            self.seen = True
+            self.start = self.depth
+        if self.start is not None and tag == "a":
+            self.links.append(attrs.get("href", ""))
+
+    def handle_data(self, data):
+        if self.start is not None:
+            self.text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in VOID:
+            return
+        if self.start is not None and self.depth == self.start:
+            self.start = None
+        self.depth -= 1
+
+
 # Project state checks must keep working when the content layout changes.
 def check_product_states():
     errs = []
@@ -121,7 +157,7 @@ def check_product_states():
     if os.path.exists(idx):
         parser = ProductCheck()
         parser.feed(Path(idx).read_text(encoding="utf-8"))
-        expected = {"PySpOS": "active", "SpaceOS 8": "active",
+        expected = {"PySpOS": "active", "SpaceOS 9": "active", "SpaceOS 8": "active",
                     "SpaceOS 6": "retired", "SpaceOS 7": "retired"}
         names = [product["name"] for product in parser.products]
         if sorted(names) != sorted(expected):
@@ -133,27 +169,43 @@ def check_product_states():
                 errs.append(f"项目 {name}: 维护状态 {status} 不正确")
             if status == "retired" and "已停更" not in text:
                 errs.append(f"项目 {name}: 未明确标注已停更")
-            if status == "active" and not any(word in text for word in ("维护中", "抢先体验")):
+            if status == "active" and not any(word in text for word in ("维护中", "公开预览", "抢先体验")):
                 errs.append(f"项目 {name}: 缺少维护状态说明")
             if not any(link and not link.startswith("#") for link in product["links"]):
                 errs.append(f"项目 {name}: 没有可点击出口")
 
-    # The SpaceOS 6/7 detail pages need a retirement notice pointing at PySpOS
+    # The SpaceOS 6/7 detail pages need a retirement notice that points at the maintained projects
     for ver in ("6", "7"):
         p = os.path.join(DOCS, f"spaceos{ver}.html")
         if not os.path.exists(p):
             continue
-        s = open(p, encoding="utf-8").read()
-        m = re.search(r'<div class="notice notice-warn"[^>]*>(.*?)</div>\s*</div>',
-                      s, re.S)
-        if not m:
+        notice = NoticeCheck()
+        notice.feed(open(p, encoding="utf-8").read())
+        if not notice.seen:
             errs.append(f"spaceos{ver}.html: 缺少停更提示块（.notice.notice-warn）")
             continue
-        banner = m.group(1)
-        if "停止开发" not in banner:
+        if "停止开发" not in "".join(notice.text):
             errs.append(f"spaceos{ver}.html: 提示块未明确写「停止开发」")
-        if "pyspos.html" not in banner:
+        if "pyspos.html" not in notice.links:
             errs.append(f"spaceos{ver}.html: 提示块未指向当前维护的 PySpOS")
+        if "spaceos9.html" not in notice.links:
+            errs.append(f"spaceos{ver}.html: 提示块未指向当前维护的 SpaceOS 9")
+    return errs
+
+
+# Site-wide rules: shared chrome in sync, SpaceOS 9 reachable everywhere, release fallback intact.
+def check_site_rules(pages):
+    errs = list(sync_docs_chrome.check())
+    for p in pages:
+        rel = os.path.relpath(p, DOCS).replace(os.sep, "/")
+        c = check_page(p)
+        if not any(urlsplit(h).path.endswith("spaceos9.html") for h in c.links):
+            errs.append(f"{rel}: 没有指向 spaceos9.html 的链接，导航里缺 SpaceOS 9")
+    releases = os.path.join(DOCS, "ota", "releases.html")
+    if os.path.exists(releases):
+        # build_update.py rewrites this variable from version.json; without it the sync silently skips
+        if "const fallbackVersionData = " not in open(releases, encoding="utf-8").read():
+            errs.append("ota/releases.html: 缺少 const fallbackVersionData，build_update.py 无法同步兜底数据")
     return errs
 
 
@@ -177,6 +229,14 @@ def main():
         total += len(c.errs)
 
     print("-" * 62)
+    site_errs = check_site_rules(pages)
+    if site_errs:
+        print("站点规则:")
+        for e in site_errs:
+            print(f"      - {e}")
+        total += len(site_errs)
+    else:
+        print("站点规则: OK（页眉/菜单/页脚与单一来源一致，每页都能到 SpaceOS 9）")
     state_errs = check_product_states()
     if state_errs:
         print("产品状态一致性:")

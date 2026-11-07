@@ -3,293 +3,186 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GoutouStdio：学生自发组织的技术工作室。当前维护 PySpOS（Python 模拟操作系统）与 SpaceOS 9（SpaceKernel 3.0 自研内核与 Linux ABI 用户态）；SpaceOS 6 / 7 / 8 保留为历史项目。">
-  <title>GoutouStdio — PySpOS 与 SpaceOS</title>
-<link rel="stylesheet" href="css/tokens.css?v=20261011">
-  <link rel="stylesheet" href="css/style.css?v=20261011">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="js/theme-init.js?v=20261011"></script>
+  <meta name="description" content="GoutouStdio 是几名学生自发组织的开源小组，维护 PySpOS（Python 写的模拟操作系统）和 SpaceOS 9（Rust 内核，兼容 Linux ABI）。">
+  <title>GoutouStdio</title>
+  <!-- head:start -->
+  <link rel="stylesheet" href="css/tokens.css?v=5532dea3">
+  <link rel="stylesheet" href="css/style.css?v=8c54b34b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
+  <!-- head:end -->
 </head>
-<body class="page-home">
+<body>
+  <!-- chrome:start -->
+  <script src="js/theme-init.js?v=73514afb"></script>
   <a class="skip-link" href="#main">跳到正文</a>
-
   <header class="site-header">
-    <div class="wrap site-header-inner">
-      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
-        <span class="brand-mark" aria-hidden="true">G</span>
-        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
-      </a>
-      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">GoutouStdio</a>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
         <ul>
-          <li><a href="index.html" aria-current="page">首页</a></li>
           <li><a href="pyspos.html">PySpOS</a></li>
           <li><a href="spaceos9.html">SpaceOS 9</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
-          <li><a href="spaceos6.html">6 · 存档</a></li>
-          <li><a href="spaceos7.html">7 · 存档</a></li>
           <li><a href="requirements.html">配置要求</a></li>
-          <li><a href="ota/index.html">下载</a></li>
+          <li><details class="menu"><summary>下载</summary>
+            <ul>
+              <li><a href="ota/index.html">PySpOS 更新包</a></li>
+              <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
+              <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
+              <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+            </ul>
+          </details></li>
+          <li><details class="menu"><summary>存档</summary>
+            <ul>
+              <li><a href="spaceos7.html">SpaceOS 7</a></li>
+              <li><a href="spaceos6.html">SpaceOS 6</a></li>
+            </ul>
+          </details></li>
           <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
         </ul>
       </nav>
       <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
-        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题">主题</button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false">菜单</button>
       </div>
     </div>
   </header>
-
-  <main id="main" class="site-main">
-    <div class="wrap page-head hero-home">
-      <div class="page-head-grid">
-        <div>
-          <span class="eyebrow">独立学生技术工作室 · 始于 2022</span>
-          <h1>把好奇，<br>写成<span class="hero-accent">操作系统。</span></h1>
-          <p class="lede">从 Python 中的进程调度，到 UEFI 上的自研内核。我们是一群学生，把对操作系统的好奇，写成能运行、能阅读、能继续探索的开源项目。</p>
-          <div class="actions">
-            <a class="btn btn-primary" href="pyspos.html">探索 PySpOS <span aria-hidden="true">↗</span></a>
-            <a class="btn btn-secondary" href="spaceos9.html">认识 SpaceOS 9</a>
-
-          </div>
-          <div class="hero-foot" aria-label="项目概况">
-            <span><strong>02</strong> 个活跃项目</span>
-            <span><strong>100%</strong> 开放源码</span>
-            <span><strong>Python / C</strong> 从模拟到内核</span>
-          </div>
-        </div>
-        <figure class="architecture-lab" aria-labelledby="system-caption">
-          <figcaption class="lab-bar" id="system-caption"><span><span class="status-dot" aria-hidden="true"></span> INSIDE PYSPOS</span><span>架构示意 / 001</span></figcaption>
-          <div class="stack-view" aria-hidden="true">
-            <div class="stack-orbit orbit-one"></div><div class="stack-orbit orbit-two"></div>
-            <div class="stack-assembly">
-              <div class="stack-plane plane-runtime" data-plane="runtime"><span class="plane-id">01 / HOST</span><strong>Python Runtime</strong><span class="plane-nodes">● ── ● ── ●</span></div>
-              <div class="stack-plane plane-kernel" data-plane="kernel"><span class="plane-id">02 / CORE</span><strong>Kernel &amp; Scheduler</strong><span class="plane-nodes">● ── ● ── ●</span></div>
-              <div class="stack-plane plane-app" data-plane="app" data-selected="true"><span class="plane-id">03 / USER SPACE</span><strong>Shell &amp; Applications</strong><span class="plane-nodes">● ── ● ── ●</span></div>
-            </div>
-            <span class="stack-coordinate coord-left">X / USER SPACE</span><span class="stack-coordinate coord-right">Y / RUNTIME</span>
-          </div>
-          <div class="layer-controls" aria-label="探索 PySpOS 架构" hidden>
-            <button type="button" class="layer-choice" data-layer="app" aria-pressed="true" aria-controls="layer-description">03 <span>应用层</span></button>
-            <button type="button" class="layer-choice" data-layer="kernel" aria-pressed="false" aria-controls="layer-description">02 <span>内核层</span></button>
-            <button type="button" class="layer-choice" data-layer="runtime" aria-pressed="false" aria-controls="layer-description">01 <span>运行时</span></button>
-          </div>
-          <div class="lab-description" id="layer-description" aria-live="polite"><code>shell / applications</code><p>从一条命令开始。Shell 解析输入，独立应用拥有自己的界面与逻辑。</p></div>
-          <a class="lab-source" href="pyspos.html#tech-title">每一层，都有源码可循 <span aria-hidden="true">↗</span></a>
-        </figure>
-      </div>
-    </div>
-
-    <nav class="wrap project-index" aria-label="项目索引">
-      <span class="eyebrow">正在构建</span>
-      <a href="#pyspos-title">PySpOS <span aria-hidden="true">↓</span></a>
-      <a href="#spaceos9-title">SpaceOS 9 <span aria-hidden="true">↓</span></a>
-      <a href="#spaceos-title">SpaceOS 8 <span aria-hidden="true">↓</span></a>
-      <a href="#archive-title" class="archive-link">历史项目与存档 <span aria-hidden="true">↓</span></a>
-    </nav>
-
-    <section class="section command-story" aria-labelledby="command-title">
-      <div class="wrap command-layout">
-        <div class="command-sticky">
-          <span class="eyebrow">把原理拆开看</span>
-          <h2 class="section-title" id="command-title">一次 Enter，<br>系统里发生了什么？</h2>
-          <p class="section-lede">以外部程序的执行路径为例，<br>沿着源码，走进系统内部。</p>
-          <div class="execution-map" aria-hidden="true">
-            <div class="execution-top"><span>EXECUTION PATH</span><span class="execution-count">01 / 03</span></div>
-            <div class="execution-node is-active" data-node="0"><span>01</span><strong>Shell</strong><code>parse → dispatch</code></div>
-            <div class="execution-wire"></div>
-            <div class="execution-node" data-node="1"><span>02</span><strong>Process</strong><code>fork → exec</code></div>
-            <div class="execution-wire"></div>
-            <div class="execution-node" data-node="2"><span>03</span><strong>Runtime</strong><code>execute → syscall</code></div>
-            <div class="execution-track"><span></span></div>
-          </div>
-        </div>
-        <div class="command-steps">
-          <article class="command-step is-active" data-step="0"><span class="step-number">01 / INPUT</span><h3>先理解，你想做什么。</h3><p>Shell 将输入解析成命令与参数，再交给对应的处理模块。管道、重定向和后台作业，从这里开始。</p><code>src/shell/dispatch.py</code><a href="pyspos.html#tech-title">查看 Shell 模块 <span aria-hidden="true">↗</span></a></article>
-          <article class="command-step" data-step="1"><span class="step-number">02 / PROCESS</span><h3>给程序，一个独立的进程。</h3><p>外部应用通过 fork / exec 运行。进程有自己的身份与生命周期，调度器用虚拟运行时间和截止期安排执行。</p><code>src/forkexec.py · src/process.py</code><a href="pyspos.html#features-title">了解进程与调度 <span aria-hidden="true">↗</span></a></article>
-          <article class="command-step" data-step="2"><span class="step-number">03 / EXECUTION</span><h3>指令运行，系统开始回应。</h3><p>ELF 程序由 Unicorn 执行 x86_64 指令；系统调用转发到模拟层。你可以观察执行、修改实现，再运行一次。</p><code>Unicorn Engine → syscall</code><a href="pyspos.html#features-title">探索 ELF 执行引擎 <span aria-hidden="true">↗</span></a></article>
+  <!-- chrome:end -->
+  <main id="main">
+    <section class="hero">
+      <div class="container">
+        <h1>几个学生写的操作系统。</h1>
+        <p class="lede">GoutouStdio 是学生自发组织的开源小组，2022 年开始做操作系统。现在维护两个项目：用 Python 写的 PySpOS，和用 Rust 写内核的 SpaceOS 9。</p>
+        <div class="actions">
+          <a class="button" href="pyspos.html">了解 PySpOS</a>
+          <a class="button button-secondary" href="spaceos9.html">了解 SpaceOS 9</a>
         </div>
       </div>
     </section>
 
-    <section class="section project-story" data-product="PySpOS" data-status="active" aria-labelledby="pyspos-title">
-      <div class="wrap editorial-grid">
-        <header class="story-heading">
-          <span class="eyebrow">Python / 用户态模拟</span>
-          <h2 class="story-title" id="pyspos-title">PySpOS<span class="title-period">.</span></h2>
-          <p class="story-tagline">让系统原理，<br>成为可执行的代码。</p>
-          <p class="project-status"><span class="badge badge-ok">维护中</span> v3.2.0 RC1 · MIT</p>
-          <p class="story-links"><a href="pyspos.html">阅读项目介绍 ↗</a><a href="ota/index.html">下载与更新 ↗</a></p>
-        </header>
-        <div class="story-copy">
-          <p class="story-lead">一个可以运行，也可以逐行理解的模拟操作系统。</p>
-          <p>在 Python 中实现进程调度、内存映射、文件系统和引导流程。应用运行在真实子进程中，ELF 由 Unicorn 执行 x86 指令；改动源码后，你可以直接观察系统行为的变化。</p>
-          <dl class="story-details">
-            <div><dt>调度</dt><dd>EEVDF 虚拟截止期与 nice 权重</dd></div>
-            <div><dt>进程</dt><dd>真实 fork / exec、作业控制与信号</dd></div>
-            <div><dt>引导</dt><dd>OOBE、A/B 槽位与签名验证</dd></div>
-          </dl>
-          <div class="source-session">
-            <div class="session-label"><span>从这里开始 / Python 3.10+</span><button class="copy-btn" type="button" data-copy="quickstart">复制命令</button></div>
-            <div id="quickstart" class="session-transcript"><div><span class="t-p">$</span> <span class="t-cmd">git clone https://github.com/ViudiraTech/PySpOS.git</span></div><div><span class="t-p">$</span> <span class="t-cmd">cd PySpOS</span></div><div><span class="t-p">$</span> <span class="t-cmd">pip install -r requirements.txt</span></div><div><span class="t-p">$</span> <span class="t-cmd">python launcher.py</span></div></div>
-          </div>
+    <section class="section" id="projects">
+      <div class="container">
+        <div class="section-head"><h2>项目</h2></div>
+        <div class="tiles">
+          <article class="tile tile-sky" data-product="PySpOS" data-status="active">
+            <h3>PySpOS</h3>
+            <p class="status"><span class="badge badge-ok">维护中</span> v3.2.0 RC1 · MIT</p>
+            <p>用 Python 写的模拟操作系统。有进程调度、文件系统和引导流程，能执行 x86_64 的 ELF 程序。</p>
+            <div class="tile-links"><a href="pyspos.html">介绍</a><a href="ota/index.html">下载</a></div>
+          </article>
+          <article class="tile tile-clay" data-product="SpaceOS 9" data-status="active">
+            <h3>SpaceOS 9</h3>
+            <p class="status"><span class="badge badge-warn">公开预览</span> x86_64</p>
+            <p>内核 SpaceKernel 3.0 用 Rust 写成，实现 Linux ABI。自带 PID 1（systemg）和 C 库（splibc），能运行动态链接的 BusyBox。</p>
+            <div class="tile-links"><a href="spaceos9.html">介绍</a><a href="spaceos9-download.html">下载镜像</a></div>
+          </article>
+          <article class="tile tile-sage" data-product="SpaceOS 8" data-status="active">
+            <h3>SpaceOS 8</h3>
+            <p class="status"><span class="badge badge-warn">抢先体验</span> x86_64 · Apache-2.0</p>
+            <p>上一代项目。基于 Uinxed 内核（C 写的 UNIX-like 内核），带自研桌面 SPUI 和一批系统程序。</p>
+            <div class="tile-links"><a href="spaceos8.html">介绍</a><a href="spaceos8-download.html">下载镜像</a></div>
+          </article>
         </div>
-      </div>
-    </section>
 
-    <section class="section project-story" data-product="SpaceOS 9" data-status="active" aria-labelledby="spaceos9-title">
-      <div class="wrap editorial-grid">
-        <header class="story-heading">
-          <span class="eyebrow">D / SpaceKernel 3.0</span>
-          <h2 class="story-title" id="spaceos9-title">SpaceOS 9<span class="title-period">.</span></h2>
-          <p class="story-tagline">自己写内核，<br>也自己写整条用户态链路。</p>
-          <p class="project-status"><span class="badge badge-warn">公开预览</span> x86_64 · Linux ABI</p>
-          <p class="story-links"><a href="spaceos9.html">阅读项目介绍 ↗</a><a href="spaceos9-download.html">获取镜像 ↗</a></p>
-        </header>
-        <div class="story-copy">
-          <p class="story-lead">从 Rust 内核一直走到能交互的 shell。</p>
-          <p>SpaceKernel 3.0 保留 Linux ABI，加入 FAT32 根盘、PID 1 systemg、splibc 用户态与动态 BusyBox；VFS 使用 Linux 语义的 dentry/inode cache。x86_64 镜像已在 QEMU/UEFI 实跑，aarch64/riscv64 通过编译检查。</p>
-          <dl class="story-details">
-            <div><dt>内核</dt><dd>SpaceKernel 3.0（SPK）· Rust · soft-float</dd></div>
-            <div><dt>用户态</dt><dd>splibc、systemg、sh · 动态 musl/BusyBox</dd></div>
-            <div><dt>验证</dt><dd>三架构 cargo check · x86_64 SELFTEST_OK / QEMU 启动</dd></div>
-          </dl>
-        </div>
-      </div>
-    </section>
-
-    <section class="section project-story" data-product="SpaceOS 8" data-status="active" aria-labelledby="spaceos-title">
-      <div class="wrap editorial-grid">
-        <header class="story-heading">
-          <span class="eyebrow">C / 自研内核与用户态</span>
-          <h2 class="story-title" id="spaceos-title">SpaceOS 8<span class="title-period">.</span></h2>
-          <p class="story-tagline">从 UEFI 启动，<br>一直写到桌面。</p>
-          <p class="project-status"><span class="badge badge-warn">抢先体验</span> x86_64 · Apache-2.0</p>
-          <p class="story-links"><a href="spaceos8.html">阅读项目介绍 ↗</a><a href="spaceos8-download.html">获取镜像 ↗</a></p>
-        </header>
-        <div class="story-copy">
-          <p class="story-lead">在真实硬件上，让自己写的内核接管系统。</p>
-          <p>基于 Uinxed 自研 UNIX-like 内核，配一整套自研用户态。从窗口合成器到浏览器，一层一层实现。内核已在实体服务器上跑通，OpenJDK 与 DOOM 已能运行，图形与部分 ABI 仍在补齐。</p>
-          <dl class="story-details">
-            <div><dt>内核</dt><dd>Uinxed 1.0.0-alpha.1 · 约 18.1 万行</dd></div>
-            <div><dt>用户态</dt><dd>SPUI 桌面、系统程序 · 约 29.2 万行</dd></div>
-            <div><dt>兼容</dt><dd>Linux 系统调用与 X11 兼容层</dd></div>
-          </dl>
-        </div>
-      </div>
-      <figure class="wrap desktop-evidence">
-        <div class="proof-label"><span>RUNTIME EVIDENCE / 真实运行</span><span>UINXED × MINECRAFT</span></div>
-        <img src="spaceos8-minecraft.png" alt="Uinxed 内核下运行 Minecraft，世界渲染与游戏界面正常" loading="lazy" width="1356" height="924">
-        <figcaption><span>一次真实的运行记录</span> Uinxed + Alpine Linux + Weston · QEMU/KVM Q35。窗口、输入与渲染正常。</figcaption>
-      </figure>
-    </section>
-
-    <section class="section content-section section-archive" aria-labelledby="archive-title">
-      <div class="wrap editorial-grid">
-        <header class="story-heading"><span class="eyebrow">历史项目</span><h2 class="section-title" id="archive-title">走过的路线，<br>也留在这里。</h2></header>
-        <div class="archive-index">
-          <div data-product="SpaceOS 6" data-status="retired"><a href="spaceos6.html">SpaceOS 6 <span aria-hidden="true">↗</span></a><span>2024 · UEFI 的第一次正式尝试</span><span class="badge">已停更</span></div>
-          <div data-product="SpaceOS 7" data-status="retired"><a href="spaceos7.html">SpaceOS 7 <span aria-hidden="true">↗</span></a><span>2026 · 完全自研内核的探索</span><span class="badge">已停更</span></div>
-          <p>历史源码与说明继续保留。当前维护的项目是 <a href="pyspos.html">PySpOS</a> 与 <a href="spaceos9.html">SpaceOS 9</a>；SpaceOS 8 保留为上一代自研内核项目。</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section content-section section-history" aria-labelledby="history-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">发展历程</span>
-          <h2 class="section-title" id="history-title">从 MP4 方案到自研内核</h2>
-        </div>
-        <ol class="timeline">
-          <li>
-            <span class="timeline-year">2022</span>
-            <div><div class="timeline-title">狗头 OS</div><p>工作室创立，从网上狗头 OS 项目起步的“MP4 架构”折腾，攒下第一批关注者。</p></div>
+        <h3 class="archive-title">存档</h3>
+        <ul class="rows">
+          <li data-product="SpaceOS 7" data-status="retired">
+            <span class="key"><a href="spaceos7.html">SpaceOS 7</a></span>
+            <p><span class="badge">已停更</span> 完全自研的混合内核，2026 年启动，做到约一半。</p>
           </li>
-          <li>
-            <span class="timeline-year">2023</span>
-            <div><div class="timeline-title">互相学习</div><p>开始读别人的代码，过程中和原作者认识，互相学习。</p></div>
+          <li data-product="SpaceOS 6" data-status="retired">
+            <span class="key"><a href="spaceos6.html">SpaceOS 6</a></span>
+            <p><span class="badge">已停更</span> 基于 Uinxed-Kernel 的桌面系统，带 SPUI 1.0，2024 年发布。</p>
           </li>
-          <li>
-            <span class="timeline-year">2024</span>
-            <div><div class="timeline-title">VimdropOS 与第一版 SpaceOS</div><p>基于 ViudiraTech 的 VimdropOS 做出第一版 SpaceOS，开启新篇章。</p></div>
-          </li>
-          <li>
-            <span class="timeline-year">2025</span>
-            <div><div class="timeline-title">UEFI 与 SpaceOS 6</div><p>深入研究 UEFI，基于 Uinxed-Kernel 研发正式的 SpaceOS。</p></div>
-          </li>
-          <li>
-            <span class="timeline-year">2026</span>
-            <div><div class="timeline-title">SpaceOS 7 自研与 SpaceOS 8</div><p>UEFI 完全搞懂之后走全栈自研；随后把方向收回内核与桌面可用的 SpaceOS 8。</p></div>
-          </li>
-        </ol>
+        </ul>
       </div>
     </section>
 
-    <section class="section content-section section-contact" aria-labelledby="contact-title">
-      <div class="wrap">
-        <div class="band">
-          <span class="eyebrow">联系</span>
-          <h2 id="contact-title">有想法，直接写信</h2>
-          <p class="band-lede">合作、报错、投简历式的自我介绍都可以。我们是学生，回得慢，但每封都读。</p>
-          <a class="mail-big" href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>
-          <div class="actions">
-            <a class="btn btn-secondary" href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a>
-            <a class="btn btn-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">PySpOS 源码</a>
-          </div>
+    <section class="section section-tint" id="quickstart">
+      <div class="container split">
+        <h2>运行 PySpOS</h2>
+        <div class="stack">
+          <p>需要 Python 3.10 或更高版本。</p>
+          <pre><code>git clone https://github.com/ViudiraTech/PySpOS.git
+cd PySpOS
+pip install -r requirements.txt
+python launcher.py</code></pre>
+          <p>各平台的要求见<a href="requirements.html">配置要求</a>，功能和模块见 <a href="pyspos.html">PySpOS 介绍</a>。</p>
         </div>
       </div>
     </section>
-    <div class="wrap">
-      <nav class="pager" aria-label="上下页">
-        <span></span>
-        <a class="pager-next" href="pyspos.html"><span class="pager-dir">下一页 →</span><span class="pager-name">PySpOS 详情</span></a>
+
+    <section class="section" id="history">
+      <div class="container split">
+        <h2>历史</h2>
+        <ul class="rows">
+          <li><span class="key">2022</span><p>工作室成立。从网上的“狗头 OS”项目开始，做“MP4 架构”的实验，有了第一批关注者。</p></li>
+          <li><span class="key">2023</span><p>开始读别人的代码，认识了原作者，互相交流。</p></li>
+          <li><span class="key">2024</span><p>基于 ViudiraTech 的 VimdropOS 做出第一版 SpaceOS。</p></li>
+          <li><span class="key">2025</span><p>深入研究 UEFI，基于 Uinxed-Kernel 开发正式的 SpaceOS。</p></li>
+          <li><span class="key">2026</span><p>UEFI 研究完成后尝试全部自研（SpaceOS 7），做到一半停下；之后回到内核与桌面，做出 SpaceOS 8。10 月公开 SpaceOS 9 预览，内核换成 Rust 写的 SpaceKernel 3.0。</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section section-tint" id="contact">
+      <div class="container split">
+        <h2>联系</h2>
+        <div class="stack">
+          <p>合作、反馈问题或自我介绍都可以发邮件到 <a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>。我们是学生，回复可能比较慢。</p>
+          <p>代码在 GitHub：<a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">ViudiraTech</a>，PySpOS 仓库是 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <!-- foot:start -->
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="index.html">GoutouStdio</a>
+        <p>学生自发组织的开源小组，做操作系统相关的项目。</p>
+      </div>
+      <nav>
+        <h2 class="footer-title">项目</h2>
+        <ul>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html">SpaceOS 9</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">下载</h2>
+        <ul>
+          <li><a href="ota/index.html">PySpOS 更新包</a></li>
+          <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
+          <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
+          <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">资料</h2>
+        <ul>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="index.html#contact">联系我们</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">存档</h2>
+        <ul>
+          <li><a href="spaceos7.html">SpaceOS 7</a></li>
+          <li><a href="spaceos6.html">SpaceOS 6</a></li>
+        </ul>
       </nav>
     </div>
-  </main>
-
-  <footer class="site-footer">
-    <div class="wrap">
-      <div class="footer-grid">
-        <div>
-          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
-          <p class="footer-note">科技创新工作室。学生自发组织的项目，不涉及任何商业活动。</p>
-        </div>
-        <nav class="footer-col" aria-label="产品">
-          <h2>产品</h2>
-          <ul>
-            <li><a href="pyspos.html">PySpOS</a></li>
-            <li><a href="spaceos9.html">SpaceOS 9</a></li>
-            <li><a href="spaceos9-download.html">SpaceOS 9 下载</a></li>
-            <li><a href="spaceos8.html">SpaceOS 8</a></li>
-            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
-            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
-          </ul>
-        </nav>
-        <nav class="footer-col" aria-label="资源">
-          <h2>资源</h2>
-          <ul>
-            <li><a href="requirements.html">配置要求</a></li>
-            <li><a href="ota/index.html">OTA 下载</a></li>
-            <li><a href="ota/releases.html">版本历史</a></li>
-            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
-          </ul>
-        </nav>
-        <nav class="footer-col" aria-label="项目">
-          <h2>项目</h2>
-          <ul>
-            <li><a href="index.html#history-title">发展历程</a></li>
-            <li><a href="index.html#contact-title">联系我们</a></li>
-            <li><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">Uinxed-Kernel</a></li>
-          </ul>
-        </nav>
-      </div>
+    <div class="container">
       <div class="footer-base">
-        <span>© 2022–2026 GoutouStdio</span>
-        <span>GoutouStdio 不是真实的公司。</span>
+        <p>© 2022–2026 GoutouStdio。学生自发组织的项目，不涉及任何商业活动，GoutouStdio 不是真实的公司。</p>
+        <p><a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a></p>
       </div>
     </div>
   </footer>
-
-  <script src="js/main.js?v=20261011"></script>
+  <script src="js/main.js?v=a4e29915"></script>
+  <!-- foot:end -->
 </body>
 </html>

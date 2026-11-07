@@ -3,226 +3,171 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="SpaceOS 7 存档：纯自研混合内核架构操作系统的尝试。该路线已停止开发，本页面仅作历史存档。">
-  <title>SpaceOS 7（存档）| GoutouStdio</title>
-<link rel="stylesheet" href="css/tokens.css?v=20261011">
-  <link rel="stylesheet" href="css/style.css?v=20261011">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b1b20'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EG%3C/text%3E%3C/svg%3E">
-  <script src="js/theme-init.js?v=20261011"></script>
+  <meta name="description" content="SpaceOS 7（已停更）：完全自研的混合内核操作系统，2026 年启动，做到约一半后停止。本页仅作存档。">
+  <title>SpaceOS 7（已停更） | GoutouStdio</title>
+  <!-- head:start -->
+  <link rel="stylesheet" href="css/tokens.css?v=5532dea3">
+  <link rel="stylesheet" href="css/style.css?v=8c54b34b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
+  <!-- head:end -->
 </head>
-<body class="page-spaceos7">
+<body>
+  <!-- chrome:start -->
+  <script src="js/theme-init.js?v=73514afb"></script>
   <a class="skip-link" href="#main">跳到正文</a>
-
   <header class="site-header">
-    <div class="wrap site-header-inner">
-      <a class="brand" href="index.html" aria-label="GoutouStdio 首页">
-        <span class="brand-mark" aria-hidden="true">G</span>
-        <span class="brand-name">GoutouStdio<small>科技创新工作室</small></span>
-      </a>
-      <nav class="site-nav" id="site-nav" aria-label="站内导航">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">GoutouStdio</a>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
         <ul>
-          <li><a href="index.html">首页</a></li>
           <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html">SpaceOS 9</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
-          <li><a href="spaceos6.html">6 · 存档</a></li>
-          <li><a href="spaceos7.html" aria-current="page">7 · 存档</a></li>
           <li><a href="requirements.html">配置要求</a></li>
-          <li><a href="ota/index.html">下载</a></li>
+          <li><details class="menu"><summary>下载</summary>
+            <ul>
+              <li><a href="ota/index.html">PySpOS 更新包</a></li>
+              <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
+              <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
+              <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+            </ul>
+          </details></li>
+          <li><details class="menu is-current"><summary>存档</summary>
+            <ul>
+              <li><a href="spaceos7.html" aria-current="page">SpaceOS 7</a></li>
+              <li><a href="spaceos6.html">SpaceOS 6</a></li>
+            </ul>
+          </details></li>
           <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
         </ul>
       </nav>
       <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"></button>
-        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" aria-expanded="false" aria-controls="site-nav">☰</button>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题">主题</button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false">菜单</button>
       </div>
     </div>
   </header>
-
-  <main id="main" class="site-main">
-    <div class="wrap page-head archive-hero"><div class="archive-hero-grid"><div>
-      <span class="eyebrow">存档 · 已停止开发</span>
-      <h1>SpaceOS 7</h1>
-      <p class="lede">纯自研混合内核架构操作系统的尝试：不依赖外部代码，UEFI 引导与内核加载全部自己写。项目做到约一半后停止。</p>
-      <div class="meta-row" aria-label="项目信息">
-        <span>启动 · 2026</span>
-        <span>完全自研</span>
-        <span>进度约 50%</span>
+  <!-- chrome:end -->
+  <main id="main">
+    <section class="hero hero-compact">
+      <div class="container">
+        <p class="hero-badge"><span class="badge">已停更</span></p>
+        <h1>SpaceOS 7</h1>
+        <p class="lede">尝试完全自研的混合内核操作系统：不依赖外部代码，UEFI 引导和内核加载都自己写。做到约一半后停止。</p>
+        <dl class="spec">
+          <div><dt>启动</dt><dd>2026</dd></div>
+          <div><dt>方式</dt><dd>完全自研</dd></div>
+          <div><dt>进度</dt><dd>约 50%</dd></div>
+        </dl>
       </div>
+    </section>
 
-    </div><div class="archive-art" aria-hidden="true"><span>ARCHIVE / SPACEOS</span><strong>07</strong><span>保留探索的每一步</span></div></div></div>
-
-    <div class="wrap document-layout archive-layout"><aside class="document-sidebar"><span class="eyebrow">项目存档</span><nav class="page-toc" aria-label="本页目录"><a href="#intro-title">掌握 UEFI 之后的一次从零开始</a><a href="#features-title">做到一半的东西</a><a href="#tech-title">内核侧的设计</a><a href="#history-title">2026 年的几次推进</a></nav><a class="sidebar-next" href="spaceos8.html">探索当前 SpaceOS 8 ↗</a></aside><div class="document-content"><section class="section content-section section-intro" aria-labelledby="intro-title">
-      <div class="wrap">
+    <section class="section" id="notice">
+      <div class="container">
         <div class="notice notice-warn" role="note">
-          <span class="notice-icon" aria-hidden="true">!</span>
-          <div>
-            <p class="notice-title">该路线已停止开发，本页仅作历史存档</p>
-            <div class="notice-body">
-              <p>不再维护，不再接受 issue、功能请求或移植。请勿基于它继续投入。当前唯一在维护的产物是 <a href="pyspos.html">PySpOS</a>，代码已迁移至 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="section-head">
-          <span class="eyebrow">介绍</span>
-          <h2 class="section-title" id="intro-title">掌握 UEFI 之后的一次从零开始</h2>
-        </div>
-        <div class="prose">
-          <p>2026 年，团队完全掌握 UEFI 技术之后启动了这个自研项目：没有外部代码，没有依赖，UEFI 引导、内核加载全部自己写。设计理念是“完全自研、混合内核、极致性能”——混合内核结合微内核和宏内核的优点，既保证稳定性，又提供高性能。</p>
-          <p>做到约一半时停止：用户态没做完，存在 Heisenbug。中间引导和内核完全重构，桌面环境运行在 Ring 3——桌面崩了内核不会跟着炸。</p>
+          <p class="notice-title">这个项目已停止开发，本页仅作存档</p>
+          <p>不再维护，不接受 issue、功能请求或移植，请不要基于它继续投入。目前在维护的是 <a href="pyspos.html">PySpOS</a> 和 <a href="spaceos9.html">SpaceOS 9</a>；PySpOS 的代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
         </div>
       </div>
     </section>
 
-    <section class="section content-section section-features" aria-labelledby="features-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">特性</span>
-          <h2 class="section-title" id="features-title">做到一半的东西</h2>
+    <section class="section section-tint" id="intro">
+      <div class="container split">
+        <h2>背景</h2>
+        <div class="stack prose">
+          <p>2026 年，团队研究清楚 UEFI 之后启动了这个项目：没有外部代码，没有依赖，UEFI 引导和内核加载全部自己写。设计目标写的是“完全自研、混合内核、极致性能”，混合内核想兼顾微内核的稳定和宏内核的性能。</p>
+          <p>做到约一半时停止：用户态没做完，还存在 Heisenbug。中间重构过一次引导和内核；桌面环境运行在 Ring 3，桌面崩溃不会拖垮内核。</p>
         </div>
-        <ul class="feature-grid archive-grid">
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
-            <div class="feature-title">SPFS 2.0 Ultra 文件系统</div>
-            <div class="feature-body">
-              <p>自研旗舰文件系统：Journal 日志、CRC64 数据校验、缓存块机制，原生内置。</p>
-              <ul class="check-list">
-                <li>Journal 日志功能</li>
-                <li>CRC64 数据校验</li>
-                <li>缓存块机制</li>
-              </ul>
-            </div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
-            <div class="feature-title">内核重构</div>
-            <div class="feature-body">
-              <p>中间引导和内核全部手搓：自研引导程序（没用 Limine / GRUB），抛弃 Uinxed-Kernel 转纯自研，伙伴系统 + Slab 分配器，进程间 IPC 与用户态支持。</p>
-            </div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
-            <div class="feature-title">Ring 3 桌面环境</div>
-            <div class="feature-body"><p>桌面跑在用户空间，内核与用户空间隔离，桌面崩溃不影响内核，安全性更高。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
-            <div class="feature-title">SMP 多核</div>
-            <div class="feature-body"><p>对称多处理支持：多核调度、同步机制、内存管理与中断处理。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
-            <div class="feature-title">xHCI 控制器</div>
-            <div class="feature-body"><p>完整的 xHCI 驱动，USB 3.0 及以上，向后兼容 USB 2.0，多设备与高带宽传输。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-4v4M3 8h18"></path></svg></span>
-            <div class="feature-title">空间 API</div>
-            <div class="feature-body"><p>自研系统调用接口：丰富的系统调用、高性能 IPC、灵活通信机制与权限控制。</p></div>
-          </li>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container split">
+        <h2>做到的部分</h2>
+        <ul class="rows rows-wide">
+          <li><span class="key">SPFS 2.0 Ultra</span><p>自研文件系统，带 Journal 日志、CRC64 数据校验和缓存块机制。</p></li>
+          <li><span class="key">内核重构</span><p>引导程序自己写（没用 Limine / GRUB）；放弃 Uinxed-Kernel，改为纯自研；伙伴系统加 Slab 分配器；进程间 IPC 和用户态支持。</p></li>
+          <li><span class="key">Ring 3 桌面</span><p>桌面跑在用户空间，与内核隔离，桌面崩溃不影响内核。</p></li>
+          <li><span class="key">SMP 多核</span><p>多核调度、同步机制、内存管理和中断处理。</p></li>
+          <li><span class="key">xHCI 控制器</span><p>xHCI 驱动，支持 USB 3.0 及以上，向后兼容 USB 2.0。</p></li>
+          <li><span class="key">空间 API</span><p>自研的系统调用接口，包含系统调用、IPC 和权限控制。</p></li>
         </ul>
       </div>
     </section>
 
-    <section class="section content-section section-tech" aria-labelledby="tech-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">技术细节</span>
-          <h2 class="section-title" id="tech-title">内核侧的设计</h2>
-        </div>
-        <ul class="feature-grid archive-grid">
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9l3 3-3 3m5 0h3"></path></svg></span>
-            <div class="feature-title">混合内核架构</div>
-            <div class="feature-body"><p>微内核组件用户空间化，关键服务跑在内核空间，高效 IPC 与完善的权限管理。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4M9 9h6v6H9z"></path></svg></span>
-            <div class="feature-title">纯手写 UEFI 库</div>
-            <div class="feature-body"><p>从零构建 UEFI 库，高半地址内核加载，不依赖任何外部引导代码。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4zM4 7V4h6l3 3M8 11h8m-8 4h5"></path></svg></span>
-            <div class="feature-title">内存管理</div>
-            <div class="feature-body"><p>伙伴系统（Buddy System）+ Slab 分配器，4KB 与 2MB 大页，完整虚拟内存与硬件辅助内存保护。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-8 8-8 8s-8-4-8-8V7zM8 12l3 3 5-6"></path></svg></span>
-            <div class="feature-title">进程调度</div>
-            <div class="feature-body"><p>CFS 完全公平调度，实时调度支持，多核负载均衡与节能调度。</p></div>
-          </li>
-          <li class="feature-card"><span class="feature-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6m0 12h16M8 14l4-5 4 3 4-7"></path></svg></span>
-            <div class="feature-title">设备驱动</div>
-            <div class="feature-body"><p>存储（IDE / AHCI / NVMe / USB / SCSI）、显示、网络、音频、输入，以及 xHCI USB 驱动。</p></div>
-          </li>
+    <section class="section section-tint" id="tech">
+      <div class="container split">
+        <h2>内核设计</h2>
+        <ul class="rows rows-wide">
+          <li><span class="key">混合内核</span><p>微内核组件放到用户空间，关键服务留在内核空间；有 IPC 和权限管理。</p></li>
+          <li><span class="key">UEFI 库</span><p>从零写的 UEFI 库，高半地址内核加载，不依赖外部引导代码。</p></li>
+          <li><span class="key">内存管理</span><p>Buddy System 加 Slab 分配器，4 KB 与 2 MB 大页，虚拟内存和硬件辅助的内存保护。</p></li>
+          <li><span class="key">进程调度</span><p>CFS 完全公平调度，支持实时调度、多核负载均衡与节能调度。</p></li>
+          <li><span class="key">设备驱动</span><p>存储（IDE / AHCI / NVMe / USB / SCSI）、显示、网络、音频、输入，以及 xHCI USB 驱动。</p></li>
         </ul>
       </div>
     </section>
 
-    <section class="section content-section section-history" aria-labelledby="history-title">
-      <div class="wrap">
-        <div class="section-head">
-          <span class="eyebrow">项目历程</span>
-          <h2 class="section-title" id="history-title">2026 年的几次推进</h2>
-        </div>
-        <ol class="timeline">
-          <li>
-            <span class="timeline-year">2026</span>
-            <div><div class="timeline-title">搞懂 UEFI</div><p>UEFI 完全理解，启动完全自研操作系统项目。（用户态没做好）</p></div>
-          </li>
-          <li>
-            <span class="timeline-year">2026</span>
-            <div><div class="timeline-title">混合内核设计</div><p>完成混合内核架构设计，结合微内核和宏内核的优点。</p></div>
-          </li>
-          <li>
-            <span class="timeline-year">2026</span>
-            <div><div class="timeline-title">内核实现</div><p>完成内核基本功能：进程调度、内存管理、中断处理。</p></div>
-          </li>
-          <li>
-            <span class="timeline-year">2026</span>
-            <div><div class="timeline-title">Ring 3 桌面</div><p>实现用户空间桌面环境，提升系统安全性。</p></div>
-          </li>
+    <section class="section" id="history">
+      <div class="container split">
+        <h2>进展</h2>
+        <ol class="rows rows-wide">
+          <li><span class="key">搞懂 UEFI</span><p>理解 UEFI 之后，启动完全自研的操作系统项目。（用户态没做好）</p></li>
+          <li><span class="key">混合内核设计</span><p>完成混合内核的架构设计。</p></li>
+          <li><span class="key">内核实现</span><p>完成内核基本功能：进程调度、内存管理、中断处理。</p></li>
+          <li><span class="key">Ring 3 桌面</span><p>实现用户空间的桌面环境。</p></li>
         </ol>
       </div>
     </section>
-    <div class="wrap">
-      <nav class="pager" aria-label="上下页">
-        <a href="spaceos6.html"><span class="pager-dir">← 上一页</span><span class="pager-name">SpaceOS 6（存档）</span></a>
-        <a class="pager-next" href="spaceos8.html"><span class="pager-dir">下一页 →</span><span class="pager-name">SpaceOS 8</span></a>
+  </main>
+  <!-- foot:start -->
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="index.html">GoutouStdio</a>
+        <p>学生自发组织的开源小组，做操作系统相关的项目。</p>
+      </div>
+      <nav>
+        <h2 class="footer-title">项目</h2>
+        <ul>
+          <li><a href="pyspos.html">PySpOS</a></li>
+          <li><a href="spaceos9.html">SpaceOS 9</a></li>
+          <li><a href="spaceos8.html">SpaceOS 8</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">下载</h2>
+        <ul>
+          <li><a href="ota/index.html">PySpOS 更新包</a></li>
+          <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
+          <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
+          <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">资料</h2>
+        <ul>
+          <li><a href="requirements.html">配置要求</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="index.html#contact">联系我们</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <h2 class="footer-title">存档</h2>
+        <ul>
+          <li><a href="spaceos7.html" aria-current="page">SpaceOS 7</a></li>
+          <li><a href="spaceos6.html">SpaceOS 6</a></li>
+        </ul>
       </nav>
     </div>
-</div></div>
-  </main>
-
-  <footer class="site-footer">
-    <div class="wrap">
-      <div class="footer-grid">
-        <div>
-          <div class="footer-brand"><span class="brand-mark" aria-hidden="true">G</span><span class="brand-name">GoutouStdio</span></div>
-          <p class="footer-note">学生自发组织的项目，不涉及任何商业活动。</p>
-        </div>
-        <nav class="footer-col" aria-label="产品">
-          <h2>产品</h2>
-          <ul>
-            <li><a href="pyspos.html">PySpOS</a></li>
-            <li><a href="spaceos8.html">SpaceOS 8</a></li>
-            <li><a href="spaceos6.html">SpaceOS 6（停更）</a></li>
-            <li><a href="spaceos7.html">SpaceOS 7（停更）</a></li>
-          </ul>
-        </nav>
-        <nav class="footer-col" aria-label="资源">
-          <h2>资源</h2>
-          <ul>
-            <li><a href="requirements.html">配置要求</a></li>
-            <li><a href="ota/index.html">OTA 下载</a></li>
-            <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
-          </ul>
-        </nav>
-        <nav class="footer-col" aria-label="项目">
-          <h2>项目</h2>
-          <ul>
-            <li><a href="index.html#history-title">发展历程</a></li>
-            <li><a href="index.html#contact-title">联系我们</a></li>
-          </ul>
-        </nav>
-      </div>
+    <div class="container">
       <div class="footer-base">
-        <span>© 2022–2026 GoutouStdio</span>
-        <span>GoutouStdio 不是真实的公司。</span>
+        <p>© 2022–2026 GoutouStdio。学生自发组织的项目，不涉及任何商业活动，GoutouStdio 不是真实的公司。</p>
+        <p><a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a></p>
       </div>
     </div>
   </footer>
-
-  <script src="js/main.js?v=20261011"></script>
+  <script src="js/main.js?v=a4e29915"></script>
+  <!-- foot:end -->
 </body>
 </html>
