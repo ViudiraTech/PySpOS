@@ -2,95 +2,66 @@
    GoutouStdio 站点 token（唯一事实来源）
    只放值与语义映射，不放组件样式。组件只准引用 --pg-*。
    三层：原始值（:root）→ 语义（按用途命名）→ 主题覆写。
+   尺寸一律用 rem，便于跟随用户的字号设置。
+   配色：暖米色底、近黑暖灰字、陶土色点缀。
    ============================================================ */
 
 :root {
   /* ---- 原始色板（主题无关） ---- */
-  --pg-ref-indigo-700: #2454c6;
-  --pg-ref-indigo-600: #1d46ab;
-  --pg-ref-indigo-200: #9fbeff;
+  --pg-ref-ivory: #faf9f5;
+  --pg-ref-ivory-dark: #f0eee6;
+  --pg-ref-white: #ffffff;
+  --pg-ref-slate: #141413;
+  --pg-ref-clay: #d97757;
+  --pg-ref-clay-deep: #a64b2a;
+  --pg-ref-clay-darker: #84391f;
 
-  --pg-ref-ink-950: #0c1424;
-  --pg-ref-ink-900: #121e32;
+  /* 终端面板：两个主题下固定同一套深色 */
+  --pg-term-bg: #1f1e1d;
+  --pg-term-fg: #f0eee6;
+  --pg-term-dim: #b0aea5;
+  --pg-term-accent: #eba589;
 
-  --pg-ref-paper: #ffffff;
-  --pg-ref-paper-dim: #edf2f8;
-  --pg-ref-line-light: #dce4ef;
-  --pg-ref-line-dark: #28374e;
-
-  /* ---- 字体（展示 / 正文 / 等宽，三族封顶） ---- */
-  --pg-font-display: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI",
-    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --pg-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    "Noto Sans CJK SC", arial, sans-serif;
-  --pg-font-mono: ui-monospace, sfmono-regular, menlo, consolas,
+  /* ---- 字体：标题用衬线，正文用无衬线，代码用等宽 ----
+     衬线栈里 Georgia 管拉丁字母；中文在 macOS 落到宋体，其余系统落到雅黑。 */
+  --pg-font-serif: Georgia, "Source Serif 4", "Songti SC", "Noto Serif CJK SC",
+    "Source Han Serif SC", "Microsoft YaHei", "PingFang SC", serif;
+  --pg-font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans SC", sans-serif;
+  --pg-font-mono: ui-monospace, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
 
   /* ---- 字阶与行高 ---- */
-  --pg-text-xs: 0.75rem;
-  --pg-text-sm: 0.875rem;
+  --pg-text-xs: 0.8125rem;
+  --pg-text-sm: 0.9375rem;
   --pg-text-md: 1rem;
-  --pg-text-lg: 1.125rem;
-  --pg-text-xl: 1.375rem;
-  --pg-text-2xl: 1.75rem;
-  --pg-text-hero: clamp(2.25rem, 4.3vw, 3.85rem);
+  --pg-text-lg: 1.1875rem;
+  --pg-text-xl: 1.5rem;
+  --pg-text-2xl: 2.125rem;
+  --pg-text-hero: clamp(2.5rem, 5.4vw, 4rem);
 
-  --pg-leading-display: 1.18;
+  --pg-leading-body: 1.8;
   --pg-leading-tight: 1.3;
-  --pg-leading-body: 1.75;
+  --pg-leading-display: 1.18;
 
-  /* ---- 尺度 ---- */
-  --pg-space-1: 4px;
-  --pg-space-2: 8px;
-  --pg-space-3: 12px;
-  --pg-space-4: 16px;
-  --pg-space-5: 24px;
-  --pg-space-6: 32px;
-  --pg-space-7: 48px;
-  --pg-space-8: 72px;
-  --pg-space-9: 96px;
-  --pg-control-h: 44px;
-  --pg-glow: 0 12px 30px rgb(36 84 198 / 0.18);
+  /* ---- 间距与尺寸 ---- */
+  --pg-space-1: 0.25rem;
+  --pg-space-2: 0.5rem;
+  --pg-space-3: 0.75rem;
+  --pg-space-4: 1rem;
+  --pg-space-5: 1.5rem;
+  --pg-space-6: 2rem;
+  --pg-space-7: 3rem;
+  --pg-space-8: 4.5rem;
+  --pg-space-9: 6rem;
 
-  --pg-radius-sm: 8px;
-  --pg-radius-md: 16px;
-  --pg-radius-lg: 24px;
-  --pg-radius-pill: 999px;
-
-  /* 组件固定尺寸（字面值，主题无关） */
-  --pg-header-h: 72px;
-  --pg-icon-btn: 40px;
-  --pg-brand-mark: 38px;
-  --pg-blueprint: 48px;
-
-  --pg-width: 78rem;
-
-  --pg-duration: 160ms;
-  --pg-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --pg-reveal-duration: 850ms;
-  --pg-reveal-delay: 0ms;
-  --pg-reveal-distance: 40px;
-  --pg-scroll-progress: 0;
-  --pg-section-progress: 0;
-  --pg-stack-tilt-x: 0deg;
-  --pg-stack-tilt-y: 0deg;
-  --pg-stack-enter: 1.2s;
-  --pg-signal-duration: 3s;
-  --pg-stroke-glow: 0 0 24px rgb(36 84 198 / 0.25);
-  --pg-shadow-float: 0 24px 60px rgb(8 18 45 / 0.16);
-  --pg-motion-slow: 500ms;
-  --pg-backdrop-blur: 18px;
-
-  /* ---- 终端窗：双主题下固定同一套深色 ---- */
-  --pg-term-bg: #0c1729;
-  --pg-term-bar: #122039;
-  --pg-term-line: #2b3c55;
-  --pg-term-fg: #e6edf3;
-  --pg-term-dim: #a1b1c9;
-  --pg-term-green: #7ee787;
-  --pg-term-blue: #79c0ff;
-  --pg-term-btn-line: #607592;
+  --pg-radius: 0.5rem;
+  --pg-radius-lg: 1rem;
+  --pg-radius-pill: 6rem;
+  --pg-header-h: 4.25rem;
+  --pg-container: 72rem;
+  --pg-measure: 42rem;
 }
 
 /* ---- 语义层：亮色（默认） ---- */
@@ -98,80 +69,80 @@
 body:not(.theme-dark) {
   color-scheme: light;
 
-  --pg-bg-page: #f8fafd;
-  --pg-bg-raised: var(--pg-ref-paper);
-  --pg-bg-sunken: var(--pg-ref-paper-dim);
-  --pg-bg-code: var(--pg-ref-ink-900);
-  --pg-fg-code-dim: #a2a2ad;
+  --pg-bg-page: var(--pg-ref-ivory);
+  --pg-bg-raised: var(--pg-ref-white);
+  --pg-bg-sunken: var(--pg-ref-ivory-dark);
 
-  --pg-fg-1: #18243b;
-  --pg-fg-2: #4d5e76;
-  --pg-fg-3: #5f6e84;
-  --pg-fg-on-ink: #ffffff;
-  --pg-fg-on-code: #e8e8ea;
+  --pg-fg-1: var(--pg-ref-slate);
+  --pg-fg-2: #3d3d3a;
+  --pg-fg-3: #5e5d59;
 
-  --pg-line-1: var(--pg-ref-line-light);
-  --pg-line-2: #c5d1e1;
-  /* 控件边界：按钮/窗框/步骤块的描边，3.0+ 对比度。
-     line-1/line-2 只做纯装饰分隔线，不承载信息。 */
-  --pg-line-strong: #78899f;
+  --pg-line-1: #e8e6dc;
+  --pg-line-2: #d6d3c5;
+  /* 控件边界：按钮、输入框的描边，3.0+ 对比度。
+     line-1/line-2 只做装饰性分隔线，不承载信息。 */
+  --pg-line-strong: #8a877d;
 
-  --pg-ink: var(--pg-ref-ink-950);
-  --pg-ink-hover: #25354d;
+  --pg-accent: var(--pg-ref-clay-deep);
+  --pg-accent-hover: var(--pg-ref-clay-darker);
+  --pg-accent-soft: #f6e3d8;
+  --pg-brand: var(--pg-ref-clay);
 
-  --pg-accent: var(--pg-ref-indigo-700);
-  --pg-accent-hover: var(--pg-ref-indigo-600);
-  --pg-accent-soft: #eaf0ff;
+  /* 主按钮：深色底、米色字 */
+  --pg-ink: var(--pg-ref-slate);
+  --pg-ink-hover: #3d3d3a;
+  --pg-on-ink: var(--pg-ref-ivory);
+
+  /* 首页项目色块：三种扁平底色 */
+  --pg-tile-clay: #f4e1d6;
+  --pg-tile-sky: #dfe8f1;
+  --pg-tile-sage: #e5e9d9;
 
   --pg-ok-fg: #065f46;
   --pg-ok-bg: #e9f5ef;
-  --pg-ok-line: #bfe3d2;
-  --pg-warn-fg: #92400e;
-  --pg-warn-bg: #fbf3e4;
-  --pg-warn-line: #ecd3a8;
+  --pg-ok-line: #9fd2bb;
+  --pg-warn-fg: #8a3d0c;
+  --pg-warn-bg: #fbf0dc;
+  --pg-warn-line: #e0be85;
   --pg-bad-fg: #991b1b;
   --pg-bad-bg: #fbecec;
-  --pg-bad-line: #f0c4c4;
-  --pg-mute-fg: #4d5e76;
-  --pg-mute-bg: var(--pg-ref-paper-dim);
-  --pg-mute-line: var(--pg-ref-line-light);
+  --pg-bad-line: #e6a8a8;
+  --pg-mute-fg: #3d3d3a;
+  --pg-mute-bg: var(--pg-ref-ivory-dark);
+  --pg-mute-line: #d6d3c5;
 
-  --pg-focus: var(--pg-ref-indigo-600);
-  --pg-shadow: 0 2px 6px rgb(24 43 79 / 0.04), 0 20px 60px rgb(24 43 79 / 0.12);
-
-  /* 反白带：极性翻转，全站只此一处用反色 */
-  --pg-band-bg: var(--pg-ref-ink-950);
-  --pg-band-fg: #f4f4f2;
-  --pg-band-mute: #a9a9b3;
-  --pg-band-line: #33333c;
+  --pg-focus: var(--pg-ref-clay-deep);
+  --pg-shadow: 0 0.5rem 1.5rem rgb(20 20 19 / 0.14);
 }
 
 /* ---- 语义层：暗色 ---- */
 body.theme-dark {
   color-scheme: dark;
 
-  --pg-bg-page: var(--pg-ref-ink-950);
-  --pg-bg-raised: var(--pg-ref-ink-900);
-  --pg-bg-sunken: #091120;
-  --pg-bg-code: #0c0c0f;
-  --pg-fg-code-dim: #95a7c3;
+  --pg-bg-page: #1f1e1d;
+  --pg-bg-raised: #2a2927;
+  --pg-bg-sunken: #181716;
 
-  --pg-fg-1: #eef3fc;
-  --pg-fg-2: #b6c5dc;
-  --pg-fg-3: #95a7c3;
-  --pg-fg-on-ink: #0c1424;
-  --pg-fg-on-code: #e8e8ea;
+  --pg-fg-1: #faf9f5;
+  --pg-fg-2: #cfccc1;
+  --pg-fg-3: #a5a297;
 
-  --pg-line-1: var(--pg-ref-line-dark);
-  --pg-line-2: #354862;
-  --pg-line-strong: #687e9c;
+  --pg-line-1: #34322f;
+  --pg-line-2: #45433f;
+  --pg-line-strong: #7b7970;
 
-  --pg-ink: #f2f2f5;
-  --pg-ink-hover: #ffffff;
+  --pg-accent: #e8926f;
+  --pg-accent-hover: #f1ae92;
+  --pg-accent-soft: #3a2a22;
+  --pg-brand: var(--pg-ref-clay);
 
-  --pg-accent: var(--pg-ref-indigo-200);
-  --pg-accent-hover: #dde4ff;
-  --pg-accent-soft: #172b4c;
+  --pg-ink: #faf9f5;
+  --pg-ink-hover: #e0ddd2;
+  --pg-on-ink: #141413;
+
+  --pg-tile-clay: #3a2b24;
+  --pg-tile-sky: #232c36;
+  --pg-tile-sage: #272c20;
 
   --pg-ok-fg: #7dd3ae;
   --pg-ok-bg: #10251d;
@@ -182,16 +153,10 @@ body.theme-dark {
   --pg-bad-fg: #f1a3a3;
   --pg-bad-bg: #2b1517;
   --pg-bad-line: #5c2629;
-  --pg-mute-fg: #b6c5dc;
-  --pg-mute-bg: #17253b;
-  --pg-mute-line: var(--pg-ref-line-dark);
+  --pg-mute-fg: #cfccc1;
+  --pg-mute-bg: #2a2927;
+  --pg-mute-line: #45433f;
 
-  --pg-focus: var(--pg-ref-indigo-200);
-  --pg-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
-
-  /* 暗色主题下使用稍亮的深蓝面，维持阅读对比度。 */
-  --pg-band-bg: #172842;
-  --pg-band-fg: #eef3fc;
-  --pg-band-mute: #b6c5dc;
-  --pg-band-line: #354862;
+  --pg-focus: #e8926f;
+  --pg-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.5);
 }
