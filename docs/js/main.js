@@ -23,8 +23,9 @@
       document.body.classList.toggle("theme-dark", dark);
       document.documentElement.dataset.theme = dark ? "dark" : "light";
       if (btn) {
-        btn.textContent = dark ? "主题：深色" : "主题：浅色";
-        btn.setAttribute("aria-label", dark ? "当前为深色主题，点击切换到浅色" : "当前为浅色主题，点击切换到深色");
+        var label = dark ? "当前为深色主题，点击切换到浅色" : "当前为浅色主题，点击切换到深色";
+        btn.setAttribute("aria-label", label);
+        btn.title = label;
       }
       if (persist) saveTheme(dark ? "dark" : "light");
     }

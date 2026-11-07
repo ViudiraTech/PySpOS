@@ -7,56 +7,110 @@
   <title>GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=5532dea3">
-  <link rel="stylesheet" href="css/style.css?v=8c54b34b">
+  <link rel="stylesheet" href="css/style.css?v=7ee53580">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
 <body>
   <!-- chrome:start -->
   <script src="js/theme-init.js?v=73514afb"></script>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 10l3 2.5L7 15M12.5 15H17"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/><rect x="10" y="10" width="4" height="4" rx=".5"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18M6.5 7h.01M9 7h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l9 4.5-9 4.5-9-4.5z"/><path d="M3 12.5l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5"/></symbol>
+    <symbol id="i-fork" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="9" r="2"/><path d="M6.5 7.5v9M17.5 11c0 3.5-4 4.5-9 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13M13.5 4.5L17 8l-3.5 3.5M20 16H7M10.5 12.5L7 16l3.5 3.5"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3.5a5.5 5.5 0 0 1-11 0zM12 17.5v3"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7.5" ry="3"/><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><path d="M7 7.25h.01M7 16.75h.01"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5l7.5 6 7.5-6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.5v5.5c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z"/><path d="M8.8 12l2.4 2.4 4-4.4"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5-5.5 3.5z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  </svg>
   <a class="skip-link" href="#main">跳到正文</a>
   <header class="site-header">
     <div class="container header-inner">
-      <a class="brand" href="index.html">GoutouStdio</a>
+      <a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect class="m1" x="3" y="4" width="22" height="6" rx="2"/><rect class="m2" x="3" y="11" width="22" height="6" rx="2"/><rect class="m3" x="3" y="18" width="22" height="6" rx="2"/></svg>GoutouStdio</a>
       <nav class="site-nav" id="site-nav" aria-label="主导航">
         <ul>
           <li><a href="pyspos.html">PySpOS</a></li>
           <li><a href="spaceos9.html">SpaceOS 9</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
           <li><a href="requirements.html">配置要求</a></li>
-          <li><details class="menu"><summary>下载</summary>
+          <li><details class="menu"><summary>下载<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             <ul>
-              <li><a href="ota/index.html">PySpOS 更新包</a></li>
-              <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
-              <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
-              <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+              <li><a href="ota/index.html"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>PySpOS 更新包</a></li>
+              <li><a href="ota/releases.html"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>PySpOS 版本历史</a></li>
+              <li><a href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg>SpaceOS 9 镜像</a></li>
+              <li><a href="spaceos8-download.html"><svg class="icon" aria-hidden="true"><use href="#i-window"/></svg>SpaceOS 8 镜像</a></li>
             </ul>
           </details></li>
-          <li><details class="menu"><summary>存档</summary>
+          <li><details class="menu"><summary>存档<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             <ul>
-              <li><a href="spaceos7.html">SpaceOS 7</a></li>
-              <li><a href="spaceos6.html">SpaceOS 6</a></li>
+              <li><a href="spaceos7.html"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg>SpaceOS 7</a></li>
+              <li><a href="spaceos6.html"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg>SpaceOS 6</a></li>
             </ul>
           </details></li>
-          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub<svg class="icon ext" aria-hidden="true"><use href="#i-external"/></svg></a></li>
         </ul>
       </nav>
       <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题">主题</button>
-        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false">菜单</button>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"><svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" title="菜单" aria-controls="site-nav" aria-expanded="false"><svg class="icon icon-menu" aria-hidden="true"><use href="#i-menu"/></svg><svg class="icon icon-close" aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
     </div>
   </header>
   <!-- chrome:end -->
   <main id="main">
     <section class="hero">
-      <div class="container">
-        <h1>几个学生写的操作系统。</h1>
-        <p class="lede">GoutouStdio 是学生自发组织的开源小组，2022 年开始做操作系统。现在维护两个项目：用 Python 写的 PySpOS，和用 Rust 写内核的 SpaceOS 9。</p>
-        <div class="actions">
-          <a class="button" href="pyspos.html">了解 PySpOS</a>
-          <a class="button button-secondary" href="spaceos9.html">了解 SpaceOS 9</a>
+      <div class="container hero-split">
+        <div>
+          <h1>几个学生，<br>在写操作系统。</h1>
+          <p class="lede">GoutouStdio 是学生自发组织的开源小组，2022 年开始做操作系统。现在维护两个项目：用 Python 写的 PySpOS，和用 Rust 写内核的 SpaceOS 9。</p>
+          <div class="actions">
+            <a class="button" href="pyspos.html">了解 PySpOS</a>
+            <a class="button button-secondary" href="spaceos9.html">了解 SpaceOS 9</a>
+          </div>
         </div>
+        <figure class="hero-art-svg">
+          <svg class="art" viewBox="0 0 480 420" role="img" aria-label="三层示意图：用户态在上，内核居中，宿主或硬件在下，层与层之间通过系统调用和设备访问连接">
+            <rect class="art-l1" x="30" y="24" width="420" height="96" rx="18"/>
+            <text x="56" y="62" font-size="24" font-weight="700">用户态</text>
+            <text class="art-sub" x="56" y="94" font-size="17">shell · 应用 · 系统程序</text>
+            <g class="art-ico"><use href="#i-terminal" x="388" y="46" width="44" height="44"/></g>
+
+            <path class="art-brand" d="M372 128v24M364 136l8-8 8 8M364 144l8 8 8-8"/>
+            <text class="art-note" x="392" y="146" font-size="15">系统调用</text>
+
+            <rect class="art-l2" x="30" y="160" width="420" height="96" rx="18"/>
+            <text x="56" y="198" font-size="24" font-weight="700">内核</text>
+            <text class="art-sub" x="56" y="230" font-size="17">调度 · 内存 · 文件系统 · 驱动</text>
+            <g class="art-ico"><use href="#i-chip" x="388" y="182" width="44" height="44"/></g>
+
+            <path class="art-brand" d="M372 264v24M364 272l8-8 8 8M364 280l8 8 8-8"/>
+            <text class="art-note" x="392" y="282" font-size="15">设备访问</text>
+
+            <rect class="art-l3" x="30" y="296" width="420" height="96" rx="18"/>
+            <text x="56" y="334" font-size="24" font-weight="700">宿主 / 硬件</text>
+            <text class="art-sub" x="56" y="366" font-size="17">Python 运行时 · UEFI 与硬件</text>
+            <g class="art-ico"><use href="#i-server" x="388" y="318" width="44" height="44"/></g>
+          </svg>
+          <figcaption>PySpOS 的宿主是 Python 运行时，SpaceOS 直接跑在 UEFI 和硬件上。</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -65,26 +119,29 @@
         <div class="section-head"><h2>项目</h2></div>
         <div class="tiles">
           <article class="tile tile-sky" data-product="PySpOS" data-status="active">
+            <span class="icon-box tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span>
             <h3>PySpOS</h3>
             <p class="status"><span class="badge badge-ok">维护中</span> v3.2.0 RC1 · MIT</p>
             <p>用 Python 写的模拟操作系统。有进程调度、文件系统和引导流程，能执行 x86_64 的 ELF 程序。</p>
-            <div class="tile-links"><a href="pyspos.html">介绍</a><a href="ota/index.html">下载</a></div>
+            <div class="tile-links"><a href="pyspos.html">介绍</a><a href="ota/index.html">下载 <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a></div>
           </article>
           <article class="tile tile-clay" data-product="SpaceOS 9" data-status="active">
+            <span class="icon-box tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span>
             <h3>SpaceOS 9</h3>
             <p class="status"><span class="badge badge-warn">公开预览</span> x86_64</p>
             <p>内核 SpaceKernel 3.0 用 Rust 写成，实现 Linux ABI。自带 PID 1（systemg）和 C 库（splibc），能运行动态链接的 BusyBox。</p>
-            <div class="tile-links"><a href="spaceos9.html">介绍</a><a href="spaceos9-download.html">下载镜像</a></div>
+            <div class="tile-links"><a href="spaceos9.html">介绍</a><a href="spaceos9-download.html">下载镜像 <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a></div>
           </article>
           <article class="tile tile-sage" data-product="SpaceOS 8" data-status="active">
+            <span class="icon-box tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-window"/></svg></span>
             <h3>SpaceOS 8</h3>
             <p class="status"><span class="badge badge-warn">抢先体验</span> x86_64 · Apache-2.0</p>
             <p>上一代项目。基于 Uinxed 内核（C 写的 UNIX-like 内核），带自研桌面 SPUI 和一批系统程序。</p>
-            <div class="tile-links"><a href="spaceos8.html">介绍</a><a href="spaceos8-download.html">下载镜像</a></div>
+            <div class="tile-links"><a href="spaceos8.html">介绍</a><a href="spaceos8-download.html">下载镜像 <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></a></div>
           </article>
         </div>
 
-        <h3 class="archive-title">存档</h3>
+        <h3 class="archive-title"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg> 存档</h3>
         <ul class="rows">
           <li data-product="SpaceOS 7" data-status="retired">
             <span class="key"><a href="spaceos7.html">SpaceOS 7</a></span>
@@ -129,8 +186,8 @@ python launcher.py</code></pre>
       <div class="container split">
         <h2>联系</h2>
         <div class="stack">
-          <p>合作、反馈问题或自我介绍都可以发邮件到 <a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>。我们是学生，回复可能比较慢。</p>
-          <p>代码在 GitHub：<a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">ViudiraTech</a>，PySpOS 仓库是 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
+          <p class="icon-line"><svg class="icon" aria-hidden="true"><use href="#i-mail"/></svg><span>合作、反馈问题或自我介绍都可以发邮件到 <a href="mailto:goutoustdio@outlook.com">goutoustdio@outlook.com</a>。我们是学生，回复可能比较慢。</span></p>
+          <p class="icon-line"><svg class="icon" aria-hidden="true"><use href="#i-code"/></svg><span>代码在 GitHub：<a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">ViudiraTech</a>，PySpOS 仓库是 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</span></p>
         </div>
       </div>
     </section>
@@ -182,7 +239,7 @@ python launcher.py</code></pre>
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=a4e29915"></script>
+  <script src="js/main.js?v=4cd585bc"></script>
   <!-- foot:end -->
 </body>
 </html>
