@@ -36,6 +36,7 @@ class PageCheck(HTMLParser):
         self.errs = []
         self.links = []
         self.ids = set()
+        self.uses = []
 
 # Record ids and link targets, and push every non-void tag onto the stack.
     def handle_starttag(self, tag, attrs):
@@ -44,6 +45,8 @@ class PageCheck(HTMLParser):
             self.ids.add(d["id"])
         if tag == "a" and "href" in d:
             self.links.append(d["href"])
+        if tag == "use" and d.get("href", "").startswith("#"):
+            self.uses.append(d["href"][1:])
         if tag == "link" and d.get("rel") == "stylesheet" and "href" in d:
             self.links.append(d["href"])
         if tag == "script" and d.get("src"):
@@ -71,6 +74,9 @@ def check_page(path):
     if c.stack:
         c.errs.append("未闭合: "
                       + ", ".join(f"<{t}>(L{p[0]})" for t, p in c.stack))
+
+    for ref in sorted(set(c.uses) - c.ids):
+        c.errs.append(f"图标不存在: #{ref}（sprite 里没有这个 symbol）")
 
     base = os.path.dirname(path)
     for href in c.links:

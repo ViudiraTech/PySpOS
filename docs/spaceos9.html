@@ -7,43 +7,70 @@
   <title>SpaceOS 9 | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=5532dea3">
-  <link rel="stylesheet" href="css/style.css?v=8c54b34b">
+  <link rel="stylesheet" href="css/style.css?v=7ee53580">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
 <body>
   <!-- chrome:start -->
   <script src="js/theme-init.js?v=73514afb"></script>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 10l3 2.5L7 15M12.5 15H17"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/><rect x="10" y="10" width="4" height="4" rx=".5"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18M6.5 7h.01M9 7h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l9 4.5-9 4.5-9-4.5z"/><path d="M3 12.5l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5"/></symbol>
+    <symbol id="i-fork" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="9" r="2"/><path d="M6.5 7.5v9M17.5 11c0 3.5-4 4.5-9 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13M13.5 4.5L17 8l-3.5 3.5M20 16H7M10.5 12.5L7 16l3.5 3.5"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3.5a5.5 5.5 0 0 1-11 0zM12 17.5v3"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7.5" ry="3"/><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><path d="M7 7.25h.01M7 16.75h.01"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7.5l7.5 6 7.5-6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.5v5.5c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z"/><path d="M8.8 12l2.4 2.4 4-4.4"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5.5 3.5-5.5 3.5z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  </svg>
   <a class="skip-link" href="#main">跳到正文</a>
   <header class="site-header">
     <div class="container header-inner">
-      <a class="brand" href="index.html">GoutouStdio</a>
+      <a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect class="m1" x="3" y="4" width="22" height="6" rx="2"/><rect class="m2" x="3" y="11" width="22" height="6" rx="2"/><rect class="m3" x="3" y="18" width="22" height="6" rx="2"/></svg>GoutouStdio</a>
       <nav class="site-nav" id="site-nav" aria-label="主导航">
         <ul>
           <li><a href="pyspos.html">PySpOS</a></li>
           <li><a href="spaceos9.html" aria-current="page">SpaceOS 9</a></li>
           <li><a href="spaceos8.html">SpaceOS 8</a></li>
           <li><a href="requirements.html">配置要求</a></li>
-          <li><details class="menu"><summary>下载</summary>
+          <li><details class="menu"><summary>下载<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             <ul>
-              <li><a href="ota/index.html">PySpOS 更新包</a></li>
-              <li><a href="ota/releases.html">PySpOS 版本历史</a></li>
-              <li><a href="spaceos9-download.html">SpaceOS 9 镜像</a></li>
-              <li><a href="spaceos8-download.html">SpaceOS 8 镜像</a></li>
+              <li><a href="ota/index.html"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>PySpOS 更新包</a></li>
+              <li><a href="ota/releases.html"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>PySpOS 版本历史</a></li>
+              <li><a href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg>SpaceOS 9 镜像</a></li>
+              <li><a href="spaceos8-download.html"><svg class="icon" aria-hidden="true"><use href="#i-window"/></svg>SpaceOS 8 镜像</a></li>
             </ul>
           </details></li>
-          <li><details class="menu"><summary>存档</summary>
+          <li><details class="menu"><summary>存档<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             <ul>
-              <li><a href="spaceos7.html">SpaceOS 7</a></li>
-              <li><a href="spaceos6.html">SpaceOS 6</a></li>
+              <li><a href="spaceos7.html"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg>SpaceOS 7</a></li>
+              <li><a href="spaceos6.html"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg>SpaceOS 6</a></li>
             </ul>
           </details></li>
-          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="https://github.com/ViudiraTech" rel="noopener" target="_blank">GitHub<svg class="icon ext" aria-hidden="true"><use href="#i-external"/></svg></a></li>
         </ul>
       </nav>
       <div class="header-actions">
-        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题">主题</button>
-        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false">菜单</button>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换主题" title="切换主题"><svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+        <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="菜单" title="菜单" aria-controls="site-nav" aria-expanded="false"><svg class="icon icon-menu" aria-hidden="true"><use href="#i-menu"/></svg><svg class="icon icon-close" aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
     </div>
   </header>
@@ -56,7 +83,7 @@
           <h1>SpaceOS 9</h1>
           <p class="lede">内核是 Rust 写的 SpaceKernel 3.0，实现了 Linux 64 位 ABI，目标是让现成的 Linux 程序直接运行。目前验证过的是 musl 动态链接的 BusyBox。镜像是 x86_64 的可启动 ISO。</p>
           <div class="actions">
-            <a class="button" href="spaceos9-download.html">下载预览镜像</a>
+            <a class="button" href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载预览镜像</a>
             <a class="button button-secondary" href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">查看源码</a>
           </div>
           <dl class="spec">
@@ -72,16 +99,42 @@
       </div>
     </section>
 
-    <section class="section" id="status">
+    <section class="section" id="points">
       <div class="container">
+        <ul class="points">
+          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><strong>Rust 内核</strong><p>SpaceKernel 3.0，soft-float，x86_64 优先。</p></li>
+          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><strong>Linux ABI</strong><p>ELF / PIE / 动态链接、信号、futex、epoll。</p></li>
+          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-disk"/></svg></span><strong>FAT32 根盘</strong><p>由 Limine 模块提供，只读挂载。</p></li>
+          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><strong>BusyBox ash</strong><p>musl 动态链接，带作业控制和 Ctrl-C。</p></li>
+        </ul>
         <div class="notice notice-info" role="status">
-          <p class="notice-title">这是公开预览</p>
-          <p>内核自测、三个架构的编译检查和 QEMU 启动已经通过；用户态和驱动覆盖还在补。下载前请读<a href="spaceos9-download.html#usage">使用声明</a>。</p>
+          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-info"/></svg>
+          <div>
+            <p class="notice-title">这是公开预览</p>
+            <p>内核自测、三个架构的编译检查和 QEMU 启动已经通过；用户态和驱动覆盖还在补。下载前请读<a href="spaceos9-download.html#usage">使用声明</a>。</p>
+        
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section section-tint" id="overview">
+    <section class="section section-tint" id="boot-chain">
+      <div class="container">
+        <div class="section-head">
+          <h2>启动顺序</h2>
+          <p class="lede">在 QEMU / UEFI 上的启动流程，每一步对应镜像里的一个组件。</p>
+        </div>
+        <ol class="flow flow-5">
+          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-server"/></svg></span><span class="flow-n">1</span></div><p class="flow-title">UEFI 固件</p><p>QEMU 里由 OVMF 提供，从 ISO 启动引导程序。</p></li>
+          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-disk"/></svg></span><span class="flow-n">2</span></div><p class="flow-title">Limine</p><p>引导内核，并把 FAT32 的 rootfs 作为模块交给它。</p></li>
+          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="flow-n">3</span></div><p class="flow-title">SpaceKernel 3.0</p><p>初始化后只读挂载根盘，再启动 PID 1。</p></li>
+          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-fork"/></svg></span><span class="flow-n">4</span></div><p class="flow-title">systemg</p><p>作为 PID 1，按依赖顺序启动 <code>.service</code> 里定义的服务。</p></li>
+          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><span class="flow-n">5</span></div><p class="flow-title">ash</p><p>控制台 shell。退出后由 systemg 重新拉起。</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="overview">
       <div class="container split">
         <h2>组成</h2>
         <div class="stack">
@@ -102,7 +155,7 @@
       </div>
     </section>
 
-    <section class="section" id="changes">
+    <section class="section section-tint" id="changes">
       <div class="container split">
         <h2>这一版新增的部分</h2>
         <ul class="rows rows-wide">
@@ -114,7 +167,7 @@
       </div>
     </section>
 
-    <section class="section section-tint" id="boundary">
+    <section class="section" id="boundary">
       <div class="container split">
         <h2>验证情况</h2>
         <div class="table-wrap">
@@ -123,22 +176,22 @@
               <tr><th scope="col">范围</th><th scope="col">状态</th><th scope="col">内容</th></tr>
             </thead>
             <tbody>
-              <tr><th scope="row">x86_64</th><td><span class="badge badge-ok">已验证</span></td><td>UEFI/QEMU 启动、systemg 作 PID 1、BusyBox 动态加载、ash 交互、<code>uname</code> / <code>id</code> / <code>nproc</code> / <code>ls</code> / <code>cat</code>、VFS dcache 自测、<code>SELFTEST_OK</code>，以及三个架构的 <code>cargo check</code>。</td></tr>
-              <tr><th scope="row">aarch64 / riscv64</th><td><span class="badge badge-warn">仅编译检查</span></td><td>内核能通过编译检查。用户态、rootfs 和启动链路没有在这个镜像里验证。</td></tr>
-              <tr><th scope="row">真实硬件与 GPU</th><td><span class="badge badge-warn">未验证</span></td><td>目前只在 QEMU 的 VirtIO GPU 2D 上验证。真实 GPU、音频、网络、睡眠唤醒不在这个镜像的承诺范围内。</td></tr>
+              <tr><th scope="row">x86_64</th><td><span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>已验证</span></td><td>UEFI/QEMU 启动、systemg 作 PID 1、BusyBox 动态加载、ash 交互、<code>uname</code> / <code>id</code> / <code>nproc</code> / <code>ls</code> / <code>cat</code>、VFS dcache 自测、<code>SELFTEST_OK</code>，以及三个架构的 <code>cargo check</code>。</td></tr>
+              <tr><th scope="row">aarch64 / riscv64</th><td><span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>仅编译检查</span></td><td>内核能通过编译检查。用户态、rootfs 和启动链路没有在这个镜像里验证。</td></tr>
+              <tr><th scope="row">真实硬件与 GPU</th><td><span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>未验证</span></td><td>目前只在 QEMU 的 VirtIO GPU 2D 上验证。真实 GPU、音频、网络、睡眠唤醒不在这个镜像的承诺范围内。</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <section class="section" id="license">
+    <section class="section section-tint" id="license">
       <div class="container split">
         <h2>源码与许可</h2>
         <div class="stack">
           <p>SpaceOS 9 的源码在 <a href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">ViudiraTech/SpaceOS-9</a>。镜像里包含 BusyBox、musl、Limine 等第三方组件，各自遵循自己的许可证，许可与源码获取方式见下载页和 <a href="spaceos9/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
           <div class="actions">
-            <a class="button" href="spaceos9-download.html">下载 SpaceOS 9</a>
+            <a class="button" href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载 SpaceOS 9</a>
             <a class="button button-secondary" href="spaceos8.html">上一代：SpaceOS 8</a>
           </div>
         </div>
@@ -192,7 +245,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=a4e29915"></script>
+  <script src="js/main.js?v=4cd585bc"></script>
   <!-- foot:end -->
 </body>
 </html>
