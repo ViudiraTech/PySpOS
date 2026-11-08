@@ -24,7 +24,17 @@ ALLOWED_FILTER_SELECTORS = {
     # Site-wide paper grain: a purely decorative pseudo-element carrying a noise background, no text in it,
     # and pointer-events: none, so it takes no part in interaction.
     'body::after',
+    # Pointer-follow highlight on cards: two empty pseudo-elements (inner glow and lit border) that fade
+    # in on hover. They hold no text and take no pointer events; the card content never changes opacity.
+    '.spot::before',
+    '.spot::after',
+    '.spot:hover::before',
+    '.spot:hover::after',
 }
+
+# opacity is allowed inside @keyframes: an animation only passes through a translucent state on its way
+# in or out, and every animation is switched off under prefers-reduced-motion. A resting state that is
+# dimmed with opacity is still caught by the rule below.
 
 
 # Read a CSS file as UTF-8 text.
@@ -80,10 +90,26 @@ def check_token_refs(all_css, defined, label):
     return missing
 
 
-# Flag opacity or filter applied to whole content blocks, whitelist aside.
+# Remove every @keyframes block, braces balanced, so its frames are not read as selectors.
+def strip_keyframes(css):
+    out, i = [], 0
+    for m in re.finditer(r"@(?:-webkit-)?keyframes\b[^{]*\{", css):
+        if m.start() < i:
+            continue
+        out.append(css[i:m.start()])
+        depth, j = 1, m.end()
+        while j < len(css) and depth:
+            depth += {"{": 1, "}": -1}.get(css[j], 0)
+            j += 1
+        i = j
+    out.append(css[i:])
+    return "".join(out)
+
+
+# Flag opacity or filter applied to whole content blocks, whitelist and @keyframes aside.
 def check_no_opacity_on_content(css, name):
     bad = []
-    body = strip_comments(css)
+    body = strip_keyframes(strip_comments(css))
     for m in re.finditer(r'([^{}]+)\{([^{}]*)\}', body):
         raw_sel, decl = m.group(1).strip(), m.group(2)
         if not raw_sel or raw_sel.startswith('@'):

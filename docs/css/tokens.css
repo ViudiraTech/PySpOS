@@ -3,47 +3,59 @@
    只放值与语义映射，不放组件样式。组件只准引用 --pg-*。
    三层：原始值（:root）→ 语义（按用途命名）→ 主题覆写。
    尺寸一律用 rem，便于跟随用户的字号设置。
-   配色：暖米色底、近黑暖灰字、陶土色点缀。
+   配色：深色科技风。近黑蓝底、冷灰字、紫→青渐变做品牌色；
+   默认深色，浅色作为可切换的备选主题。
    ============================================================ */
 
 :root {
   /* ---- 原始色板（主题无关） ---- */
-  --pg-ref-ivory: #faf9f5;
-  --pg-ref-ivory-dark: #f0eee6;
+  --pg-ref-void: #05060a;
+  --pg-ref-night: #0a0c13;
+  --pg-ref-snow: #f6f7fb;
   --pg-ref-white: #ffffff;
-  --pg-ref-slate: #141413;
-  --pg-ref-clay: #d97757;
-  --pg-ref-clay-deep: #a64b2a;
-  --pg-ref-clay-darker: #84391f;
+  --pg-ref-violet: #7c6cff;
+  --pg-ref-violet-deep: #4b3fd6;
+  --pg-ref-cyan: #22d3ee;
+  --pg-ref-cyan-deep: #0b6f86;
+  --pg-ref-emerald: #34d399;
+  --pg-ref-pink: #f472b6;
 
   /* 终端面板：两个主题下固定同一套深色 */
-  --pg-term-bg: #1f1e1d;
-  --pg-term-fg: #f0eee6;
-  --pg-term-dim: #b0aea5;
-  --pg-term-accent: #eba589;
+  --pg-term-bg: #07080d;
+  --pg-term-fg: #e8eaf2;
+  --pg-term-dim: #9198ab;
+  --pg-term-accent: #67e3f6;
+  --pg-term-bar: #12141d;
+  --pg-term-red: #ff5f57;
+  --pg-term-yellow: #febc2e;
+  --pg-term-green: #28c840;
 
-  /* ---- 字体：标题用衬线，正文用无衬线，代码用等宽 ----
-     衬线栈里 Georgia 管拉丁字母；中文在 macOS 落到宋体，其余系统落到雅黑。 */
-  --pg-font-serif: Georgia, "Source Serif 4", "Songti SC", "Noto Serif CJK SC",
-    "Source Han Serif SC", "Microsoft YaHei", "PingFang SC", serif;
-  --pg-font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+  /* ---- 字体：标题与正文都用无衬线，代码与标签用等宽 ---- */
+  --pg-font-display: "Inter Display", Inter, system-ui, -apple-system, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans SC", sans-serif;
+  --pg-font-sans: Inter, system-ui, -apple-system, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
     "Noto Sans SC", sans-serif;
-  --pg-font-mono: ui-monospace, "SF Mono", Menlo, Consolas,
+  --pg-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
 
   /* ---- 字阶与行高 ---- */
+  --pg-text-2xs: 0.75rem;
   --pg-text-xs: 0.8125rem;
   --pg-text-sm: 0.9375rem;
   --pg-text-md: 1rem;
   --pg-text-lg: 1.1875rem;
   --pg-text-xl: 1.5rem;
-  --pg-text-2xl: 2.125rem;
-  --pg-text-hero: clamp(2.5rem, 5.4vw, 4rem);
+  --pg-text-2xl: clamp(1.875rem, 3.2vw, 2.625rem);
+  --pg-text-hero: clamp(2.75rem, 6.6vw, 5.5rem);
+  --pg-text-page: clamp(2.5rem, 5vw, 4rem);
 
-  --pg-leading-body: 1.8;
+  --pg-leading-body: 1.75;
   --pg-leading-tight: 1.3;
-  --pg-leading-display: 1.18;
+  --pg-leading-display: 1.08;
+  --pg-tracking-display: -0.035em;
+  --pg-tracking-label: 0.14em;
 
   /* ---- 间距与尺寸 ---- */
   --pg-space-1: 0.25rem;
@@ -53,110 +65,171 @@
   --pg-space-5: 1.5rem;
   --pg-space-6: 2rem;
   --pg-space-7: 3rem;
-  --pg-space-8: 4.5rem;
-  --pg-space-9: 6rem;
+  --pg-space-8: 5rem;
+  --pg-space-9: 7.5rem;
 
-  --pg-radius: 0.5rem;
-  --pg-radius-lg: 1rem;
+  --pg-radius-sm: 0.375rem;
+  --pg-radius: 0.625rem;
+  --pg-radius-lg: 1.125rem;
+  --pg-radius-xl: 1.5rem;
   --pg-radius-pill: 6rem;
   --pg-header-h: 4.25rem;
-  --pg-container: 72rem;
-  --pg-measure: 42rem;
+  --pg-container: 75rem;
+  --pg-measure: 44rem;
+  --pg-hairline: 0.0625rem;
+  --pg-stroke: 0.125rem;
+  --pg-blur: 1rem;
+  --pg-blur-lg: 1.5rem;
+
+  /* ---- 动效：时长与缓动 ---- */
+  --pg-dur-1: 160ms;
+  --pg-dur-2: 320ms;
+  --pg-dur-3: 640ms;
+  --pg-dur-aurora: 28s;
+  --pg-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --pg-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* 弹簧：刚度 180、阻尼 14 预先算好的曲线；不支持 linear() 的浏览器整条声明失效，回到 ease */
+  --pg-ease-spring: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%,
+    1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163 27%, 1.154, 1.129 32.8%,
+    1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1);
 }
 
-/* ---- 语义层：亮色（默认） ---- */
+/* ---- 语义层：亮色（备选） ---- */
 :root,
 body:not(.theme-dark) {
   color-scheme: light;
 
-  --pg-bg-page: var(--pg-ref-ivory);
+  --pg-bg-page: var(--pg-ref-snow);
   --pg-bg-raised: var(--pg-ref-white);
-  --pg-bg-sunken: var(--pg-ref-ivory-dark);
+  --pg-bg-sunken: #edeff5;
+  --pg-bg-glass: rgb(255 255 255 / 0.72);
+  --pg-bg-card: rgb(255 255 255 / 0.8);
 
-  --pg-fg-1: var(--pg-ref-slate);
-  --pg-fg-2: #3d3d3a;
-  --pg-fg-3: #5e5d59;
+  --pg-fg-1: #0b0d14;
+  --pg-fg-2: #3b4152;
+  --pg-fg-3: #575e72;
 
-  --pg-line-1: #e8e6dc;
-  --pg-line-2: #d6d3c5;
+  --pg-line-1: #e4e7ef;
+  --pg-line-2: #d5d9e4;
   /* 控件边界：按钮、输入框的描边，3.0+ 对比度。
      line-1/line-2 只做装饰性分隔线，不承载信息。 */
-  --pg-line-strong: #8a877d;
+  --pg-line-strong: #838a9e;
+  --pg-line-glass: rgb(11 13 20 / 0.08);
+  --pg-line-hi: rgb(255 255 255 / 0.9);
 
-  --pg-accent: var(--pg-ref-clay-deep);
-  --pg-accent-hover: var(--pg-ref-clay-darker);
-  --pg-accent-soft: #f6e3d8;
-  --pg-brand: var(--pg-ref-clay);
+  --pg-accent: var(--pg-ref-violet-deep);
+  --pg-accent-hover: #3a2fb8;
+  --pg-accent-soft: #ecebff;
+  --pg-brand: var(--pg-ref-violet);
+  --pg-brand-2: var(--pg-ref-cyan-deep);
+  --pg-grad-brand: linear-gradient(120deg, var(--pg-ref-violet-deep) 0%, var(--pg-ref-violet) 45%, var(--pg-ref-cyan-deep) 100%);
+  --pg-grad-text: linear-gradient(180deg, #0b0d14 30%, #4a5066 100%);
+  --pg-grad-line: linear-gradient(90deg, transparent, rgb(75 63 214 / 0.5), rgb(11 111 134 / 0.5), transparent);
 
-  /* 主按钮：深色底、米色字 */
-  --pg-ink: var(--pg-ref-slate);
-  --pg-ink-hover: #3d3d3a;
-  --pg-on-ink: var(--pg-ref-ivory);
+  /* 主按钮：深色底、白字 */
+  --pg-ink: #0b0d14;
+  --pg-ink-hover: #262a38;
+  --pg-on-ink: var(--pg-ref-white);
 
-  /* 首页项目色块：三种扁平底色 */
-  --pg-tile-clay: #f4e1d6;
-  --pg-tile-sky: #dfe8f1;
-  --pg-tile-sage: #e5e9d9;
+  /* 首页项目卡片：三种带色调的底 */
+  --pg-tile-clay: #f1efff;
+  --pg-tile-sky: #eaf7fb;
+  --pg-tile-sage: #eaf7f1;
+  --pg-glow-clay: rgb(124 108 255 / 0.32);
+  --pg-glow-sky: rgb(34 211 238 / 0.32);
+  --pg-glow-sage: rgb(52 211 153 / 0.32);
 
-  --pg-ok-fg: #065f46;
-  --pg-ok-bg: #e9f5ef;
-  --pg-ok-line: #9fd2bb;
-  --pg-warn-fg: #8a3d0c;
-  --pg-warn-bg: #fbf0dc;
-  --pg-warn-line: #e0be85;
+  /* 首屏极光与网格背景（纯装饰） */
+  --pg-aurora-1: rgb(124 108 255 / 0.22);
+  --pg-aurora-2: rgb(34 211 238 / 0.18);
+  --pg-aurora-3: rgb(244 114 182 / 0.12);
+  --pg-grid: rgb(11 13 20 / 0.06);
+  --pg-spot: rgb(124 108 255 / 0.12);
+  --pg-noise-strength: 0.03;
+  --pg-shine: rgb(255 255 255 / 0.28);
+
+  --pg-ok-fg: #05603f;
+  --pg-ok-bg: #e6f6ef;
+  --pg-ok-line: #9fd8bf;
+  --pg-warn-fg: #844006;
+  --pg-warn-bg: #fdf3e1;
+  --pg-warn-line: #e8c58c;
   --pg-bad-fg: #991b1b;
-  --pg-bad-bg: #fbecec;
-  --pg-bad-line: #e6a8a8;
-  --pg-mute-fg: #3d3d3a;
-  --pg-mute-bg: var(--pg-ref-ivory-dark);
-  --pg-mute-line: #d6d3c5;
+  --pg-bad-bg: #fdecec;
+  --pg-bad-line: #eaa9a9;
+  --pg-mute-fg: #3b4152;
+  --pg-mute-bg: #edeff5;
+  --pg-mute-line: #d5d9e4;
 
-  --pg-focus: var(--pg-ref-clay-deep);
-  --pg-shadow: 0 0.5rem 1.5rem rgb(20 20 19 / 0.14);
+  --pg-focus: var(--pg-ref-violet-deep);
+  --pg-shadow: 0 0.75rem 2rem rgb(11 13 20 / 0.1), 0 0.125rem 0.375rem rgb(11 13 20 / 0.06);
+  --pg-shadow-lg: 0 2rem 4rem rgb(11 13 20 / 0.14);
+  --pg-glow: 0 0 0 0.0625rem rgb(75 63 214 / 0.18), 0 0.5rem 2rem rgb(124 108 255 / 0.22);
 }
 
-/* ---- 语义层：暗色 ---- */
+/* ---- 语义层：暗色（默认） ---- */
 body.theme-dark {
   color-scheme: dark;
 
-  --pg-bg-page: #1f1e1d;
-  --pg-bg-raised: #2a2927;
-  --pg-bg-sunken: #181716;
+  --pg-bg-page: var(--pg-ref-void);
+  --pg-bg-raised: #0e1018;
+  --pg-bg-sunken: #090b11;
+  --pg-bg-glass: rgb(10 12 19 / 0.66);
+  --pg-bg-card: rgb(17 19 29 / 0.6);
 
-  --pg-fg-1: #faf9f5;
-  --pg-fg-2: #cfccc1;
-  --pg-fg-3: #a5a297;
+  --pg-fg-1: #f1f3f9;
+  --pg-fg-2: #b6bccc;
+  --pg-fg-3: #8a91a5;
 
-  --pg-line-1: #34322f;
-  --pg-line-2: #45433f;
-  --pg-line-strong: #7b7970;
+  --pg-line-1: #161923;
+  --pg-line-2: #222632;
+  --pg-line-strong: #5d6477;
+  --pg-line-glass: rgb(255 255 255 / 0.08);
+  --pg-line-hi: rgb(255 255 255 / 0.1);
 
-  --pg-accent: #e8926f;
-  --pg-accent-hover: #f1ae92;
-  --pg-accent-soft: #3a2a22;
-  --pg-brand: var(--pg-ref-clay);
+  --pg-accent: #a99fff;
+  --pg-accent-hover: #cdc7ff;
+  --pg-accent-soft: #15142c;
+  --pg-brand: var(--pg-ref-violet);
+  --pg-brand-2: var(--pg-ref-cyan);
+  --pg-grad-brand: linear-gradient(120deg, var(--pg-ref-violet) 0%, #a78bfa 40%, var(--pg-ref-cyan) 100%);
+  --pg-grad-text: linear-gradient(180deg, #ffffff 30%, #8f96aa 100%);
+  --pg-grad-line: linear-gradient(90deg, transparent, rgb(124 108 255 / 0.7), rgb(34 211 238 / 0.7), transparent);
 
-  --pg-ink: #faf9f5;
-  --pg-ink-hover: #e0ddd2;
-  --pg-on-ink: #141413;
+  --pg-ink: #f1f3f9;
+  --pg-ink-hover: #ffffff;
+  --pg-on-ink: #05060a;
 
-  --pg-tile-clay: #3a2b24;
-  --pg-tile-sky: #232c36;
-  --pg-tile-sage: #272c20;
+  --pg-tile-clay: #120f24;
+  --pg-tile-sky: #0b1820;
+  --pg-tile-sage: #0b1a16;
+  --pg-glow-clay: rgb(124 108 255 / 0.45);
+  --pg-glow-sky: rgb(34 211 238 / 0.4);
+  --pg-glow-sage: rgb(52 211 153 / 0.4);
 
-  --pg-ok-fg: #7dd3ae;
-  --pg-ok-bg: #10251d;
-  --pg-ok-line: #1f4a3a;
-  --pg-warn-fg: #f0c57c;
-  --pg-warn-bg: #2a2113;
-  --pg-warn-line: #57431f;
-  --pg-bad-fg: #f1a3a3;
-  --pg-bad-bg: #2b1517;
+  --pg-aurora-1: rgb(124 108 255 / 0.3);
+  --pg-aurora-2: rgb(34 211 238 / 0.18);
+  --pg-aurora-3: rgb(244 114 182 / 0.14);
+  --pg-grid: rgb(255 255 255 / 0.045);
+  --pg-spot: rgb(124 108 255 / 0.16);
+  --pg-noise-strength: 0.05;
+  --pg-shine: rgb(124 108 255 / 0.3);
+
+  --pg-ok-fg: #6ee7b7;
+  --pg-ok-bg: #0a1f18;
+  --pg-ok-line: #1b4a39;
+  --pg-warn-fg: #f6c87a;
+  --pg-warn-bg: #211a0c;
+  --pg-warn-line: #54421d;
+  --pg-bad-fg: #f5a3a3;
+  --pg-bad-bg: #261215;
   --pg-bad-line: #5c2629;
-  --pg-mute-fg: #cfccc1;
-  --pg-mute-bg: #2a2927;
-  --pg-mute-line: #45433f;
+  --pg-mute-fg: #c3c8d6;
+  --pg-mute-bg: #12141d;
+  --pg-mute-line: #2a2e3b;
 
-  --pg-focus: #e8926f;
-  --pg-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.5);
+  --pg-focus: #a99fff;
+  --pg-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.5), 0 0.125rem 0.375rem rgb(0 0 0 / 0.4);
+  --pg-shadow-lg: 0 2rem 5rem rgb(0 0 0 / 0.6);
+  --pg-glow: 0 0 0 0.0625rem rgb(124 108 255 / 0.35), 0 0.5rem 2.5rem rgb(124 108 255 / 0.35);
 }
