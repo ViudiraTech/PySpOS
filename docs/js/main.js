@@ -1,5 +1,6 @@
 /* 站点交互：主题切换、导航菜单、代码块复制。
-   三项都是渐进增强，脚本失效时页面内容与导航仍然可用。 */
+   三项都是渐进增强，脚本失效时页面内容与导航仍然可用。
+   滚动与入场动画在 motion.js 里，和这里互不依赖。 */
 (function () {
   "use strict";
 
@@ -11,9 +12,10 @@
   function saveTheme(theme) {
     try { localStorage.setItem(KEY, theme); } catch (e) { /* 隐私模式下忽略 */ }
   }
-  function preferredTheme() {
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) return "light";
-    return "dark";
+  // 站点默认暗色，访客手动切到浅色才用浅色（与 theme-init.js 一致）。
+  function preferredTheme() { return "dark"; }
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   function initTheme() {
@@ -31,8 +33,24 @@
     }
     apply(readTheme() || preferredTheme(), false);
     if (!btn) return;
+    // 支持 View Transitions 的浏览器里，新主题从按钮位置以圆形展开；其余浏览器直接切换。
     btn.addEventListener("click", function () {
-      apply(document.body.classList.contains("theme-dark") ? "light" : "dark", true);
+      var next = document.body.classList.contains("theme-dark") ? "light" : "dark";
+      if (!document.startViewTransition || reducedMotion()) { apply(next, true); return; }
+      var rect = btn.getBoundingClientRect();
+      var x = rect.left + rect.width / 2;
+      var y = rect.top + rect.height / 2;
+      var r = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+      var root = document.documentElement;
+      root.classList.add("vt-theme");
+      var vt = document.startViewTransition(function () { apply(next, true); });
+      vt.ready.then(function () {
+        root.animate(
+          { clipPath: ["circle(0 at " + x + "px " + y + "px)", "circle(" + r + "px at " + x + "px " + y + "px)"] },
+          { duration: 560, easing: "cubic-bezier(0.65, 0, 0.35, 1)", pseudoElement: "::view-transition-new(root)" }
+        );
+      }).catch(function () { /* 被打断时主题已经切好，忽略 */ });
+      vt.finished.then(function () { root.classList.remove("vt-theme"); }, function () { root.classList.remove("vt-theme"); });
     });
     window.addEventListener("storage", function (e) {
       if (e.key === KEY) apply(e.newValue || preferredTheme(), false);
@@ -102,8 +120,9 @@
       var text = copy.textContent.replace(/\n$/, "");
       function done(ok) {
         btn.textContent = ok ? "已复制" : "复制失败";
+        btn.classList.toggle("is-done", ok);
         status.textContent = ok ? "已复制到剪贴板" : "复制失败，请手动选择文本";
-        window.setTimeout(function () { btn.textContent = "复制"; }, 1600);
+        window.setTimeout(function () { btn.textContent = "复制"; btn.classList.remove("is-done"); }, 1600);
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });

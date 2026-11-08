@@ -119,6 +119,15 @@ ICONS = {
 
 BLOCKS = ("head", "chrome", "foot")
 
+# Third-party animation libraries, loaded in this order before js/motion.js. Versions and licences
+# are listed in docs/js/vendor/README.md.
+VENDOR_SCRIPTS = [
+    "js/vendor/gsap.min.js",
+    "js/vendor/ScrollTrigger.min.js",
+    "js/vendor/SplitText.min.js",
+    "js/vendor/lenis.min.js",
+]
+
 
 # Every page in docs/ and docs/ota/, as paths relative to docs/ with forward slashes.
 def page_paths():
@@ -261,6 +270,10 @@ def render_foot(page):
         "  </footer>",
         f'  <script src="{root}js/main.js?v={asset_version("js/main.js")}"></script>',
     ]
+    # Animation stack, served from docs/js/vendor so the site never depends on a CDN.
+    # motion.js does nothing when any of these fail to load or the visitor asks for reduced motion.
+    for rel in VENDOR_SCRIPTS + ["js/motion.js"]:
+        out.append(f'  <script src="{root}{rel}?v={asset_version(rel)}"></script>')
     return "\n".join(out)
 
 
