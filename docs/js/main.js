@@ -132,10 +132,25 @@
     });
   }
 
+  // 手机上表格会堆叠成卡片，每个单元格前要显示列名；这里把表头文字抄到 data-label。
+  function initTableLabels() {
+    document.querySelectorAll("main table").forEach(function (table) {
+      var heads = table.querySelectorAll("thead th");
+      if (!heads.length) return;
+      table.querySelectorAll("tbody tr").forEach(function (tr) {
+        Array.prototype.forEach.call(tr.children, function (cell, i) {
+          var label = heads[i] && heads[i].textContent.trim();
+          if (cell.tagName === "TD" && label) cell.setAttribute("data-label", label);
+        });
+      });
+    });
+  }
+
   function init() {
     initTheme();
     initMenu();
     initCopy();
+    initTableLabels();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
