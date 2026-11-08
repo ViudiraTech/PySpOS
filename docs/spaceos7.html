@@ -7,7 +7,7 @@
   <title>SpaceOS 7（已停更） | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=a25c6458">
+  <link rel="stylesheet" href="css/style.css?v=9bbaa2c0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -89,65 +89,49 @@
       </div>
     </section>
 
-    <section class="section" id="notice">
-      <div class="container">
-        <div class="notice notice-warn" role="note">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-archive"/></svg>
-          <div>
-            <p class="notice-title">这个项目已停止开发，本页仅作存档</p>
-            <p>不再维护，不接受 issue、功能请求或移植，请不要基于它继续投入。目前在维护的是 <a href="pyspos.html">PySpOS</a> 和 <a href="spaceos9.html">SpaceOS 9</a>；PySpOS 的代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
-        
-          </div>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#intro">背景</a></li>
+          <li><a href="#features">做到的部分</a></li>
+          <li><a href="#history">进展</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+      <div class="notice notice-warn" role="note">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-archive"/></svg>
+        <div>
+          <p class="notice-title">这个项目已停止开发，本页仅作存档</p>
+          <p>不再维护，不接受 issue 或功能请求。目前在维护的是 <a href="pyspos.html">PySpOS</a> 和 <a href="spaceos9.html">SpaceOS 9</a>。</p>
         </div>
       </div>
-    </section>
 
-    <section class="section section-tint" id="intro">
-      <div class="container split">
-        <h2>背景</h2>
-        <div class="stack prose">
-          <p>2026 年，团队研究清楚 UEFI 之后启动了这个项目：没有外部代码，没有依赖，UEFI 引导和内核加载全部自己写。设计目标写的是“完全自研、混合内核、极致性能”，混合内核想兼顾微内核的稳定和宏内核的性能。</p>
-          <p>做到约一半时停止：用户态没做完，还存在 Heisenbug。中间重构过一次引导和内核；桌面环境运行在 Ring 3，桌面崩溃不会拖垮内核。</p>
-        </div>
-      </div>
-    </section>
+          <h2 id="intro">背景</h2>
+          <p>2026 年搞懂 UEFI 后启动：不用外部代码，引导和内核加载全部自己写。目标是混合内核，兼顾微内核的稳定和宏内核的性能。</p>
+          <p>做到约一半时停止：用户态没完成，还有难以复现的 Heisenbug。</p>
 
-    <section class="section" id="features">
-      <div class="container split">
-        <h2>做到的部分</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">SPFS 2.0 Ultra</span><p>自研文件系统，带 Journal 日志、CRC64 数据校验和缓存块机制。</p></li>
-          <li><span class="key">内核重构</span><p>引导程序自己写（没用 Limine / GRUB）；放弃 Uinxed-Kernel，改为纯自研；伙伴系统加 Slab 分配器；进程间 IPC 和用户态支持。</p></li>
-          <li><span class="key">Ring 3 桌面</span><p>桌面跑在用户空间，与内核隔离，桌面崩溃不影响内核。</p></li>
-          <li><span class="key">SMP 多核</span><p>多核调度、同步机制、内存管理和中断处理。</p></li>
-          <li><span class="key">xHCI 控制器</span><p>xHCI 驱动，支持 USB 3.0 及以上，向后兼容 USB 2.0。</p></li>
-          <li><span class="key">空间 API</span><p>自研的系统调用接口，包含系统调用、IPC 和权限控制。</p></li>
-        </ul>
-      </div>
-    </section>
+          <h2 id="features">做到的部分</h2>
+          <ul>
+            <li><strong>自写引导</strong>：没用 Limine 或 GRUB，也不再基于 Uinxed-Kernel。</li>
+            <li><strong>混合内核</strong>：微内核组件放在用户空间，关键服务留在内核，带 IPC 和权限控制。</li>
+            <li><strong>内存</strong>：Buddy + Slab 分配器，4 KB 与 2 MB 页。</li>
+            <li><strong>调度</strong>：CFS，支持实时调度和多核负载均衡。</li>
+            <li><strong>Ring 3 桌面</strong>：桌面跑在用户空间，崩溃不影响内核。</li>
+            <li><strong>SPFS 2.0 Ultra</strong>：自研文件系统，带日志和 CRC64 校验。</li>
+            <li><strong>驱动</strong>：xHCI（USB 3.0+）、存储、显示、网络、音频和输入。</li>
+            <li><strong>空间 API</strong>：自研的系统调用、IPC 和权限接口。</li>
+          </ul>
 
-    <section class="section section-tint" id="tech">
-      <div class="container split">
-        <h2>内核设计</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">混合内核</span><p>微内核组件放到用户空间，关键服务留在内核空间；有 IPC 和权限管理。</p></li>
-          <li><span class="key">UEFI 库</span><p>从零写的 UEFI 库，高半地址内核加载，不依赖外部引导代码。</p></li>
-          <li><span class="key">内存管理</span><p>Buddy System 加 Slab 分配器，4 KB 与 2 MB 大页，虚拟内存和硬件辅助的内存保护。</p></li>
-          <li><span class="key">进程调度</span><p>CFS 完全公平调度，支持实时调度、多核负载均衡与节能调度。</p></li>
-          <li><span class="key">设备驱动</span><p>存储（IDE / AHCI / NVMe / USB / SCSI）、显示、网络、音频、输入，以及 xHCI USB 驱动。</p></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="history">
-      <div class="container split">
-        <h2>进展</h2>
-        <ol class="rows rows-wide">
-          <li><span class="key">搞懂 UEFI</span><p>理解 UEFI 之后，启动完全自研的操作系统项目。（用户态没做好）</p></li>
-          <li><span class="key">混合内核设计</span><p>完成混合内核的架构设计。</p></li>
-          <li><span class="key">内核实现</span><p>完成内核基本功能：进程调度、内存管理、中断处理。</p></li>
-          <li><span class="key">Ring 3 桌面</span><p>实现用户空间的桌面环境。</p></li>
-        </ol>
+          <h2 id="history">进展</h2>
+          <ol>
+            <li>搞懂 UEFI，启动项目。</li>
+            <li>完成混合内核的架构设计。</li>
+            <li>实现调度、内存管理和中断处理。</li>
+            <li>实现 Ring 3 桌面，之后停止。</li>
+          </ol>
+        </article>
       </div>
     </section>
   </main>
@@ -198,7 +182,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=182b2eeb"></script>
+  <script src="js/main.js?v=cb908392"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>

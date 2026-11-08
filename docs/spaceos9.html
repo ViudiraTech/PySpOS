@@ -7,7 +7,7 @@
   <title>SpaceOS 9 | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=a25c6458">
+  <link rel="stylesheet" href="css/style.css?v=9bbaa2c0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -81,7 +81,7 @@
         <div>
           <p class="hero-badge"><span class="badge badge-warn">公开预览</span></p>
           <h1>SpaceOS 9</h1>
-          <p class="lede">内核是 Rust 写的 SpaceKernel 3.0，实现了 Linux 64 位 ABI，目标是让现成的 Linux 程序直接运行。目前验证过的是 musl 动态链接的 BusyBox。镜像是 x86_64 的可启动 ISO。</p>
+          <p class="lede">内核 SpaceKernel 3.0 用 Rust 写成，实现 Linux 64 位 ABI，目标是直接运行现成的 Linux 程序。目前验证过 musl 动态链接的 BusyBox。</p>
           <div class="actions">
             <a class="button" href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载预览镜像</a>
             <a class="button button-secondary" href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">查看源码</a>
@@ -99,102 +99,72 @@
       </div>
     </section>
 
-    <section class="section" id="points">
-      <div class="container">
-        <ul class="points">
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><strong>Rust 内核</strong><p>SpaceKernel 3.0，soft-float，x86_64 优先。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><strong>Linux ABI</strong><p>ELF / PIE / 动态链接、信号、futex、epoll。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-disk"/></svg></span><strong>FAT32 根盘</strong><p>由 Limine 模块提供，只读挂载。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><strong>BusyBox ash</strong><p>musl 动态链接，带作业控制和 Ctrl-C。</p></li>
-        </ul>
-        <div class="notice notice-info" role="status">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-info"/></svg>
-          <div>
-            <p class="notice-title">这是公开预览</p>
-            <p>内核自测、三个架构的编译检查和 QEMU 启动已经通过；用户态和驱动覆盖还在补。下载前请读<a href="spaceos9-download.html#usage">使用声明</a>。</p>
-        
-          </div>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#overview">组成</a></li>
+          <li><a href="#boot-chain">启动顺序</a></li>
+          <li><a href="#changes">这一版新增</a></li>
+          <li><a href="#boundary">验证情况</a></li>
+          <li><a href="#license">源码与许可</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+      <div class="notice notice-info" role="status">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div>
+          <p class="notice-title">这是公开预览</p>
+          <p>内核自测、三个架构的编译检查和 QEMU 启动已经通过，用户态和驱动还在补。下载前请读<a href="spaceos9-download.html#usage">使用声明</a>。</p>
         </div>
       </div>
-    </section>
 
-    <section class="section section-tint" id="boot-chain">
-      <div class="container">
-        <div class="section-head">
-          <h2>启动顺序</h2>
-          <p class="lede">在 QEMU / UEFI 上的启动流程，每一步对应镜像里的一个组件。</p>
-        </div>
-        <ol class="flow flow-5">
-          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-server"/></svg></span><span class="flow-n">1</span></div><p class="flow-title">UEFI 固件</p><p>QEMU 里由 OVMF 提供，从 ISO 启动引导程序。</p></li>
-          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-disk"/></svg></span><span class="flow-n">2</span></div><p class="flow-title">Limine</p><p>引导内核，并把 FAT32 的 rootfs 作为模块交给它。</p></li>
-          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="flow-n">3</span></div><p class="flow-title">SpaceKernel 3.0</p><p>初始化后只读挂载根盘，再启动 PID 1。</p></li>
-          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-fork"/></svg></span><span class="flow-n">4</span></div><p class="flow-title">systemg</p><p>作为 PID 1，按依赖顺序启动 <code>.service</code> 里定义的服务。</p></li>
-          <li><div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><span class="flow-n">5</span></div><p class="flow-title">ash</p><p>控制台 shell。退出后由 systemg 重新拉起。</p></li>
-        </ol>
-      </div>
-    </section>
+          <h2 id="overview">组成</h2>
+          <ul>
+            <li><strong>内核</strong>：SpaceKernel 3.0，Rust、soft-float，x86_64 优先。</li>
+            <li><strong>ABI</strong>：Linux 64 位，支持 ELF / PIE / 动态链接、信号、futex、epoll、AF_UNIX。</li>
+            <li><strong>根盘</strong>：FAT32，由 Limine 模块提供，只读挂载。</li>
+            <li><strong>PID 1</strong>：systemg，按依赖启动服务并回收进程。</li>
+            <li><strong>用户态</strong>：自带 C 库 splibc 和 sh；BusyBox 通过 musl 动态链接运行。</li>
+            <li><strong>终端</strong>：ash，支持作业控制和 Ctrl-C / Ctrl-Z。</li>
+          </ul>
 
-    <section class="section" id="overview">
-      <div class="container split">
-        <h2>组成</h2>
-        <div class="stack">
-          <p>SpaceOS 9 没有另造一套用户接口，而是尽量把 Linux 现有的进程、文件和终端语义做完整，让现成程序能直接运行。</p>
+          <h2 id="boot-chain">启动顺序</h2>
+          <ol>
+            <li>UEFI 固件（QEMU 里是 OVMF）从 ISO 启动引导程序。</li>
+            <li>Limine 加载内核，并把 FAT32 根盘作为模块交给它。</li>
+            <li>SpaceKernel 初始化，只读挂载根盘，启动 PID 1。</li>
+            <li>systemg 按 <code>.service</code> 的依赖启动服务。</li>
+            <li>拉起控制台 shell ash；退出后由 systemg 重启。</li>
+          </ol>
+
+          <h2 id="changes">这一版新增</h2>
+          <ul>
+            <li><strong>VFS 缓存</strong>：Linux 语义的 dentry / inode 缓存和 LRU 回收；FAT32 大文件读取加了簇链缓存。</li>
+            <li><strong>动态链接</strong>：内核装载 ELF 解释器和 PIE，能运行 musl 动态链接的 BusyBox。</li>
+            <li><strong>进程与信号</strong>：线程、进程组与会话、POSIX 信号、futex、epoll、signalfd、timerfd。</li>
+            <li><strong>终端</strong>：控制终端、前后台进程组和 raw 模式。</li>
+          </ul>
+
+          <h2 id="boundary">验证情况</h2>
           <div class="table-wrap">
             <table>
+              <thead>
+                <tr><th scope="col">范围</th><th scope="col">状态</th><th scope="col">说明</th></tr>
+              </thead>
               <tbody>
-                <tr><th scope="row">内核</th><td>SpaceKernel 3.0。Rust、soft-float、多架构，x86_64 优先。</td></tr>
-                <tr><th scope="row">ABI</th><td>Linux 64 位：ELF / PIE / PT_INTERP、系统调用、信号、futex、epoll、AF_UNIX。</td></tr>
-                <tr><th scope="row">根盘</th><td>FAT32。Limine 模块提供 rootfs，只读挂载；有 <code>/dev</code>、<code>/proc</code>、<code>/sys</code>、<code>/tmp</code>、<code>/run</code>。</td></tr>
-                <tr><th scope="row">PID 1</th><td>systemg：服务单元、依赖排序、SIGCHLD 回收与重启。</td></tr>
-                <tr><th scope="row">用户态</th><td>splibc（freestanding C 库）、sh、systemg。动态链接的 BusyBox 通过 musl 运行。</td></tr>
-                <tr><th scope="row">终端</th><td>ash，带作业控制：raw termios、poll、控制终端、前台进程组、Ctrl-C / Ctrl-Z。</td></tr>
+                <tr><th scope="row">x86_64</th><td><span class="badge badge-ok">已验证</span></td><td>QEMU / UEFI 启动、systemg、BusyBox 动态加载、ash 交互和内核自测。</td></tr>
+                <tr><th scope="row">aarch64 / riscv64</th><td><span class="badge badge-warn">仅编译检查</span></td><td>用户态和启动链路未验证。</td></tr>
+                <tr><th scope="row">真实硬件</th><td><span class="badge badge-warn">未验证</span></td><td>只在 QEMU 的 VirtIO GPU 2D 上测过。</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="section section-tint" id="changes">
-      <div class="container split">
-        <h2>这一版新增的部分</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">VFS 缓存</span><p>Linux 语义的 dentry / inode 缓存：正、负 dentry，inode 身份，LRU 回收，路径前缀失效。procfs、sysfs、devtmpfs 每次都重新验证，避免设备注销后还查到旧目录。FAT32 的大文件读取另外做了簇链缓存。</p></li>
-          <li><span class="key">动态链接与 BusyBox</span><p>内核装载 ELF 解释器和 PIE。镜像里有 musl 动态加载器和 BusyBox standalone shell；ash 能接收键盘和串口输入，并执行 applet。</p></li>
-          <li><span class="key">进程、信号与终端</span><p>clone 线程、进程组与会话、<code>wait4</code> / <code>waitid</code>、POSIX 信号、futex、epoll、signalfd、timerfd、AF_UNIX。终端支持控制终端、前后台进程组和 raw 模式。</p></li>
-          <li><span class="key">从 PID 1 到 shell</span><p>systemg 作为 PID 1，解析 <code>/etc/systemg/*.service</code>，按依赖启动服务、回收孤儿进程，并拉起控制台 shell。splibc 提供静态 C 运行环境和自带的 sh。</p></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="boundary">
-      <div class="container split">
-        <h2>验证情况</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th scope="col">范围</th><th scope="col">状态</th><th scope="col">内容</th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">x86_64</th><td><span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>已验证</span></td><td>UEFI/QEMU 启动、systemg 作 PID 1、BusyBox 动态加载、ash 交互、<code>uname</code> / <code>id</code> / <code>nproc</code> / <code>ls</code> / <code>cat</code>、VFS dcache 自测、<code>SELFTEST_OK</code>，以及三个架构的 <code>cargo check</code>。</td></tr>
-              <tr><th scope="row">aarch64 / riscv64</th><td><span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>仅编译检查</span></td><td>内核能通过编译检查。用户态、rootfs 和启动链路没有在这个镜像里验证。</td></tr>
-              <tr><th scope="row">真实硬件与 GPU</th><td><span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>未验证</span></td><td>目前只在 QEMU 的 VirtIO GPU 2D 上验证。真实 GPU、音频、网络、睡眠唤醒不在这个镜像的承诺范围内。</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section class="section section-tint" id="license">
-      <div class="container split">
-        <h2>源码与许可</h2>
-        <div class="stack">
-          <p>SpaceOS 9 的源码在 <a href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">ViudiraTech/SpaceOS-9</a>。镜像里包含 BusyBox、musl、Limine 等第三方组件，各自遵循自己的许可证，许可与源码获取方式见下载页和 <a href="spaceos9/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
-          <div class="actions">
-            <a class="button" href="spaceos9-download.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载 SpaceOS 9</a>
-            <a class="button button-secondary" href="spaceos8.html">上一代：SpaceOS 8</a>
-          </div>
-        </div>
+          <h2 id="license">源码与许可</h2>
+          <p>源码在 <a href="https://github.com/ViudiraTech/SpaceOS-9" rel="noopener" target="_blank">ViudiraTech/SpaceOS-9</a>。镜像里的 BusyBox、musl、Limine 等组件各有许可，见 <a href="spaceos9/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
+          <p><a href="spaceos9-download.html">下载 SpaceOS 9</a> · <a href="spaceos8.html">上一代：SpaceOS 8</a></p>
+        </article>
       </div>
     </section>
   </main>
@@ -245,7 +215,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=182b2eeb"></script>
+  <script src="js/main.js?v=cb908392"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>

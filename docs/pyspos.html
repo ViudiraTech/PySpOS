@@ -7,7 +7,7 @@
   <title>PySpOS | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=a25c6458">
+  <link rel="stylesheet" href="css/style.css?v=9bbaa2c0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -80,7 +80,7 @@
       <div class="container hero-split">
         <div>
           <h1>PySpOS</h1>
-          <p class="lede">用 Python 写的模拟操作系统。它跑在宿主系统上，自己实现了 shell、进程调度、文件系统、引导流程和 OTA 更新，也能执行 x86_64 的 ELF 程序。</p>
+          <p class="lede">用 Python 写的模拟操作系统，跑在宿主系统上。有 shell、进程调度、文件系统和 OTA 更新，还能执行 x86_64 ELF 程序。</p>
           <div class="actions">
             <a class="button" href="ota/index.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载 3.2.0</a>
             <a class="button button-secondary" href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">查看源码</a>
@@ -105,140 +105,84 @@
     0      0  Sleeping  idle    swapper/0
     1      0  Sleeping  init    init
     2      1  Running   shell   pyspos-sh</span></code></pre>
-          <figcaption>shell 中 <code>help</code> 与 <code>ps</code> 的输出（节选）。格式取自 <code>src/commands.py</code>、<code>src/shell/proc_cmds.py</code> 和 <code>src/process.py</code>；PID 0、1、2 是保留进程。</figcaption>
+          <figcaption>shell 里 <code>help</code> 和 <code>ps</code> 的输出（节选）。PID 0、1、2 是保留进程。</figcaption>
         </figure>
       </div>
     </section>
 
-    <section class="section" id="points">
-      <div class="container">
-        <ul class="points">
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-fork"/></svg></span><strong>真子进程</strong><p>应用是独立的 OS 进程，有 PID、父子关系和信号。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span><strong>EEVDF 调度</strong><p>参照 Linux 6.6+，按虚拟截止期和 nice 权重排程。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-code"/></svg></span><strong>ELF 引擎</strong><p>Unicorn 执行 x86_64 指令，缺它时退回自研模拟器。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-swap"/></svg></span><strong>A/B 升级</strong><p>更新装进非活动槽位，校验后切换，失败可回滚。</p></li>
-        </ul>
-      </div>
-    </section>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#overview">简介</a></li>
+          <li><a href="#path">一条命令怎么执行</a></li>
+          <li><a href="#changes">3.2.0 更新</a></li>
+          <li><a href="#modules">源码结构</a></li>
+          <li><a href="#compat">运行环境</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+          <h2 id="overview">简介</h2>
+          <p>PySpOS 从 2022 年的“MP4 架构狗头 OS”演变而来。应用是独立的进程，调度器参照 Linux 的 EEVDF。</p>
+          <ul>
+            <li><strong>真子进程</strong>：应用有 PID、父子关系和信号。</li>
+            <li><strong>EEVDF 调度</strong>：按虚拟截止期和 nice 权重排程。</li>
+            <li><strong>ELF 引擎</strong>：Unicorn 执行 x86_64 指令；没装时退回自研的 SpaceCPU 1 Pro。</li>
+            <li><strong>A/B 升级</strong>：更新装进非活动槽位，校验后切换，失败可回滚。</li>
+          </ul>
+          <p>动态链接（INTERP）和 TLS 还没有实现。</p>
 
-    <section class="section section-tint" id="path">
-      <div class="container">
-        <div class="section-head">
-          <h2>一条命令的执行路径</h2>
-          <p class="lede">以外部程序为例：从按下 Enter 到系统调用，经过这三步。</p>
-        </div>
-        <ol class="flow">
-          <li>
-            <div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><span class="flow-n">1</span></div>
-            <p class="flow-title">Shell：parse → dispatch</p>
-            <p>Shell 把输入解析成命令和参数，再交给对应的模块。管道、重定向和后台作业都从这里开始。</p>
-            <code>src/shell/dispatch.py</code>
-          </li>
-          <li>
-            <div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-fork"/></svg></span><span class="flow-n">2</span></div>
-            <p class="flow-title">进程：fork → exec</p>
-            <p>外部应用通过 fork / exec 运行，是独立的进程。调度器用虚拟运行时间和截止期安排执行。</p>
-            <code>src/forkexec.py · src/process.py</code>
-          </li>
-          <li>
-            <div class="flow-top"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-code"/></svg></span><span class="flow-n">3</span></div>
-            <p class="flow-title">运行时：execute → syscall</p>
-            <p>ELF 由 Unicorn 执行 x86_64 指令，系统调用转发到内置的模拟层。可以观察执行、改实现，再运行一次。</p>
-            <code>Unicorn Engine → syscall</code>
-          </li>
-        </ol>
-      </div>
-    </section>
+          <h2 id="path">一条命令怎么执行</h2>
+          <ol>
+            <li><strong>Shell</strong>：解析输入并分发给对应模块。管道、重定向和后台作业从这里开始。</li>
+            <li><strong>进程</strong>：外部程序经 fork / exec 成为独立进程，由调度器安排运行。</li>
+            <li><strong>运行时</strong>：Unicorn 执行 ELF 指令，系统调用转给内置的模拟层。</li>
+          </ol>
 
-    <section class="section" id="overview">
-      <div class="container split">
-        <h2>概览</h2>
-        <div class="stack">
-          <p>PySpOS 从 2022 年的“MP4 架构狗头 OS”一路改过来。现在的版本能跑命令、管理文件、执行 ELF 程序；应用是独立进程，调度器参照 Linux 的 EEVDF。</p>
-          <p>3.2.0 重构了内部结构：原先 1217 行的 <code>main.py</code> 拆成 <code>src/shell/</code> 下的 sys、elf、ota、proc、dispatch 几个模块，原文件留作兼容层。调度在 <code>process.py</code>，进程引擎在 <code>forkexec.py</code>。</p>
-          <p>ELF 默认由 Unicorn Engine 执行真实的 x86_64 指令，系统调用转发给内置的模拟层。没装 unicorn 时退回自研的 SpaceCPU 1 Pro 模拟器，Windows 上也能跑。动态链接（INTERP）和 TLS 还没有实现。</p>
-          <div class="table-wrap">
-            <table>
-              <tbody>
-                <tr><th scope="row">当前版本</th><td>v3.2.0 RC1</td></tr>
-                <tr><th scope="row">项目启动</th><td>2022</td></tr>
-                <tr><th scope="row">核心语言</th><td>Python（另有部分 C 测试程序）</td></tr>
-                <tr><th scope="row">升级方式</th><td>A/B 槽位，可在本地回滚</td></tr>
-                <tr><th scope="row">程序格式</th><td>ELF（x86_64）、SPF 脚本</td></tr>
-                <tr><th scope="row">测试</th><td>按子系统分组，在 GitHub Actions 上运行</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
+          <h2 id="changes">3.2.0 更新</h2>
+          <p>这一版把 1217 行的 <code>main.py</code> 拆进了 <code>src/shell/</code>，原文件保留为兼容层。</p>
+          <ul>
+            <li><strong>进程</strong>：不再是协作式模拟。PID 0、1、2 依次引导，孤儿进程由 init 收养。</li>
+            <li><strong>调度</strong>：EEVDF，参照 Linux 6.6+ 的权重表、vruntime 和虚拟截止期。</li>
+            <li><strong>后台作业</strong>：<code>cmd &amp;</code>、<code>jobs</code>、<code>fg</code>、<code>bg</code>、<code>wait</code>，以及进程组与会话。</li>
+            <li><strong>ELF 调试</strong>：加 <code>--stats</code>、<code>--map</code>、<code>--disasm</code>、<code>--strace</code> 观察执行过程。</li>
+            <li><strong>窗口</strong>：VortexGlass 管理窗口和输入，应用可以用 Python SDK 开窗口、画控件，见 <a href="vortexglass.md">vortexglass.md</a>。</li>
+            <li><strong>开机向导</strong>：11 步 curses 向导，语言和时区会实际生效，用 <code>oobe</code> 重跑。</li>
+            <li><strong>终端</strong>：中文按双宽排版，修好了按 Enter 出现 <code>^M</code> 的问题。</li>
+            <li><strong>命令</strong>：分组 <code>help</code>、Tab 补全、管道和重定向；<code>apps/</code> 下的程序可以直接执行。</li>
+            <li><strong>配置</strong>：SpaceConfig v2（<code>.spc</code>），带 Schema 校验和迁移工具。</li>
+            <li><strong>OTA</strong>：云端已恢复，Recovery 里可以选版本装到指定槽位。</li>
+            <li><strong>出厂重置</strong>：<code>recovery.erase</code> 清理 8 类数据。</li>
+            <li><strong>许可</strong>：改用 MIT。</li>
+          </ul>
 
-    <section class="section section-tint" id="changes">
-      <div class="container split">
-        <h2>3.2.0 的改动</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">进程</span><p>应用是独立的 OS 进程，不再是协作式模拟。PID 0（swapper）、1（init）、2（shell）依次引导；孤儿进程由 init 收养，退出后先成为僵尸，再被回收。</p></li>
-          <li><span class="key">调度</span><p>EEVDF（Earliest Eligible Virtual Deadline First），参照 Linux 6.6+：nice 权重表、vruntime、虚拟截止期和信号状态机。</p></li>
-          <li><span class="key">后台作业</span><p><code>cmd &amp;</code>、<code>jobs</code>、<code>fg</code>、<code>bg</code>、<code>wait</code>、<code>$!</code>，以及进程组与会话。前台交互经管道中继，后台作业的 stdin 接 <code>/dev/null</code>。</p></li>
-          <li><span class="key">ELF 引擎</span><p>默认用 Unicorn，没装就用 SpaceCPU 1 Pro。可以加 <code>--stats</code>、<code>--map</code>、<code>--disasm</code>、<code>--strace</code> 观察执行过程。</p></li>
-          <li><span class="key">窗口 API</span><p>VortexGlass 管理窗口和输入。应用可以用 Python SDK 开多个窗口、处理键盘鼠标事件、绘制控件，或直接提交 RGBA 像素。记事本、文件浏览器和绘图程序各自持有界面和逻辑。API 与示例见 <a href="vortexglass.md">vortexglass.md</a>。</p></li>
-          <li><span class="key">首次开机向导</span><p>共 11 步的 curses 向导。语言和时区设置会实际生效（<code>zoneinfo</code> + <code>TZ</code>），完成标记写在 <code>etc/.oobe_done</code>，可以用 <code>oobe</code> 命令重跑。</p></li>
-          <li><span class="key">终端</span><p>TUI 按显示宽度排版（CJK 双宽），并去掉完整的 ANSI 转义序列。输入侧有 <code>stty sane</code> 恢复、输入归一化和重试上限，按 Enter 出现 <code>^M</code> 的问题已修复。</p></li>
-          <li><span class="key">命令</span><p>命令走元数据注册表：分组 <code>help</code>、<code>help &lt;cmd&gt;</code>、Tab 补全，支持管道和重定向。<code>PATH=apps/</code> 下的外部程序可以直接执行。</p></li>
-          <li><span class="key">SpaceConfig v2</span><p><code>.spc</code> 配置格式，支持转义、行尾注释、<code>null</code> 和列表，带 Schema 校验，以及 <code>spc_get / set / migrate</code> 工具。</p></li>
-          <li><span class="key">A/B 槽位与回滚</span><p>更新装进非活动槽位，校验通过后再切换，失败可以回滚。OTA 云端已恢复（<code>goutoustdio.rainyland.top</code>），在 Recovery 里也可以从云端选版本装到指定槽位。</p></li>
-          <li><span class="key">出厂重置</span><p><code>recovery.erase</code> 清理 8 类数据，包括题库历史、shell 历史和整棵目录树的 <code>__pycache__</code>。</p></li>
-          <li><span class="key">SPF 脚本</span><p>SPF（Space Portable Format）是自研的脚本格式，支持变量、算术、输入和引入。</p></li>
-          <li><span class="key">许可与测试</span><p>3.2.0 起使用 MIT 许可，代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。回归测试在 GitHub Actions 上运行。</p></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="modules">
-      <div class="container">
-        <div class="section-head">
-          <h2>模块</h2>
-          <p class="lede">每个模块只列一行，完整说明在仓库 README 和源码注释里。</p>
-        </div>
-        <div>
+          <h2 id="modules">源码结构</h2>
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th scope="col">模块</th><th scope="col">文件</th><th scope="col">作用</th></tr>
+                <tr><th scope="col">位置</th><th scope="col">作用</th></tr>
               </thead>
               <tbody>
-                <tr><th scope="row">主循环</th><td class="nowrap"><code>src/kernel.py</code></td><td>处理用户输入、执行命令、管理应用运行，启动时初始化各子系统。入口是 <code>kernel.loop()</code>。</td></tr>
-                <tr><th scope="row">SPF 解析</th><td class="nowrap"><code>src/parse_spf.py</code></td><td>解析并执行 SPF 文件，支持 <code>putchar()</code> 与 <code>exit()</code> 系统调用。</td></tr>
-                <tr><th scope="row">OTA 更新</th><td class="nowrap"><code>src/ota.py</code></td><td>版本检查、下载、验证、安装，云端地址是 <code>goutoustdio.rainyland.top</code>。</td></tr>
-                <tr><th scope="row">文件系统</th><td class="nowrap"><code>src/fs.py</code></td><td>list / create / read / delete 等文件操作 API，基于 os 和 shutil 实现。</td></tr>
-                <tr><th scope="row">配置管理</th><td class="nowrap"><code>src/btcfg.py</code></td><td>管理启动配置（ROOT 权限、启动器锁定状态），存放在 <code>etc/bootcfg.json</code>。</td></tr>
-                <tr><th scope="row">ELF 运行</th><td class="nowrap"><code>src/elf_loader/</code></td><td>ELF 加载、CPU 模拟和系统调用模拟，支持 x86 / x86_64。用法：<code>run program.elf</code>，可加 <code class="nowrap">--stats</code> / <code class="nowrap">--map</code> / <code class="nowrap">--strace</code>。</td></tr>
+                <tr><th scope="row"><code>src/kernel.py</code></th><td>主循环：处理输入、执行命令、初始化子系统</td></tr>
+                <tr><th scope="row"><code>src/shell/</code></th><td>命令解析与分发</td></tr>
+                <tr><th scope="row"><code>src/process.py</code></th><td>进程与调度</td></tr>
+                <tr><th scope="row"><code>src/elf_loader/</code></th><td>ELF 加载、CPU 与系统调用模拟</td></tr>
+                <tr><th scope="row"><code>src/parse_spf.py</code></th><td>SPF 脚本（自研格式）</td></tr>
+                <tr><th scope="row"><code>src/ota.py</code></th><td>更新的检查、下载、校验和安装</td></tr>
+                <tr><th scope="row"><code>src/fs.py</code></th><td>文件操作 API</td></tr>
+                <tr><th scope="row"><code>src/btcfg.py</code></th><td>启动配置，存在 <code>etc/bootcfg.json</code></td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="section section-tint" id="compat">
-      <div class="container split">
-        <h2>兼容性</h2>
-        <div class="stack">
-          <div class="table-wrap">
-            <table>
-              <tbody>
-                <tr><th scope="row">Windows</th><td>Windows 7 及以上，兼容性最好</td></tr>
-                <tr><th scope="row">Linux</th><td>主流发行版（Ubuntu、Debian、Fedora 等）</td></tr>
-                <tr><th scope="row">macOS</th><td>macOS 10.14 及以上</td></tr>
-                <tr><th scope="row">Python</th><td>3.10 及以上；CI 覆盖 3.10、3.12、3.14</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="actions">
-            <a class="button" href="ota/index.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载更新包</a>
-            <a class="button button-secondary" href="requirements.html">完整配置要求</a>
-          </div>
-        </div>
+          <h2 id="compat">运行环境</h2>
+          <ul>
+            <li><strong>Python</strong>：3.10 或更高。</li>
+            <li><strong>系统</strong>：Windows 7+、主流 Linux 发行版、macOS 10.14+。</li>
+          </ul>
+          <p>详见<a href="requirements.html">配置要求</a>。更新包在<a href="ota/index.html">下载页</a>，源码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
+        </article>
       </div>
     </section>
   </main>
@@ -289,7 +233,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=182b2eeb"></script>
+  <script src="js/main.js?v=cb908392"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>
