@@ -7,7 +7,7 @@
   <title>SpaceOS 8 | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=a25c6458">
+  <link rel="stylesheet" href="css/style.css?v=28bae9f1">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -81,7 +81,7 @@
         <div>
           <p class="hero-badge"><span class="badge badge-warn">抢先体验</span> <span class="badge">上一代</span></p>
           <h1>SpaceOS 8</h1>
-          <p class="lede">内核是 C 写的 UNIX-like 内核 Uinxed-Kernel，用户态是一套自研的桌面和系统程序，包括窗口合成器、浏览器和文件管理器。第二版 slim 镜像修好了 xHCI 上的 USB HID，USB 键盘和鼠标现在可以用；第一版里它们插上没有反应。</p>
+          <p class="lede">内核是 C 写的 UNIX-like 内核 Uinxed-Kernel，用户态是一整套自研的桌面和系统程序。第二版镜像修好了 xHCI 上的 USB 键盘和鼠标。</p>
           <div class="actions">
             <a class="button" href="spaceos8-download.html"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>下载第二版镜像</a>
             <a class="button button-secondary" href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">内核源码</a>
@@ -94,205 +94,134 @@
         </div>
         <figure class="hero-art">
           <img src="spaceos8-minecraft.png" alt="Minecraft 在 Weston 桌面中运行的截图，世界完整渲染，生命值、饥饿条、快捷栏和准星都正常" width="1356" height="924" fetchpriority="high">
-          <figcaption>Minecraft 运行在 Uinxed 内核上：用户态是 Alpine Linux v3.24，桌面是 Weston（Wayland），终端是 weston-terminal 14.0.2，宿主是 QEMU/KVM Q35。窗口、输入和渲染正常。</figcaption>
+          <figcaption>Minecraft 运行在 Uinxed 内核上（Alpine Linux v3.24 + Weston，QEMU/KVM）。</figcaption>
         </figure>
       </div>
     </section>
 
-    <section class="section" id="points">
-      <div class="container">
-        <ul class="points">
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-window"/></svg></span><strong>自研用户态</strong><p>桌面、合成器、浏览器和系统程序，约 29.2 万行。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg></span><strong>X11 兼容层</strong><p>120 个核心协议请求，能运行 DOOM 这类图形程序。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><strong>Uinxed 内核</strong><p>C 写的 UNIX-like 内核，实现 Linux 6.12 系统调用 ABI。</p></li>
-          <li><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-server"/></svg></span><strong>实体机验证</strong><p>已在 Dell PowerEdge R410 等实体服务器上启动。</p></li>
-        </ul>
-        <div class="notice notice-info" role="status">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-info"/></svg>
-          <div>
-            <p class="notice-title">抢先体验版，不是正式 release</p>
-            <p>内核已在实体服务器上启动，桌面能运行，也能跑 OpenJDK 和 DOOM 这类现成的 Linux 软件。图形和部分 ABI 还在补，所以只叫抢先体验。</p>
-        
-          </div>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#overview">简介</a></li>
+          <li><a href="#structure">系统结构</a></li>
+          <li><a href="#proof">能跑的现成软件</a></li>
+          <li><a href="#desktop">桌面与应用</a></li>
+          <li><a href="#kernel">Uinxed-Kernel</a></li>
+          <li><a href="#state">当前状态</a></li>
+          <li><a href="#run">构建与运行</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+      <div class="notice notice-info" role="status">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div>
+          <p class="notice-title">抢先体验版，不是正式发布</p>
+          <p>内核已在实体服务器上启动，桌面能运行；图形和部分 ABI 还在补。</p>
         </div>
       </div>
-    </section>
 
-    <section class="section section-tint" id="structure">
-      <div class="container split">
-        <h2>系统结构</h2>
-        <div class="stack">
-          <p>从上到下是各层的职责；虚线是用户态和内核之间的系统调用接口。</p>
-          <ol class="layers">
-            <li class="layer-user"><strong>SPUI 桌面与应用</strong><span>compositor · browser · terminal · filemgr · settings 等</span></li>
-            <li class="layer-compat"><strong>X11 兼容层 · VortexGlass</strong><span>Linux 图形软件与窗口主题</span></li>
-            <li class="layer-lib"><strong>libc · libgfx · imgui</strong><span>自研的 C 库、图形库和 GUI 工具包</span></li>
-            <li class="layer-abi"><strong>Linux 6.12 系统调用 ABI</strong><span>编号 0–462</span></li>
-            <li class="layer-kernel"><strong>Uinxed-Kernel</strong><span>EEVDF 调度 · 内存 · VFS · 网络 · 驱动</span></li>
-            <li class="layer-boot"><strong>Limine 引导</strong><span>UEFI 与 Legacy 双模</span></li>
+          <h2 id="overview">简介</h2>
+          <ul>
+            <li>用户态约 29.2 万行，内核约 18.1 万行，全部自研。</li>
+            <li>内核实现 Linux 6.12 的系统调用 ABI（编号 0–462）。</li>
+            <li>已在 Dell PowerEdge R410 等实体服务器上启动。</li>
+            <li>内核仓库使用 Apache-2.0 许可。</li>
+          </ul>
+
+          <h2 id="structure">系统结构</h2>
+          <p>从上到下：</p>
+          <ol>
+            <li><strong>SPUI 桌面与应用</strong>：合成器、浏览器、终端、文件管理器等。</li>
+            <li><strong>X11 兼容层</strong>与 VortexGlass 窗口主题。</li>
+            <li><strong>自研库</strong>：libc、libgfx、imgui。</li>
+            <li><strong>Linux 6.12 系统调用 ABI</strong>：用户态和内核的分界。</li>
+            <li><strong>Uinxed-Kernel</strong>：调度、内存、VFS、网络、驱动。</li>
+            <li><strong>Limine 引导</strong>：UEFI 与 Legacy 都支持。</li>
           </ol>
-        </div>
-      </div>
-    </section>
 
-    <section class="section" id="overview">
-      <div class="container split">
-        <h2>规模</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th scope="col">部分</th><th scope="col">规模</th><th scope="col">说明</th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">用户态</th><td class="nowrap"><span class="bar" style="--w: 100%"><i></i></span>约 29.2 万行</td><td>SPUI 桌面、合成器、浏览器和系统程序，全部自研。</td></tr>
-              <tr><th scope="row">内核</th><td class="nowrap"><span class="bar" style="--w: 62%"><i></i></span>约 18.1 万行</td><td>C 写的 UNIX-like 单体内核，449 个 C/H 文件。</td></tr>
-              <tr><th scope="row">图形界面</th><td class="nowrap"><span class="bar" style="--w: 12%"><i></i></span>约 3.4 万行</td><td>合成器和自研图形库 libgfx。</td></tr>
-              <tr><th scope="row">浏览器</th><td class="nowrap"><span class="bar" style="--w: 8%"><i></i></span>约 2.4 万行</td><td>纯 C 的 UxHtml 引擎，带 JavaScript 引擎。</td></tr>
-              <tr><th scope="row">系统调用</th><td class="nowrap">编号 0–462</td><td>Linux 6.12 x86-64 的系统调用编号。</td></tr>
-              <tr><th scope="row">版本 / 许可</th><td class="nowrap">1.0.0-alpha.1</td><td>内核仓库的许可是 Apache-2.0。</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section class="section section-tint" id="proof">
-      <div class="container split">
-        <h2>现成软件的运行情况</h2>
-        <div class="stack">
-          <p>下面这些程序都不是为这个内核写的。</p>
+          <h2 id="proof">能跑的现成软件</h2>
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th scope="col">程序</th><th scope="col">状态</th><th scope="col">备注</th></tr>
+                <tr><th scope="col">程序</th><th scope="col">状态</th><th scope="col">说明</th></tr>
               </thead>
               <tbody>
-                <tr><th scope="row">OpenJDK</th><td><span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>能运行</span></td><td>为它重写了信号处理、TSS / SMP / APIC 和中断路径，并修了 VFS 与页管理。JVM 的 GC 线程、线程挂起和内存映射都依赖这些地方行为正确。</td></tr>
-                <tr><th scope="row">DOOM</th><td><span class="badge badge-ok"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>能运行</span></td><td>经自研的 X11 兼容层运行。需要键盘、鼠标、连续动画帧、音频和稳定的显示通路。</td></tr>
-                <tr><th scope="row">systemd</th><td><span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>初步跑通</span></td><td>systemd 一启动就探测大量可选的 sysctl、挂载点和命名空间接口，任何一处行为不符都会起不来。为此补了 Cgroup v2 和完整的 Linux 命名空间支持。</td></tr>
-                <tr><th scope="row">Minecraft</th><td><span class="badge">团队实测</span></td><td>需要内核扛住真实 JVM 的内存管理、GC 线程调度、mmap 和 futex 行为。运行环境见页首截图。</td></tr>
+                <tr><th scope="row">OpenJDK</th><td><span class="badge badge-ok">能运行</span></td><td>为它重写了信号、SMP 和中断路径。</td></tr>
+                <tr><th scope="row">DOOM</th><td><span class="badge badge-ok">能运行</span></td><td>经自研的 X11 兼容层运行。</td></tr>
+                <tr><th scope="row">systemd</th><td><span class="badge badge-warn">初步跑通</span></td><td>为它补了 Cgroup v2 和命名空间。</td></tr>
+                <tr><th scope="row">Minecraft</th><td><span class="badge">团队实测</span></td><td>见页首截图。</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="section" id="compat">
-      <div class="container split">
-        <h2>X11 兼容层与窗口主题</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">X11 兼容层</span><p>从零写的 X11 服务器，实现了 120 个核心协议请求，约 4500 行。目的是让原生 SPUI 桌面直接运行 Linux 上的图形软件：窗口映射、绘制、输入与事件、字体、光标、属性与选区，缺任何一个都会让部分程序起不来。</p></li>
-          <li><span class="key">VortexGlass</span><p>Vista Aero 风格的毛玻璃窗口装饰，在自研合成器里逐像素绘制。34 个素材覆盖四边边框、标题栏按钮的四种状态和 Aero orb。主题可以在 <code>tech</code> / <code>win98</code> / <code>vortexglass</code> 之间切换，由配置服务统一管理，所有应用共用一套外观。</p></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="section section-tint" id="desktop">
-      <div class="container split">
-        <h2>用户态与桌面</h2>
-        <div class="stack">
-          <p>用户态没有套现成的发行版：从窗口合成器到浏览器都是自己写的。</p>
-          <ul class="rows rows-wide">
-            <li><span class="key">SPUI 桌面</span><p>约 4500 行，14 个文件。有 dock、壁纸和窗口管理；dock 上可以启动终端、开始屏幕、文件管理器、活动监视器和文本编辑器。图标缺失时有降级配色。</p></li>
-            <li><span class="key">服务与配置</span><p>init / service / uxconfd。自研的 PID 1 服务管理器，有目标里程碑、进程监管与自动重启、僵尸回收。状态输出对齐 systemd 的 <code>[ OK ] Started …</code> 格式，提供 systemctl 风格的命令行，经 <code>/tmp/initctl</code> 与 PID 1 通信。配置由 <code>uxconfd</code> 统一管理，用 <code>uxconf-query</code> 读写。</p></li>
-            <li><span class="key">首次开机向导</span><p>约 2100 行。思路和 PySpOS 里的向导相同：语言、时区等设置会实际生效。</p></li>
-            <li><span class="key">libc 与工具链</span><p>libc / libgfx / imgui：自己的 C 库、图形库和 GUI 工具包，另有自研的 <code>sh</code>。</p></li>
+          <h2 id="desktop">桌面与应用</h2>
+          <ul>
+            <li><strong>SPUI 桌面</strong>：dock、壁纸和窗口管理。</li>
+            <li><strong>X11 兼容层</strong>：从零写的 X11 服务器，实现 120 个核心协议请求。</li>
+            <li><strong>VortexGlass</strong>：Aero 风格的毛玻璃窗口，主题可在 <code>tech</code> / <code>win98</code> / <code>vortexglass</code> 间切换。</li>
+            <li><strong>init</strong>：自研 PID 1，带服务监管和 systemctl 风格的命令。</li>
+            <li><strong>libc / libgfx / imgui</strong>：自己的 C 库、图形库和 GUI 工具包。</li>
           </ul>
-          <h3>应用</h3>
-          <p>全部自研，不是移植来的。行数是源码规模。</p>
+          <p>代码量最大的几个应用：</p>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr><th scope="col">程序</th><th scope="col">作用</th><th scope="col">行数</th></tr>
               </thead>
               <tbody>
-                <tr><th scope="row">compositor</th><td>窗口合成器：DRM/KMS、损伤跟踪、Xcursor、窗口装饰</td><td class="num"><span class="bar" style="--w: 48%"><i></i></span>12,320</td></tr>
-                <tr><th scope="row">browser</th><td>浏览器，含 UxHtml 渲染引擎与 JS 引擎</td><td class="num"><span class="bar" style="--w: 100%"><i></i></span>25,713</td></tr>
-                <tr><th scope="row">libgfx</th><td>自研图形库与控件库</td><td class="num"><span class="bar" style="--w: 85%"><i></i></span>21,785</td></tr>
-                <tr><th scope="row">settings</th><td>系统设置</td><td class="num"><span class="bar" style="--w: 12%"><i></i></span>3,064</td></tr>
-                <tr><th scope="row">terminal</th><td>终端仿真器</td><td class="num"><span class="bar" style="--w: 11%"><i></i></span>2,869</td></tr>
-                <tr><th scope="row">oobe</th><td>首次开机向导</td><td class="num"><span class="bar" style="--w: 8%"><i></i></span>2,137</td></tr>
-                <tr><th scope="row">editor</th><td>文本编辑器</td><td class="num"><span class="bar" style="--w: 6%"><i></i></span>1,637</td></tr>
-                <tr><th scope="row">displaymgr</th><td>显示管理器</td><td class="num"><span class="bar" style="--w: 6%"><i></i></span>1,489</td></tr>
-                <tr><th scope="row">filemgr</th><td>文件管理器</td><td class="num"><span class="bar" style="--w: 5%"><i></i></span>1,347</td></tr>
-                <tr><th scope="row">sysmon</th><td>活动监视器</td><td class="num"><span class="bar" style="--w: 5%"><i></i></span>1,267</td></tr>
-                <tr><th scope="row">init</th><td>PID 1 服务管理器</td><td class="num"><span class="bar" style="--w: 5%"><i></i></span>1,262</td></tr>
-                <tr><th scope="row">uxconfd</th><td>配置守护进程</td><td class="num"><span class="bar" style="--w: 3%"><i></i></span>873</td></tr>
-                <tr><th scope="row">netmgrd</th><td>网络管理器</td><td class="num"><span class="bar" style="--w: 3%"><i></i></span>761</td></tr>
-                <tr><th scope="row">escalate</th><td>提权通道</td><td class="num"><span class="bar" style="--w: 3%"><i></i></span>685</td></tr>
-                <tr><th scope="row">calc</th><td>计算器</td><td class="num"><span class="bar" style="--w: 2%"><i></i></span>388</td></tr>
+                <tr><th scope="row">browser</th><td>浏览器，含 UxHtml 渲染引擎和 JS 引擎</td><td class="num">25,713</td></tr>
+                <tr><th scope="row">libgfx</th><td>图形库与控件库</td><td class="num">21,785</td></tr>
+                <tr><th scope="row">compositor</th><td>窗口合成器</td><td class="num">12,320</td></tr>
+                <tr><th scope="row">settings</th><td>系统设置</td><td class="num">3,064</td></tr>
+                <tr><th scope="row">terminal</th><td>终端仿真器</td><td class="num">2,869</td></tr>
               </tbody>
             </table>
           </div>
+          <p>另有开机向导、编辑器、文件管理器、活动监视器、计算器等，都是自研的。</p>
+
+          <h2 id="kernel">Uinxed-Kernel</h2>
+          <ul>
+            <li><strong>调度</strong>：EEVDF，SMP 负载均衡，futex 优先级继承。</li>
+            <li><strong>内存</strong>：buddy + slab，四级页表，页缓存和 swap。</li>
+            <li><strong>文件系统</strong>：VFS；支持 FAT、exFAT、ext2/3/4、NTFS 和 ISO 9660。</li>
+            <li><strong>网络</strong>：自研 TCP/IP 协议栈（IPv4 / IPv6），e1000 和 RTL8139/8169 网卡驱动。</li>
+            <li><strong>驱动</strong>：USB HID、AHCI、NVMe、DRM/KMS、VirtIO-GPU、HD Audio、ACPI。</li>
+            <li><strong>安全与 IPC</strong>：seccomp、epoll、eventfd、memfd、PTY 等。</li>
+          </ul>
+
+          <h2 id="state">当前状态</h2>
+      <div class="notice notice-warn" role="note">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-alert"/></svg>
+        <div>
+          <p class="notice-title">实验性系统，不要拿重要数据冒险</p>
+          <p>请用可抛弃的机器和测试盘。NTFS 写入驱动还不能信任。</p>
         </div>
       </div>
-    </section>
-
-    <section class="section" id="kernel">
-      <div class="container split">
-        <h2>Uinxed-Kernel</h2>
-        <div class="stack">
-          <p>桌面、应用和浏览器都跑在这个内核上：C 从零写的 UNIX-like x86_64 单体内核，经 Limine 引导（UEFI 与 Legacy 双模），实现 Linux 6.12 的系统调用 ABI。</p>
-          <div class="table-wrap">
-            <table>
-              <tbody>
-                <tr><th scope="row">调度与进程</th><td>EEVDF 调度器，每 CPU 运行队列配红黑树时间线（vruntime / deadline / vlag / weight）；SMP 任务迁移与负载均衡、IPI 抢占；两阶段等待队列避免丢失唤醒；互斥量与 futex 的优先级继承；cgroups、ptrace、可加载内核模块。</td></tr>
-                <tr><th scope="row">内存管理</th><td>二元 buddy 物理页分配器，四级页表（4 KiB / 2 MiB / 1 GiB）；高半区直接映射（HHDM）和 slab 分配器；统一页缓存，带 LRU 回收、脏页回写和预读；swap 子系统。</td></tr>
-                <tr><th scope="row">文件系统</th><td>UNIX 风格的 VFS，有挂载点和 inode 节点；tmpfs 作默认根，另有 procfs、sysfs、devtmpfs、cpio、cgroupfs；实际文件系统覆盖 FAT12/16/32、exFAT、ext2/3/4、NTFS（可写）和 ISO 9660。</td></tr>
-                <tr><th scope="row">网络</th><td>自研协议栈：Ethernet、ARP、IPv4/IPv6、ICMP/ICMPv6、NDP、UDP、TCP；e1000/e1000e 与 RTL8139/8169 网卡驱动；Linux 套接字 ABI、DHCP 客户端，以及 /proc/net 和 /sys/class/net 视图。</td></tr>
-                <tr><th scope="row">驱动</th><td>输入：PS/2 键鼠、evdev、USB HID。存储：IDE/ATA、AHCI、NVMe、USB Mass Storage。显示：DRM/KMS、VirtIO-GPU、GOP 帧缓冲。音频：SB16、Intel HD Audio。总线与平台：PCI/PCIe、USB、I2C、ACPI、HPET、TPM 1.2/2.0。</td></tr>
-                <tr><th scope="row">安全与 IPC</th><td>seccomp 过滤和 no_new_privs；AF_UNIX / AF_NETLINK / AF_INET / AF_INET6；pipe、epoll、eventfd、timerfd、signalfd、memfd、pidfd、POSIX 消息队列和 System V IPC；futex2；inotify；Unix98 PTY 和多虚拟终端。</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section section-tint" id="state">
-      <div class="container split">
-        <h2>当前状态</h2>
-        <div class="stack">
-          <div class="notice notice-warn" role="note">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-alert"/></svg>
-          <div>
-              <p class="notice-title">实验性系统，不要用重要数据冒险</p>
-              <p>内核版本串是 <code>Uinxed 1.0.0-alpha.1</code>。请用可抛弃的机器和测试盘。</p>
-          
-          </div>
-        </div>
           <h3>已经跑通</h3>
           <ul>
-            <li>内核在实体服务器上启动，已验证 Dell PowerEdge R410 等机器。</li>
-            <li>能引导 Alpine Linux 并拉起图形桌面。Weston（Wayland）和 Xfce 两条路径都验证过，终端可用。</li>
-            <li>SPUI 桌面和自研用户态在同一个内核上运行。</li>
-            <li>X11 兼容层能运行 DOOM 这类图形程序，OpenJDK 能运行。</li>
+            <li>在实体服务器上启动。</li>
+            <li>引导 Alpine Linux 并拉起图形桌面，Weston 和 Xfce 都验证过。</li>
+            <li>SPUI 桌面和自研用户态。</li>
+            <li>DOOM 和 OpenJDK。</li>
           </ul>
-          <h3>第二版的更新</h3>
-          <p>修复 xHCI 控制器上的 USB HID，USB 键盘和鼠标可以使用。第一版镜像继续保留，详情和校验值见<a href="spaceos8-download.html#release-history">下载页的版本记录</a>。</p>
           <h3>还在做</h3>
           <ul>
-            <li>GPU 驱动、虚拟化设备、音频，以及相当一部分 Linux ABI。</li>
-            <li>PS/2 输入路径、evdev 消费者、poll/epoll 唤醒和 EEVDF 调度器还在验证阶段。</li>
-            <li>systemd 只是初步跑通，离可用还有距离。</li>
-            <li>NTFS 写入驱动还不能信任。</li>
+            <li>GPU 驱动、音频和部分 Linux ABI。</li>
+            <li>PS/2 输入、epoll 唤醒和调度器的验证。</li>
+            <li>让 systemd 真正可用。</li>
           </ul>
-        </div>
-      </div>
-    </section>
+          <p>第二版镜像修复了 xHCI 上的 USB HID，第一版仍然保留，见<a href="spaceos8-download.html#release-history">版本记录</a>。</p>
 
-    <section class="section" id="run">
-      <div class="container split">
-        <h2>构建与运行</h2>
-        <div class="stack">
-          <p>需要 make、gcc（建议 13.3+）、qemu、xorriso；menuconfig 另需 kconfig-frontends 和 libncurses-dev。</p>
-          <h3>在 QEMU 里运行</h3>
-          <p>不需要额外硬件，最快能看到桌面。<code>make run</code> 已经把串口输出接到终端。要抓内核日志，把 <code>limine.conf</code> 里的 <code>console=tty0</code> 改成 <code>console=ttyS0</code>：启动挂死时屏幕控制台可能丢日志，串口更可靠。</p>
-          <h3>在实体机上运行</h3>
-          <p>已在 Dell PowerEdge R410 上验证。先看仓库 README 的 <code>Run on physical hardware</code> 一节，按步骤准备引导介质。请用可抛弃的机器和测试盘；文件系统驱动（尤其是 NTFS 写入）目前不适合放重要数据。</p>
-          <p><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">源码</a> · <a href="requirements.html">配置要求</a> · <a href="spaceos8-download.html">下载镜像</a></p>
-        </div>
+          <h2 id="run">构建与运行</h2>
+          <p>需要 make、gcc（建议 13.3+）、qemu 和 xorriso。</p>
+          <ul>
+            <li><strong>QEMU</strong>：<code>make run</code>，串口输出直接到终端。要抓内核日志，把 <code>limine.conf</code> 里的 <code>console=tty0</code> 改成 <code>console=ttyS0</code>。</li>
+            <li><strong>实体机</strong>：按仓库 README 的 <code>Run on physical hardware</code> 一节准备引导介质。</li>
+          </ul>
+          <p><a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">内核源码</a> · <a href="requirements.html">配置要求</a> · <a href="spaceos8-download.html">下载镜像</a></p>
+        </article>
       </div>
     </section>
   </main>
@@ -343,7 +272,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=182b2eeb"></script>
+  <script src="js/main.js?v=1fc349d9"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>

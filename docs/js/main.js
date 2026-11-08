@@ -145,7 +145,7 @@
           totals[i] = (totals[i] || 0) + cell.textContent.trim().length;
         });
       });
-      var main = totals.indexOf(Math.max.apply(null, totals));
+      var main = table.hasAttribute("data-keep-labels") ? -1 : totals.indexOf(Math.max.apply(null, totals));
       rows.forEach(function (tr) {
         Array.prototype.forEach.call(tr.children, function (cell, i) {
           var label = heads[i] && heads[i].textContent.trim();
@@ -196,6 +196,7 @@
 
   function initFold() {
     document.querySelectorAll("main .table-wrap:not([data-nofold]) table").forEach(function (table) {
+      if (table.closest(".prose")) return;  // 文档式正文已经精简过，表格全部展开
       var rows = Array.prototype.slice.call(table.querySelectorAll("tbody > tr"));
       makeFold(table, rows, FOLD_ROWS);
     });
@@ -240,6 +241,15 @@
   function initToc() {
     var main = document.querySelector("main");
     if (!main) return;
+    // 文档式页面自带静态目录（没有脚本也能用），这里只负责高亮当前小节
+    var docToc = main.querySelector(".doc-toc");
+    if (docToc) {
+      var docLinks = Array.prototype.slice.call(docToc.querySelectorAll("a[href^='#']"));
+      var targets = docLinks.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+      document.documentElement.classList.add("has-toc");
+      spy(docToc.querySelector("ul"), docLinks, targets);
+      return;
+    }
     var sections = Array.prototype.slice.call(main.querySelectorAll(":scope > section.section[id]")).filter(function (s) {
       return s.querySelector("h2");
     });
@@ -263,6 +273,11 @@
     else main.prepend(nav);
     document.documentElement.classList.add("has-toc");
 
+    spy(ul, links, sections);
+  }
+
+  // 滚动时高亮当前小节：目标越过视口上方 40% 的位置就算进入
+  function spy(ul, links, targets) {
     if (!("IntersectionObserver" in window)) return;
     var current = null;
     function activate(a) {
@@ -277,10 +292,10 @@
     }
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
-        if (e.isIntersecting) activate(links[sections.indexOf(e.target)]);
+        if (e.isIntersecting) activate(links[targets.indexOf(e.target)]);
       });
     }, { rootMargin: "-40% 0px -55% 0px" });
-    sections.forEach(function (s) { io.observe(s); });
+    targets.forEach(function (t) { if (t) io.observe(t); });
   }
 
   function init() {

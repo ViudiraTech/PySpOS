@@ -7,7 +7,7 @@
   <title>SpaceOS 6（已停更） | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=a25c6458">
+  <link rel="stylesheet" href="css/style.css?v=28bae9f1">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -80,7 +80,7 @@
       <div class="container">
         <p class="hero-badge"><span class="badge">已停更</span></p>
         <h1>SpaceOS 6</h1>
-        <p class="lede">基于 Uinxed-Kernel 的桌面操作系统：SPUI 1.0 界面、SPF Parser 2.0、SPFS 2.0 文件系统。这是团队第一次接触 UEFI。</p>
+        <p class="lede">基于 Uinxed-Kernel 的桌面系统，带 SPUI 1.0 界面和 SPFS 2.0 文件系统。这是团队第一次接触 UEFI。</p>
         <dl class="spec">
           <div><dt>版本</dt><dd>6.0</dd></div>
           <div><dt>首次发布</dt><dd>2024</dd></div>
@@ -91,54 +91,50 @@
       </div>
     </section>
 
-    <section class="section" id="notice">
-      <div class="container">
-        <div class="notice notice-warn" role="note">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-archive"/></svg>
-          <div>
-            <p class="notice-title">这个项目已停止开发，本页仅作存档</p>
-            <p>不再维护，不接受 issue、功能请求或移植，请不要基于它继续投入。目前在维护的是 <a href="pyspos.html">PySpOS</a> 和 <a href="spaceos9.html">SpaceOS 9</a>；PySpOS 的代码在 <a href="https://github.com/ViudiraTech/PySpOS" rel="noopener" target="_blank">ViudiraTech/PySpOS</a>。</p>
-        
-          </div>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#intro">背景</a></li>
+          <li><a href="#features">做到的部分</a></li>
+          <li><a href="#tech">内核</a></li>
+          <li><a href="#reqs">当年的配置要求</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+      <div class="notice notice-warn" role="note">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-archive"/></svg>
+        <div>
+          <p class="notice-title">这个项目已停止开发，本页仅作存档</p>
+          <p>不再维护，不接受 issue 或功能请求。目前在维护的是 <a href="pyspos.html">PySpOS</a> 和 <a href="spaceos9.html">SpaceOS 9</a>。</p>
         </div>
       </div>
-    </section>
 
-    <section class="section section-tint" id="intro">
-      <div class="container split">
-        <h2>背景</h2>
-        <div class="stack prose">
-          <p>SpaceOS 6 基于 ViudiraTech 开发的 Uinxed-Kernel 深度定制，2024 年开始研发，内核优化、用户界面、文件系统和硬件驱动都是自己做的。</p>
-          <p>Uinxed-Kernel 是 64 位宏内核，运行在 CPU Ring 0，进程调度、内存管理、文件系统和设备驱动都在内核空间。SPUI（SpaceOS User Interface）1.0 是自研的桌面环境。硬件上支持 AHCI / NVMe 存储、SB16 声卡、JPG 硬件加速和分区表，可以多系统部署。</p>
-        </div>
-      </div>
-    </section>
+          <h2 id="intro">背景</h2>
+          <p>2024 年开始，在 ViudiraTech 的 Uinxed-Kernel 上深度定制。界面、文件系统和驱动是自己做的。</p>
 
-    <section class="section" id="features">
-      <div class="container split">
-        <h2>做到的部分</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">SPUI 1.0 桌面</span><p>自研桌面环境，支持窗口管理、任务栏和开始菜单。</p></li>
-          <li><span class="key">SPF Parser 2.0</span><p>解析并执行 SPF（SpaceOS Format）可执行文件。2.0 版性能更好，支持更多系统调用。</p></li>
-          <li><span class="key">JPG 图片解析</span><p>原生支持 JPG 解析与显示，不依赖第三方库。</p></li>
-          <li><span class="key">SB16 声卡</span><p>SB16 声卡驱动，支持 PCM 播放和 MIDI 合成。</p></li>
-          <li><span class="key">分区表与存储</span><p>分区表、AHCI、NVMe，多分区管理和引导加载器配置。</p></li>
-          <li><span class="key">SPFS 2.0</span><p>自研文件系统，带文件权限管理和日志，面向硬盘优化读写延迟和吞吐。</p></li>
-        </ul>
-      </div>
-    </section>
+          <h2 id="features">做到的部分</h2>
+          <ul>
+            <li><strong>SPUI 1.0</strong>：自研桌面，有窗口管理、任务栏和开始菜单。</li>
+            <li><strong>SPF Parser 2.0</strong>：执行 SPF 可执行文件，支持更多系统调用。</li>
+            <li><strong>SPFS 2.0</strong>：自研文件系统，带权限管理和日志。</li>
+            <li><strong>存储</strong>：IDE / AHCI / NVMe，MBR 与 GPT 分区表，可以多系统部署。</li>
+            <li><strong>音频</strong>：SB16 驱动，支持 PCM 播放和 MIDI。</li>
+            <li><strong>图片</strong>：原生 JPG 解析，不依赖第三方库。</li>
+          </ul>
 
-    <section class="section section-tint" id="tech">
-      <div class="container split">
-        <h2>内核与子系统</h2>
-        <ul class="rows rows-wide">
-          <li><span class="key">Uinxed-Kernel</span><p>ViudiraTech 开发的 64 位宏内核，运行在 Ring 0，提供系统调用、进程调度、内存管理和文件系统。</p></li>
-          <li><span class="key">宏内核架构</span><p>进程管理、内存管理、文件系统和设备驱动都在内核空间。</p></li>
-          <li><span class="key">内存管理</span><p>分页和内存保护。</p></li>
-          <li><span class="key">存储</span><p>IDE / AHCI / NVMe 接口，MBR 与 GPT 分区表。</p></li>
-          <li><span class="key">音频</span><p>SB16 兼容驱动，DMA 传输，音频混合与音量控制。</p></li>
-          <li><span class="key">当年的配置要求</span><p>x86 处理器（Pentium 及以上），内存最低 64 MB（推荐 128 MB 以上），至少 500 MB 可用空间，VESA 兼容显卡（800×600）。</p></li>
-        </ul>
+          <h2 id="tech">内核</h2>
+          <p>Uinxed-Kernel 是 64 位宏内核，运行在 Ring 0。调度、内存、文件系统和驱动都在内核空间，内存有分页和保护。</p>
+
+          <h2 id="reqs">当年的配置要求</h2>
+          <ul>
+            <li>Pentium 及以上的 x86 处理器。</li>
+            <li>内存 64 MB，推荐 128 MB 以上。</li>
+            <li>500 MB 可用空间。</li>
+            <li>VESA 兼容显卡，800×600。</li>
+          </ul>
+        </article>
       </div>
     </section>
   </main>
@@ -189,7 +185,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=182b2eeb"></script>
+  <script src="js/main.js?v=1fc349d9"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>
