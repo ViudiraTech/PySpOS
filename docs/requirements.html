@@ -7,7 +7,7 @@
   <title>配置要求 | GoutouStdio</title>
   <!-- head:start -->
   <link rel="stylesheet" href="css/tokens.css?v=87f53e71">
-  <link rel="stylesheet" href="css/style.css?v=9bbaa2c0">
+  <link rel="stylesheet" href="css/style.css?v=28bae9f1">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23d97757'/%3E%3Ctext x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='%23faf9f5' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
   <!-- head:end -->
 </head>
@@ -79,100 +79,89 @@
     <section class="hero hero-compact">
       <div class="container">
         <h1>配置要求</h1>
-        <p class="lede">PySpOS 是跑在宿主系统上的 Python 程序；SpaceOS 8 和 9 是要自己启动的内核。条件差别大，所以按产品分开写。</p>
+        <p class="lede">按产品列出最低配置和推荐配置。最低配置能运行，推荐配置体验更好。</p>
       </div>
     </section>
 
-    <section class="section" id="pyspos">
-      <div class="container split">
-        <div class="split-head"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><h2>PySpOS 3.2.0</h2></div>
-        <div class="stack">
-          <p>纯用户态，不直接操作硬件，能跑 Python 的机器就能跑。</p>
-          <div class="table-wrap" data-nofold>
-            <table>
-              <tbody>
-                <tr><th scope="row">Python</th><td>3.10 或更高。CI 覆盖 3.10、3.12、3.14。</td></tr>
-                <tr><th scope="row">系统</th><td>Windows 7 及以上、Linux 各发行版、macOS。</td></tr>
-                <tr><th scope="row">磁盘</th><td>约 120 MB。不需要管理员权限。</td></tr>
-                <tr><th scope="row">CPU / 内存</th><td>双核 CPU、512 MB 内存足够，不需要独立显卡。</td></tr>
-                <tr><th scope="row">终端</th><td>curses 的首次开机向导需要 80×24 字符的终端。SSH、tmux、Windows Terminal 都可以。</td></tr>
-                <tr><th scope="row">可选依赖</th><td><code>unicorn</code>（ELF 引擎，缺失时退回自研模拟器）；<code>tzdata</code>（真实时区，Windows 和精简容器镜像需要）。都不是硬性要求。</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p><a href="pyspos.html">PySpOS 介绍</a> · <a href="ota/index.html">下载更新包</a></p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section section-tint" id="spaceos9">
-      <div class="container split">
-        <div class="split-head"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><h2>SpaceOS 9 公开预览</h2></div>
-        <div class="stack">
-          <p>目前只在 QEMU 上验证过。</p>
-          <div class="table-wrap" data-nofold>
-            <table>
-              <tbody>
-                <tr><th scope="row">虚拟机</th><td>x86_64 QEMU，推荐 Q35 机型和 VirtIO GPU 2D。</td></tr>
-                <tr><th scope="row">固件</th><td>OVMF UEFI 固件。</td></tr>
-                <tr><th scope="row">内存</th><td>至少 512 MiB。</td></tr>
-                <tr><th scope="row">未验证</th><td>真实硬件、真实 GPU、音频、网络、睡眠唤醒。</td></tr>
-                <tr><th scope="row">其他架构</th><td>aarch64 / riscv64 只通过编译检查，镜像里没有它们的用户态。</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p><a href="spaceos9.html">SpaceOS 9 介绍</a> · <a href="spaceos9-download.html#boot">QEMU 启动命令</a></p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="spaceos8">
-      <div class="container split">
-        <div class="split-head"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-window"/></svg></span><h2>SpaceOS 8</h2></div>
-        <div class="stack">
-          <div class="notice notice-warn" role="note">
-          <svg class="icon notice-icon" aria-hidden="true"><use href="#i-alert"/></svg>
-          <div>
-              <p class="notice-title">请用可抛弃的机器和测试盘</p>
-              <p>NTFS 写入驱动目前还不能信任，确认稳定前不要让它碰重要数据。已在 Dell PowerEdge R410 等实体服务器上验证。</p>
-          
-          </div>
-        </div>
-          <p>表里“已验证”是实际跑过的组合，“默认关闭”的需要自己在 <code>make menuconfig</code> 里打开。</p>
-          <div class="table-wrap" data-nofold>
-            <table>
+    <section class="section doc-section">
+      <div class="container doc">
+        <nav class="page-toc doc-toc" aria-label="本页目录">
+          <p class="doc-toc-title">本页目录</p>
+          <ul>
+          <li><a href="#pyspos">PySpOS 3.2.0</a></li>
+          <li><a href="#spaceos9">SpaceOS 9 公开预览</a></li>
+          <li><a href="#spaceos8">SpaceOS 8</a></li>
+          <li><a href="#retired">SpaceOS 6 / 7</a></li>
+          </ul>
+        </nav>
+        <article class="prose">
+          <h2 id="pyspos">PySpOS 3.2.0</h2>
+          <p>纯用户态程序，能跑 Python 就能跑。</p>
+          <div class="table-wrap">
+            <table data-keep-labels>
               <thead>
-                <tr><th scope="col">硬件</th><th scope="col">要求</th><th scope="col">状态</th></tr>
+                <tr><th scope="col">项目</th><th scope="col">最低配置</th><th scope="col">推荐配置</th></tr>
               </thead>
               <tbody>
-                <tr><th scope="row">处理器</th><td>x86_64 必需。多核可用，SMP 启动会拉起全部核心，并在核间迁移任务、均衡负载。</td><td><span class="badge badge-ok">已验证</span></td></tr>
-                <tr><th scope="row">内存</th><td>最低 128 MB，512 MB 可启动。跑图形桌面并使用 swap，建议 1 GB 以上。</td><td></td></tr>
-                <tr><th scope="row">固件</th><td>经 Limine 引导，UEFI 与 Legacy 两种模式都支持，不挑固件实现。</td><td><span class="badge badge-ok">UEFI 已验证</span></td></tr>
-                <tr><th scope="row">输入</th><td>PS/2 键盘和鼠标是主路径，提供 Linux 兼容的 <code>evdev</code>；另支持 USB HID（键盘、鼠标、消费类控制器）。PS/2 路径仍在验证中。</td><td><span class="badge badge-ok">xHCI USB HID 已验证</span></td></tr>
-                <tr><th scope="row">显示</th><td>DRM/KMS 内核核心、通用 GPU 驱动注册表、内置 VirtIO-GPU 驱动；GOP 帧缓冲控制台（点阵字体）和软件帧缓冲兜底。没接显卡时可用 GOP 文本控制台。</td><td><span class="badge badge-warn">真实 GPU 驱动未完成</span></td></tr>
-                <tr><th scope="row">存储</th><td>IDE/ATA、AHCI（SATA）、NVMe、USB Mass Storage 都有驱动（NVMe 已启用）。默认根文件系统是 tmpfs。</td><td><span class="badge badge-warn">NTFS 写入不建议用</span></td></tr>
-                <tr><th scope="row">网络</th><td>需要 Intel e1000 / e1000e 或 Realtek RTL8139 / RTL8169。协议栈自研，客户端带 DHCP。其他网卡可能无法联网。</td><td><span class="badge badge-warn">需要指定网卡</span></td></tr>
-                <tr><th scope="row">音频（可选）</th><td>Sound Blaster 16 与 Intel HD Audio，带 ALSA 兼容的 PCM / control ABI。SB16 需要在 menuconfig 里打开。</td><td><span class="badge">SB16 默认关闭</span></td></tr>
+                <tr><th scope="row">Python</th><td>3.10</td><td>3.12 或 3.14（CI 测过的版本）</td></tr>
+                <tr><th scope="row">系统</th><td>Windows 7、主流 Linux、macOS 10.14</td><td>同左</td></tr>
+                <tr><th scope="row">处理器</th><td>双核</td><td>同左</td></tr>
+                <tr><th scope="row">内存</th><td>512 MB</td><td>同左</td></tr>
+                <tr><th scope="row">存储</th><td>120 MB 可用空间</td><td>同左</td></tr>
+                <tr><th scope="row">终端</th><td>80×24 字符</td><td>同左</td></tr>
+                <tr><th scope="row">可选依赖</th><td>无</td><td><code>unicorn</code>（ELF 引擎）、<code>tzdata</code>（真实时区）</td></tr>
               </tbody>
             </table>
           </div>
-          <h3>构建</h3>
-          <p>必需：<code>make</code>、<code>gcc</code>（建议 13.3+）、<code>qemu</code>、<code>xorriso</code>。建议：<code>clang-format</code>、<code>clang-tidy</code>。只有 menuconfig 需要 <code>kconfig-frontends</code> 和 <code>libncurses-dev</code>。</p>
-          <pre><code>sudo apt install build-essential qemu-system-x86 xorriso libncurses-dev</code></pre>
-          <h3>默认关闭的功能</h3>
-          <p>有些子系统在 Kconfig 里默认是 <code>n</code>，要用得自己打开：<code>VIRTIO</code> / <code>VIRTIO_GPU</code>（虚拟化设备）、<code>SOUND_SB16</code>（声卡）。用 <code>make menuconfig</code> 打开，并确认虚拟机或实体机上有对应设备。新增 GPU 驱动，是在 <code>drivers/gpu/gpu_drivers.c</code> 的注册表里加一条记录。</p>
-          <p><a href="spaceos8.html">SpaceOS 8 介绍</a> · <a href="https://github.com/ViudiraTech/Uinxed-Kernel" rel="noopener" target="_blank">内核源码与构建说明</a></p>
+          <p>不需要管理员权限和独立显卡。缺 <code>unicorn</code> 时退回自研模拟器，Windows 和精简容器镜像需要 <code>tzdata</code> 才有真实时区。</p>
+
+          <h2 id="spaceos9">SpaceOS 9 公开预览</h2>
+          <p>目前只在 QEMU 上验证过。</p>
+          <div class="table-wrap">
+            <table data-keep-labels>
+              <thead>
+                <tr><th scope="col">项目</th><th scope="col">最低配置</th><th scope="col">推荐配置</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">平台</th><td>x86_64 QEMU</td><td>x86_64 QEMU，Q35 机型</td></tr>
+                <tr><th scope="row">固件</th><td>OVMF（UEFI）</td><td>同左</td></tr>
+                <tr><th scope="row">内存</th><td>512 MiB</td><td>同左</td></tr>
+                <tr><th scope="row">显示</th><td>—</td><td>VirtIO GPU 2D</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>真实硬件、GPU、音频、网络和睡眠唤醒都没有验证。aarch64 / riscv64 只通过编译检查，镜像里没有它们的用户态。启动命令见<a href="spaceos9-download.html#boot">下载页</a>。</p>
+
+          <h2 id="spaceos8">SpaceOS 8</h2>
+      <div class="notice notice-warn" role="note">
+        <svg class="icon notice-icon" aria-hidden="true"><use href="#i-alert"/></svg>
+        <div>
+          <p class="notice-title">请用可抛弃的机器和测试盘</p>
+          <p>NTFS 写入驱动还不能信任，不要让它碰重要数据。</p>
         </div>
       </div>
-    </section>
+          <div class="table-wrap">
+            <table data-keep-labels>
+              <thead>
+                <tr><th scope="col">项目</th><th scope="col">最低配置</th><th scope="col">推荐配置</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">处理器</th><td>x86_64</td><td>x86_64 多核（支持 SMP）</td></tr>
+                <tr><th scope="row">内存</th><td>128 MB</td><td>1 GB 以上（图形桌面 + swap）</td></tr>
+                <tr><th scope="row">固件</th><td>UEFI 或 Legacy BIOS</td><td>UEFI（已验证）</td></tr>
+                <tr><th scope="row">显示</th><td>GOP 帧缓冲</td><td>VirtIO-GPU；真实显卡驱动未完成</td></tr>
+                <tr><th scope="row">存储</th><td>不需要（默认根是 tmpfs）</td><td>IDE / AHCI / NVMe / USB 存储</td></tr>
+                <tr><th scope="row">输入</th><td>PS/2 键盘和鼠标</td><td>USB 键盘和鼠标（xHCI，已验证）</td></tr>
+                <tr><th scope="row">网络</th><td>可以不接</td><td>Intel e1000 / e1000e 或 Realtek RTL8139 / RTL8169</td></tr>
+                <tr><th scope="row">音频</th><td>可以没有</td><td>Intel HD Audio</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>VirtIO 和 SB16 声卡默认关闭，要用 <code>make menuconfig</code> 打开。实体机已在 Dell PowerEdge R410 上验证。构建依赖见 <a href="spaceos8.html#run">SpaceOS 8 介绍</a>。</p>
 
-    <section class="section section-tint" id="retired">
-      <div class="container split">
-        <div class="split-head"><span class="icon-box"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg></span><h2>SpaceOS 6 / 7</h2></div>
-        <div class="stack">
-          <p>这两个项目已停止开发，这里不再列硬件要求。页面仅作历史存档，配置和构建说明以当时的仓库记录为准。</p>
-          <p><a href="spaceos7.html">SpaceOS 7 存档</a> · <a href="spaceos6.html">SpaceOS 6 存档</a></p>
-        </div>
+          <h2 id="retired">SpaceOS 6 / 7</h2>
+          <p>已停止开发，不再列配置要求。见 <a href="spaceos7.html">SpaceOS 7</a> 和 <a href="spaceos6.html">SpaceOS 6</a> 存档页。</p>
+        </article>
       </div>
     </section>
   </main>
@@ -223,7 +212,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/main.js?v=cb908392"></script>
+  <script src="js/main.js?v=1fc349d9"></script>
   <script src="js/vendor/gsap.min.js?v=b2cff385"></script>
   <script src="js/vendor/ScrollTrigger.min.js?v=c07f2876"></script>
   <script src="js/vendor/SplitText.min.js?v=ac0878d9"></script>

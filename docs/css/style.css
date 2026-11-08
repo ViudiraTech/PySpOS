@@ -1529,6 +1529,10 @@ html.has-toc { scroll-padding-top: calc(var(--pg-header-h) + 3.5rem); }
     margin-top: 0;
   }
   .table-wrap td:has(> .badge:only-child)::before { display: none; }
+  /* 最低 / 推荐对照表：卡片里两栏并排，一眼对比 */
+  .table-wrap table[data-keep-labels] tbody tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .table-wrap table[data-keep-labels] tbody tr > th { grid-column: 1 / -1; }
+  .table-wrap table[data-keep-labels] tbody tr > td { grid-column: auto; grid-row: 2; margin-top: var(--pg-space-2); }
   /* 数字列（行数等）同样放到标题右边，条形图缩短后跟在数字上方 */
   .table-wrap tbody tr > td.num {
     grid-column: 2;

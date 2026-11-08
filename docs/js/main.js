@@ -145,7 +145,7 @@
           totals[i] = (totals[i] || 0) + cell.textContent.trim().length;
         });
       });
-      var main = totals.indexOf(Math.max.apply(null, totals));
+      var main = table.hasAttribute("data-keep-labels") ? -1 : totals.indexOf(Math.max.apply(null, totals));
       rows.forEach(function (tr) {
         Array.prototype.forEach.call(tr.children, function (cell, i) {
           var label = heads[i] && heads[i].textContent.trim();
