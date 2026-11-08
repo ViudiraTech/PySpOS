@@ -449,6 +449,16 @@
     reveal($$(".footer-grid > *", footer), { y: 24 }, { stagger: 0.07, start: "top 95%" });
   }
 
+  // main.js 展开折叠内容后调用：新露出的条目依次浮现
+  window.pgMotion = {
+    show: function (items) {
+      gsap.fromTo(items, { y: 24, autoAlpha: 0 }, {
+        y: 0, autoAlpha: 1, duration: 0.7, stagger: 0.05, ease: "expo.out", overwrite: true,
+        clearProps: "transform,opacity,visibility"
+      });
+    }
+  };
+
   function init() {
     initLenis();
     initChrome();
